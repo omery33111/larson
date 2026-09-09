@@ -1,0 +1,1225 @@
+/* ------------------------- PAGE ------------------------- */
+/* The chat fills whatever height the layout has left. `.app-main` is a flex column, so a
+   flex child here resolves against real space instead of guessing at the navbar and footer
+   with a calc() that would go wrong the moment either of them changes. */
+.chat-page {
+  position: relative;
+  flex: 1;
+  /* Zero, and deliberately so: a floor here would be a floor the flex chain cannot shrink
+     past, and the page would start scrolling again on a short screen. */
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* The chat wants the height more than it wants the margin the other pages get. */
+.App-fullheight .app-main {
+  padding-top: 2.5dvh;
+  padding-bottom: 2.5dvh;
+}
+
+
+/* ------------------------- THE GLOW ------------------------- */
+/* The dim the whole screen is built around, in two parts.
+
+   Outside the shell: light spilling around the object, which is what makes the chat read as
+   lit rather than as a panel with a gradient in it. Inside: the same treatment the written
+   profile has along its top edge, so the two screens are recognisably the same product.
+
+   It answers to state. While Larson is writing, the aura lifts and breathes; when he stops,
+   it settles. That is the difference between a glow that means something and a decoration. */
+.chat-aura {
+  position: absolute;
+  /* Flush with the page box on purpose. An absolutely positioned element that sticks out
+     adds scrollable overflow and gives the whole app a scrollbar; the blur below spills the
+     light past the edge without doing that, because filter overflow is ink, not scroll. */
+  inset: 0;
+  border-radius: 40%;
+  background:
+    radial-gradient(62% 46% at 50% 2%, rgba(240, 185, 11, 0.30) 0%, rgba(240, 185, 11, 0) 72%),
+    radial-gradient(80% 50% at 50% 100%, rgba(240, 185, 11, 0.10) 0%, rgba(240, 185, 11, 0) 72%);
+  filter: blur(46px);
+  opacity: 0.8;
+  pointer-events: none;
+  transition: opacity 0.7s ease-in-out;
+}
+
+.chat-aura-live {
+  opacity: 1;
+  animation: chat-breathe 3.6s ease-in-out infinite;
+}
+
+/* Opacity only. Nothing here may move layout while text is streaming into it. */
+@keyframes chat-breathe {
+  0%, 100% { opacity: 0.7; }
+  50%      { opacity: 1; }
+}
+
+
+/* ------------------------- THE SHELL ------------------------- */
+/* No frame. The box is meant to dissolve into the page rather than sit on it, so instead of
+   a border it fades from a shade above the ground at the top down to the ground itself at
+   the bottom - which leaves the bottom edge with nothing to draw. The aura does the rest. */
+.chat-shell {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 264px 1fr;
+  overflow: hidden;
+  /* Barely a shade off the page, and gone entirely by the bottom edge. The box is no longer
+     drawn by its own fill - what gives it shape is what sits inside it: the tinted sidebar,
+     the raised message blocks, the two hairlines. That is what makes it read as part of the
+     page rather than as a panel dropped onto it. */
+  background:
+    radial-gradient(120% 80% at 50% -8%, rgba(240, 185, 11, 0.07) 0%, rgba(240, 185, 11, 0) 62%),
+    linear-gradient(180deg, #13161c 0%, #111419 55%, #0f1115 100%);
+  border: none;
+  border-radius: 16px;
+}
+
+/* The one line of gold that is left, softer than a border and read as light rather than as
+   an edge. It is the same signature the written profile carries. */
+.chat-shell::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  inset-inline: 12%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(240, 185, 11, 0.55), transparent);
+  z-index: 2;
+}
+
+
+/* ------------------------- SIDEBAR ------------------------- */
+.chat-sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  /* In RTL the sidebar is the first column and therefore on the right; inline-end is the
+     edge that faces the conversation. */
+  border-inline-end: 1px solid rgba(255, 255, 255, 0.045);
+  background-color: rgba(11, 14, 19, 0.32);
+}
+
+.chat-sidebar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 1.1rem 1rem 0.6rem;
+}
+
+/* Two halves of one list. The saved answers belong beside the conversations because that is
+   what they are - bookmarks into them - and a tab strip says that in the space a heading was
+   using anyway. */
+.chat-tabs {
+  display: flex;
+  gap: 0.2rem;
+  flex: 1;
+  min-width: 0;
+  padding: 0.2rem;
+  background-color: rgba(0, 0, 0, 0.22);
+  border-radius: 9px;
+}
+
+.chat-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.32rem;
+  flex: 1;
+  min-width: 0;
+  min-height: 34px;
+  padding: 0.3rem 0.4rem;
+  background: none;
+  border: none;
+  border-radius: 7px;
+  color: #7d828e;
+  font-family: inherit;
+  font-size: 0.82rem;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.15s ease-in-out, color 0.15s ease-in-out;
+}
+
+.chat-tab:hover {
+  color: #cfd2d8;
+}
+
+.chat-tab-active {
+  background-color: #232833;
+  color: #e8e8e8;
+  font-weight: 600;
+}
+
+.chat-tab-star {
+  font-size: 0.78em;
+  color: #5c6270;
+}
+
+.chat-tab-active .chat-tab-star {
+  color: #f0b90b;
+}
+
+.chat-tab-count {
+  padding: 0 0.32rem;
+  background-color: rgba(240, 185, 11, 0.14);
+  border-radius: 999px;
+  color: #f0b90b;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.chat-sidebar-close {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  background: none;
+  border: none;
+  color: #8b909c;
+  font-size: 1.15rem;
+  cursor: pointer;
+}
+
+.chat-new {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 44px;
+  margin: 0 1rem 0.9rem;
+  padding: 0.5rem 0.9rem;
+  background-color: rgba(240, 185, 11, 0.08);
+  border: 1px dashed #3b3320;
+  border-radius: 10px;
+  color: #f0b90b;
+  font-family: inherit;
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out;
+}
+
+.chat-new:hover:not(:disabled) {
+  background-color: rgba(240, 185, 11, 0.14);
+  border-color: #f0b90b;
+}
+
+.chat-new:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.chat-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 0.6rem 1rem;
+}
+
+.chat-list-empty {
+  color: #5c6270;
+  font-size: 0.83rem;
+  line-height: 1.6;
+  padding: 0.5rem 0.4rem;
+}
+
+.chat-list-row {
+  display: flex;
+  align-items: center;
+  border-radius: 8px;
+  transition: background-color 0.15s ease-in-out;
+}
+
+.chat-list-row:hover {
+  background-color: #1b1f27;
+}
+
+.chat-list-row-active {
+  background-color: #1b1f27;
+  /* The marker sits on the outer edge of the list, which in RTL is the right. */
+  box-shadow: inset -2px 0 0 0 #f0b90b;
+}
+
+.chat-list-open {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0.4rem 0.6rem;
+  background: none;
+  border: none;
+  color: #cfd2d8;
+  font-family: inherit;
+  font-size: 0.9rem;
+  text-align: start;
+  cursor: pointer;
+}
+
+.chat-list-row-active .chat-list-open {
+  color: #e8e8e8;
+}
+
+.chat-list-icon {
+  flex-shrink: 0;
+  color: #5c6270;
+}
+
+.chat-list-row-active .chat-list-icon {
+  color: #f0b90b;
+}
+
+/* One line, always. A long question must not be allowed to set the width of the column. */
+.chat-list-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.chat-list-tool {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  min-width: 32px;
+  min-height: 44px;
+  background: none;
+  border: none;
+  color: #4d525d;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease-in-out, color 0.15s ease-in-out;
+}
+
+.chat-list-row:hover .chat-list-tool,
+.chat-list-tool:focus-visible {
+  opacity: 1;
+}
+
+.chat-list-tool:hover {
+  color: #f0b90b;
+}
+
+.chat-list-delete:hover {
+  color: #d1494e;
+}
+
+/* A touch screen has no hover, so the tools would be unreachable there. */
+@media (hover: none) {
+  .chat-list-tool {
+    opacity: 1;
+  }
+}
+
+.chat-list-renaming {
+  padding: 0.15rem 0.3rem;
+}
+
+.chat-rename-input {
+  width: 100%;
+  min-height: 40px;
+  padding: 0.35rem 0.55rem;
+  background-color: #12151b;
+  border: 1px solid #f0b90b;
+  border-radius: 7px;
+  color: #e8e8e8;
+  font-family: inherit;
+  /* 16px, or iOS zooms the page the moment this takes focus. */
+  font-size: 16px;
+  outline: none;
+}
+
+
+/* ------------------------- SAVED ANSWERS ------------------------- */
+.chat-list-saved {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-top: 0.9rem;
+}
+
+/* The preview shows the answer's opening line - which is exactly why Larson is told to make
+   that line answer the question on its own. Read here, it has no question above it. */
+.chat-saved {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  width: 100%;
+  padding: 0.65rem 0.7rem;
+  background-color: #1b1f27;
+  border: 1px solid #2b303b;
+  border-inline-start: 2px solid #8a6a12;
+  border-radius: 9px;
+  color: #cfd2d8;
+  font-family: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition: border-color 0.15s ease-in-out, background-color 0.15s ease-in-out;
+}
+
+.chat-saved:hover {
+  background-color: #1f242e;
+  border-color: #3b3320;
+  border-inline-start-color: #f0b90b;
+}
+
+.chat-saved-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.chat-saved-mark {
+  display: block;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.chat-saved-mine {
+  color: #6b7280;
+  font-size: 0.7rem;
+}
+
+.chat-saved-go {
+  margin-inline-start: auto;
+  color: #4d525d;
+  font-size: 0.8rem;
+}
+
+.chat-saved:hover .chat-saved-go {
+  color: #f0b90b;
+}
+
+/* Three lines, then it stops. Any more and the list becomes the reading surface, and it is
+   too narrow to be one - that is what jumping back to the thread is for. */
+.chat-saved-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 0.83rem;
+  line-height: 1.55;
+}
+
+.chat-saved-origin {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: #5c6270;
+  font-size: 0.72rem;
+}
+
+/* Following this one leaves the chat for the mentor's page. Gold, because that is what the
+   mentor wears everywhere else in the product. */
+.chat-saved-origin-icon {
+  flex-shrink: 0;
+  color: #b08c1e;
+}
+
+
+/* ------------------------- MAIN COLUMN ------------------------- */
+.chat-main {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* The header of the conversation itself: which thread you are in on the right, and what
+   Larson is doing on the left. Without it the desktop screen opens with no statement of
+   what it is - and the sidebar highlight alone is a weak way to say where you are. */
+.chat-topbar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 1.25rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.045);
+}
+
+.chat-topbar-menu {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  background: none;
+  border: none;
+  color: #cfd2d8;
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.chat-topbar-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: #e8e8e8;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.chat-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+  padding: 0.2rem 0.65rem;
+  background-color: rgba(240, 185, 11, 0.06);
+  border: 1px solid #3b3320;
+  border-radius: 999px;
+  color: #8b909c;
+  font-size: 0.74rem;
+  white-space: nowrap;
+}
+
+.chat-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #8a6a12;
+}
+
+.chat-status-live {
+  color: #e0b341;
+}
+
+.chat-status-live .chat-status-dot {
+  background-color: #f0b90b;
+  animation: chat-breathe 1.6s ease-in-out infinite;
+}
+
+.chat-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  background-color: rgba(8, 10, 14, 0.6);
+}
+
+
+/* ------------------------- THE THREAD ------------------------- */
+/* The app-wide bar is 10px because it is the one the user drags on the page. Inside the
+   thread and the list it is a passenger, and at 320px it costs a readable share of the line. */
+.chat-thread,
+.chat-list {
+  scrollbar-width: thin;
+}
+
+.chat-thread::-webkit-scrollbar,
+.chat-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-thread::-webkit-scrollbar-thumb,
+.chat-list::-webkit-scrollbar-thumb {
+  border-width: 1px;
+}
+
+.chat-thread {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+  padding: 1.5rem 1.5rem 0;
+}
+
+.chat-thread-loading {
+  color: #6b7280;
+  text-align: center;
+  padding-block: 2rem;
+}
+
+/* Holds the last message off the composer, and is also what `gap` measures against so the
+   final turn does not sit flush on the border. */
+.chat-thread-floor {
+  flex: 0 0 auto;
+  height: 0.5rem;
+}
+
+
+/* ------------------------- WELCOME ------------------------- */
+.chat-welcome {
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  max-width: 62ch;
+  padding-block: 1rem;
+}
+
+.chat-welcome-mark {
+  display: block;
+  width: clamp(76px, 12vw, 104px);
+  aspect-ratio: 1;
+  margin-bottom: 0.85rem;
+}
+
+.chat-welcome-title {
+  color: #e8e8e8;
+  font-size: clamp(1.35rem, 3.2vw, 1.9rem);
+  font-weight: 700;
+  line-height: 1.25;
+  margin-bottom: 0.6rem;
+}
+
+.chat-welcome-pitch {
+  color: #a8adb8;
+  font-size: 1rem;
+  line-height: 1.7;
+  margin-bottom: 1.2rem;
+}
+
+/* Intrinsic, so it sorts itself out at every width without a single media query. */
+.chat-openers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr));
+  gap: 0.6rem;
+  width: 100%;
+}
+
+.chat-opener {
+  min-height: 44px;
+  padding: 0.7rem 1rem;
+  background-color: #1b1f27;
+  border: 1px solid #2b303b;
+  border-radius: 10px;
+  color: #cfd2d8;
+  font-family: inherit;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  text-align: start;
+  cursor: pointer;
+  transition: border-color 0.15s ease-in-out, color 0.15s ease-in-out;
+}
+
+.chat-opener:hover {
+  border-color: #f0b90b;
+  color: #e8e8e8;
+}
+
+.chat-welcome-note {
+  color: #5c6270;
+  font-size: 0.82rem;
+  margin-top: 1.1rem;
+}
+
+
+/* ------------------------- TURNS ------------------------- */
+.chat-turn {
+  display: flex;
+  gap: 0.75rem;
+  max-width: 100%;
+}
+
+.chat-turn-user {
+  justify-content: flex-end;
+}
+
+/* The trader's own words stay a bubble because they are short. The tail corner is logical,
+   so it stays on the speaker's side of an RTL screen. */
+.chat-bubble {
+  max-width: min(560px, 88%);
+  padding: 0.7rem 1.05rem;
+  background-color: #1b1f27;
+  border: 1px solid #2b303b;
+  border-radius: 14px;
+  border-end-end-radius: 4px;
+  color: #e8e8e8;
+}
+
+.chat-bubble p {
+  line-height: 1.7;
+}
+
+.chat-bubble p + p {
+  margin-top: 0.5rem;
+}
+
+.chat-bubble-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 0.4rem;
+  padding: 0.15rem 0.5rem;
+  background-color: #12151b;
+  border-radius: 6px;
+  color: #8b909c;
+  font-size: 0.76rem;
+}
+
+.chat-turn-larson {
+  align-items: flex-start;
+}
+
+/* He fills more of the disc than he used to, which he can now afford: the artwork was
+   riding high and left inside its own box, so the padding was paying for empty space at the
+   bottom rather than for clearance at the spikes. Centred, the same circle holds a larger
+   figure with the same room around the outer spikes - which is the part that clips. */
+.chat-avatar {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  padding: 3px;
+  /* Back to the product's own dark disc. Chasing this colour was treating the symptom:
+     the reason he vanished was that he was BUILT out of the theme's near-black, so no disc
+     behind him could have fixed it. He is brushed steel now, and the dark disc works. */
+  background-color: #12151b;
+  border: 1px solid #3b3320;
+  border-radius: 50%;
+  overflow: hidden;
+}
+
+/* His answers are analysis, two or three paragraphs long. A bubble that size stops reading
+   as speech, so this is a block with his mark beside it. */
+.chat-answer {
+  flex: 1;
+  min-width: 0;
+  padding: 0.85rem 1.15rem;
+  background:
+    linear-gradient(180deg, rgba(240, 185, 11, 0.045) 0%, rgba(240, 185, 11, 0) 45%),
+    #1a1e26;
+  border: 1px solid #23262f;
+  border-inline-start: 2px solid #3b3320;
+  border-radius: 14px;
+  border-end-start-radius: 4px;
+  color: #cfd2d8;
+}
+
+.chat-answer p {
+  font-size: 0.98rem;
+  line-height: 1.85;
+}
+
+.chat-answer p + p {
+  margin-top: 0.85rem;
+}
+
+.chat-answer strong {
+  color: #e8e8e8;
+  font-weight: 600;
+}
+
+.chat-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1.05em;
+  margin-inline-start: 0.18em;
+  vertical-align: -0.15em;
+  background-color: #f0b90b;
+  animation: chat-blink 1s steps(2, start) infinite;
+}
+
+@keyframes chat-blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0; }
+}
+
+/* ------------------------- MESSAGE ACTIONS ------------------------- */
+/* In the flow, not on top of the text. An overlay would sit on the last line of an answer,
+   and a row that appears and pushes layout would move the very text under the cursor. */
+.chat-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+  margin-top: 0.5rem;
+  margin-inline-start: -0.35rem;
+  opacity: 0;
+  transition: opacity 0.15s ease-in-out;
+}
+
+.chat-answer:hover .chat-actions,
+.chat-bubble:hover .chat-actions,
+.chat-actions:focus-within,
+.chat-actions-pinned {
+  opacity: 1;
+}
+
+/* Hover does not exist on a touch screen, and a feature you cannot reach on a phone is not
+   a feature. */
+@media (hover: none) {
+  .chat-actions {
+    opacity: 1;
+  }
+}
+
+.chat-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: none;
+  border: none;
+  border-radius: 7px;
+  color: #5c6270;
+  font-size: 0.86rem;
+  cursor: pointer;
+  transition: background-color 0.15s ease-in-out, color 0.15s ease-in-out;
+}
+
+.chat-action:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+  color: #e8e8e8;
+}
+
+.chat-action-done {
+  color: #2fa66a;
+}
+
+.chat-action-starred {
+  color: #f0b90b;
+}
+
+.chat-action-starred:hover {
+  color: #ffd34d;
+}
+
+@media (hover: none) {
+  .chat-action {
+    width: 40px;
+    height: 40px;
+  }
+}
+
+
+/* ------------------------- LANDING ON A SAVED ANSWER ------------------------- */
+/* Opening one from the list scrolls the thread to it and lights it. This is the whole
+   argument for storing a pointer rather than a copy: the answer is handed back in the
+   conversation that produced it, not as a card on its own. */
+.chat-turn-found .chat-answer,
+.chat-turn-found .chat-bubble {
+  animation: chat-found 2.6s ease-out;
+}
+
+@keyframes chat-found {
+  0%   { box-shadow: 0 0 0 2px #f0b90b, 0 0 30px rgba(240, 185, 11, 0.30); }
+  60%  { box-shadow: 0 0 0 2px rgba(240, 185, 11, 0.5), 0 0 18px rgba(240, 185, 11, 0.14); }
+  100% { box-shadow: 0 0 0 0 rgba(240, 185, 11, 0); }
+}
+
+
+/* ------------------------- DROPPING A FILE ------------------------- */
+/* Same gesture the upload screen teaches, over the conversation instead of a panel. */
+.chat-drop {
+  position: absolute;
+  /* Inset, so the dashed edge reads as a target inside the panel rather than as a new
+     border around it. */
+  inset: 10px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  background-color: rgba(11, 14, 19, 0.86);
+  border: 2px dashed #f0b90b;
+  border-radius: 14px;
+  pointer-events: none;
+}
+
+.chat-drop-icon {
+  color: #f0b90b;
+  font-size: 2.2rem;
+  margin-bottom: 0.3rem;
+}
+
+.chat-drop-title {
+  color: #e8e8e8;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.chat-drop-note {
+  color: #8b909c;
+  font-size: 0.85rem;
+}
+
+
+/* ------------------------- CONFIRM DELETE ------------------------- */
+/* MUI supplies the focus trap, the escape key and the backdrop; everything visible here is
+   the product's own CSS, same as every other surface. */
+.chat-confirm {
+  max-width: 380px;
+  padding: 1.6rem 1.5rem 1.3rem;
+  text-align: center;
+}
+
+.chat-confirm-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  margin-bottom: 0.9rem;
+  background-color: rgba(209, 73, 78, 0.12);
+  border-radius: 50%;
+  color: #d1494e;
+  font-size: 1.35rem;
+}
+
+.chat-confirm-title {
+  color: #e8e8e8;
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin-bottom: 0.6rem;
+}
+
+.chat-confirm-body {
+  color: #a8adb8;
+  font-size: 0.92rem;
+  line-height: 1.7;
+}
+
+.chat-confirm-name {
+  display: block;
+  color: #e8e8e8;
+  font-weight: 600;
+  margin-bottom: 0.3rem;
+  overflow-wrap: anywhere;
+}
+
+.chat-confirm-actions {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 1.4rem;
+}
+
+.chat-confirm-actions .app-btn {
+  flex: 1;
+}
+
+.chat-confirm-delete {
+  background-color: #d1494e;
+  color: #ffffff;
+}
+
+
+.chat-waiting {
+  color: #6b7280;
+  font-size: 0.83rem;
+  padding-inline-start: 3.2rem;
+  margin-top: -0.6rem;
+}
+
+
+/* ------------------------- COMPOSER ------------------------- */
+.chat-composer {
+  flex: 0 0 auto;
+  padding: 0.9rem 1.5rem 1.1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.045);
+  background-color: rgba(11, 14, 19, 0.25);
+}
+
+.chat-attachment {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.6rem;
+  padding: 0.45rem 0.7rem;
+  background-color: #1b1f27;
+  border: 1px solid #3b3320;
+  border-radius: 10px;
+}
+
+.chat-attachment-icon {
+  color: #f0b90b;
+  flex-shrink: 0;
+}
+
+.chat-attachment-name {
+  color: #e8e8e8;
+  font-size: 0.86rem;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.chat-attachment-note {
+  color: #8b909c;
+  font-size: 0.76rem;
+}
+
+.chat-attachment-drop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  margin-inline-start: auto;
+  background: none;
+  border: none;
+  color: #8b909c;
+  cursor: pointer;
+}
+
+.chat-attachment-drop:hover {
+  color: #d1494e;
+}
+
+.chat-input-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.4rem;
+  padding: 0.3rem 0.4rem;
+  background-color: #1b1f27;
+  border: 1px solid #2b303b;
+  border-radius: 14px;
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.chat-input-row:focus-within {
+  border-color: #f0b90b;
+  box-shadow: 0 0 0 3px rgba(240, 185, 11, 0.08);
+}
+
+.chat-file-input {
+  display: none;
+}
+
+.chat-attach {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  background: none;
+  border: none;
+  border-radius: 10px;
+  color: #8b909c;
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: color 0.15s ease-in-out;
+}
+
+.chat-attach:hover:not(:disabled) {
+  color: #f0b90b;
+}
+
+.chat-attach:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.chat-input {
+  flex: 1;
+  min-width: 0;
+  max-height: 200px;
+  padding: 0.7rem 0.35rem;
+  background: none;
+  border: none;
+  resize: none;
+  color: #e8e8e8;
+  font-family: inherit;
+  /* 16px minimum, or iOS Safari zooms the page in the moment this takes focus. */
+  font-size: 16px;
+  line-height: 1.6;
+  outline: none;
+}
+
+.chat-input::placeholder {
+  color: #5c6270;
+}
+
+.chat-input:disabled {
+  color: #8b909c;
+}
+
+.chat-send {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  background-color: #f0b90b;
+  border: none;
+  border-radius: 10px;
+  color: #0f1115;
+  font-size: 1.05rem;
+  cursor: pointer;
+  transition: filter 0.15s ease-in-out, opacity 0.15s ease-in-out;
+}
+
+/* The icon is drawn pointing right. On an RTL screen "forward" is the other way. */
+.chat-send svg {
+  transform: scaleX(-1);
+}
+
+.chat-send:hover:not(:disabled) {
+  filter: brightness(1.12);
+}
+
+.chat-send:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.chat-stop {
+  background-color: #2b303b;
+  color: #e8e8e8;
+}
+
+/* A square is a square either way round. */
+.chat-stop svg {
+  transform: none;
+}
+
+.chat-disclaimer {
+  color: #4d525d;
+  font-size: 0.74rem;
+  text-align: center;
+  margin-top: 0.6rem;
+}
+
+
+/* ------------------------- LAPTOP RESPONSIVE STYLING ------------------------- */
+@media (min-width: 1025px) and (max-width: 1919px) {
+  .chat-shell {
+    grid-template-columns: 240px 1fr;
+  }
+}
+
+
+/* ------------------------- TABLET RESPONSIVE STYLING ------------------------- */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .chat-shell {
+    grid-template-columns: 210px 1fr;
+  }
+
+  .chat-thread {
+    padding: 1.15rem 1.15rem 0;
+  }
+
+  .chat-composer {
+    padding: 0.8rem 1.15rem 1rem;
+  }
+}
+
+
+/* ------------------------- MOBILE RESPONSIVE STYLING ------------------------- */
+@media (max-width: 768px) {
+  /* One column. The list becomes a drawer over the conversation rather than a strip beside
+     it - at this width a 200px column would leave the thread too narrow to read. */
+  .chat-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .chat-sidebar {
+    position: absolute;
+    z-index: 4;
+    inset-block: 0;
+    /* inline-start is the right edge here, which is the side the menu button is on. */
+    inset-inline-start: 0;
+    width: min(280px, 82%);
+    background-color: #14171e;
+    border-inline-end: none;
+    border-inline-start: 1px solid #23262f;
+    transform: translateX(100%);
+    transition: transform 0.22s ease-in-out;
+  }
+
+  .chat-sidebar-open {
+    transform: translateX(0);
+  }
+
+  .chat-sidebar-close {
+    display: flex;
+  }
+
+  .chat-topbar-menu {
+    display: flex;
+  }
+
+  .chat-topbar {
+    padding-inline: 0.6rem;
+  }
+
+  /* The thread title and the status pill together do not fit a phone, and of the two the
+     title is the one that says where you are. */
+  .chat-status {
+    display: none;
+  }
+
+  .chat-thread {
+    padding: 1rem 0.85rem 0;
+    gap: 1rem;
+  }
+
+  .chat-bubble {
+    max-width: 92%;
+  }
+
+  .chat-avatar {
+    width: 40px;
+    height: 40px;
+    padding: 3px;
+  }
+
+  .chat-turn {
+    gap: 0.55rem;
+  }
+
+  .chat-answer {
+    padding: 0.75rem 0.9rem;
+  }
+
+  .chat-waiting {
+    padding-inline-start: 2.6rem;
+  }
+
+  .chat-composer {
+    padding: 0.6rem 0.7rem 0.7rem;
+  }
+
+  .chat-attachment {
+    padding: 0.35rem 0.55rem;
+    margin-bottom: 0.45rem;
+  }
+
+  .chat-attachment-note {
+    font-size: 0.7rem;
+  }
+
+  .chat-disclaimer {
+    font-size: 0.68rem;
+    margin-top: 0.45rem;
+  }
+
+  .chat-topbar {
+    padding-block: 0.35rem;
+  }
+
+  .chat-welcome-pitch {
+    font-size: 0.95rem;
+  }
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-aura-live,
+  .chat-caret,
+  .chat-sidebar {
+    animation: none;
+    transition: none;
+  }
+}

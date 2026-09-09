@@ -1,0 +1,16 @@
+# ------------------------- BACK-END:
+back-end/.venv/
+back-end/.env
+back-end/project/mydatabase.db
+back-end/staticfiles/
+back-end/static/files/
+__pycache__/
+*.pyc
+
+# ------------------------- FRONT-END:
+front-end/node_modules/
+front-end/dist/
+front-end/.env.local
+
+# ------------------------- MISC:
+.DS_Store

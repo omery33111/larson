@@ -1,0 +1,71 @@
+.home-page {
+  text-align: center;
+  padding-top: 8dvh;
+}
+
+.home-title {
+  color: #f0b90b;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  font-size: clamp(1.8rem, 5vw, 3rem);
+}
+
+.home-subtitle {
+  color: #cfd2d8;
+  margin-bottom: 2rem;
+  font-size: clamp(0.95rem, 2.2vw, 1.15rem);
+  max-width: 60ch;
+  margin-inline: auto;
+}
+
+
+
+
+
+/* ------------------------- LAPTOP RESPONSIVE STYLING ------------------------- */
+@media (min-width: 1025px) and (max-width: 1919px) {
+
+}
+
+
+/* ------------------------- TABLET RESPONSIVE STYLING ------------------------- */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .home-page {
+    padding-top: 6dvh;
+  }
+}
+
+
+/* ------------------------- MOBILE RESPONSIVE STYLING ------------------------- */
+@media (max-width: 768px) {
+  .home-page {
+    padding-top: 4dvh;
+  }
+}
+
+
+/* ------------------------- THE FRONT DOOR ------------------------- */
+/* The only page a signed-out visitor sees, so it carries the character and the promise
+   rather than a bare login link. */
+.home-mark {
+  display: block;
+  width: clamp(88px, 14vw, 120px);
+  aspect-ratio: 1;
+  margin: 0 auto 1.2rem;
+}
+
+.home-pitch {
+  max-width: 52ch;
+  margin: 1rem auto 0;
+  color: #8b909c;
+  font-size: 0.98rem;
+  line-height: 1.75;
+}
+
+.home-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  justify-content: center;
+  margin-top: 1.8rem;
+}

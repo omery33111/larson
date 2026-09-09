@@ -1,0 +1,272 @@
+/* ------------------------- NAVBAR ------------------------- */
+.my-navbar {
+  background-color: #15181f;
+  border-bottom: 1px solid #23262f;
+  overflow-x: hidden;
+}
+
+.my-navbar-container {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding-block: 0.75rem;
+}
+
+/* Mark plus wordmark, so it reads as a logo rather than as a face floating in the bar. The
+   mentor button carries its own icon for the same reason - Larson twice in one row made the
+   brand look like a button and the button look like decoration. */
+.my-navbar-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #f0b90b;
+  font-weight: 700;
+  font-size: 1.35rem;
+  letter-spacing: 1px;
+}
+
+.my-navbar-wordmark {
+  font-size: 1.15rem;
+  letter-spacing: 0.08em;
+}
+
+/* ------------------------- THE ACCOUNT ------------------------- */
+/* His name opens everything that is about him: his own page, his resume, and the way out.
+   A bare "logout" sitting in the navigation is a destination the product does not have. */
+.my-navbar-account {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 44px;
+  padding: 0.25rem 0.6rem 0.25rem 0.4rem;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: #cfd2d8;
+  font-family: inherit;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out;
+}
+
+.my-navbar-account:hover {
+  background-color: #1b1f27;
+  border-color: #2b303b;
+}
+
+.my-navbar-avatar {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  background-color: #2b303b;
+  border-radius: 50%;
+  color: #e8e8e8;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.my-navbar-name {
+  max-width: 12ch;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.my-navbar-chevron {
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+
+/* ------------------------- THE ACCOUNT MENU ------------------------- */
+/* The paper itself is styled at the call site, where MUI's own specificity lives. What is
+   left here is the content inside the items, which is ordinary CSS. */
+.my-navbar-menu-title {
+  color: #f0b90b;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.my-navbar-menu-sub {
+  color: #6b7280;
+  font-size: 0.78rem;
+}
+
+.my-navbar-menu-item {
+  gap: 0.55rem;
+  color: #cfd2d8;
+  font-size: 0.92rem;
+}
+
+.my-navbar-menu-line {
+  height: 1px;
+  margin: 0.3rem 0;
+  background-color: #23262f;
+}
+
+.my-navbar-nav {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.my-navbar-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  /* 44px is the minimum comfortable touch target */
+  min-height: 44px;
+  padding: 0;
+  background: none;
+  border: none;
+  color: #cfd2d8;
+  font-family: inherit;
+  font-size: 1rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.my-navbar-link:hover {
+  color: #f0b90b;
+}
+
+/* The one item on the bar that is a destination rather than a link. The mentor is the thing
+   the trader is meant to reach for at the end of a session, so it carries the product's gold
+   and everything else stays plain text - a bar where three items shout says nothing. */
+.my-navbar-primary {
+  padding: 0.35rem 0.85rem;
+  background-color: rgba(240, 185, 11, 0.10);
+  border: 1px solid #3b3320;
+  border-radius: 999px;
+  color: #f0b90b;
+  font-weight: 600;
+  transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out;
+}
+
+.my-navbar-primary:hover {
+  background-color: rgba(240, 185, 11, 0.18);
+  border-color: #f0b90b;
+}
+
+/* How long it has been since he told Larson anything. It appears only once that is a real
+   gap, so it never becomes wallpaper. */
+.my-navbar-badge {
+  padding: 0.05rem 0.4rem;
+  background-color: #f0b90b;
+  border-radius: 999px;
+  color: #0f1115;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.my-navbar-user {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: #f0b90b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 40vw;
+}
+
+/* Sized as half of a logo lockup rather than as a portrait. At 5rem beside a wordmark the
+   mark stopped reading as a brand and started reading as a character standing in the bar. */
+.larson-mark {
+  display: block;
+  width: 2.6rem;
+  height: 2.6rem;
+}
+
+/* ------------------------- FOOTER ------------------------- */
+.my-footer {
+  background-color: #15181f;
+  border-top: 1px solid #23262f;
+  padding-block: 3dvh;
+  text-align: center;
+}
+
+.my-footer-text {
+  color: #cfd2d8;
+  margin-bottom: 4px;
+}
+
+.my-footer-disclaimer {
+  color: #6b7280;
+  font-size: 0.78rem;
+}
+
+
+
+
+
+/* ------------------------- LAPTOP RESPONSIVE STYLING ------------------------- */
+@media (min-width: 1025px) and (max-width: 1919px) {
+
+}
+
+
+/* ------------------------- TABLET RESPONSIVE STYLING ------------------------- */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .my-navbar-nav {
+    gap: 0.85rem;
+  }
+}
+
+
+/* ------------------------- MOBILE RESPONSIVE STYLING ------------------------- */
+@media (max-width: 768px) {
+  .my-navbar-brand {
+    font-size: 1.15rem;
+  }
+
+  .larson-mark {
+    width: 2.2rem;
+    height: 2.2rem;
+  }
+
+  /* The mark alone is the brand at this width. The wordmark is the first thing to go, so the
+     three destinations get a row of their own instead of a fourth line. */
+  .my-navbar-wordmark {
+    display: none;
+  }
+
+  .my-navbar-name {
+    max-width: 8ch;
+  }
+
+  /* Two rows at every phone width: the brand and the account share the top, and the three
+     destinations get a row of their own underneath. Left to wrap in source order it took
+     three rows at 375 and four at 320, with the mark sitting alone on the first. */
+  .my-navbar-account {
+    order: 2;
+  }
+
+  .my-navbar-nav {
+    order: 3;
+    width: 100%;
+    justify-content: center;
+    gap: 0.9rem;
+  }
+
+  /* Five items do not fit one line on a narrow phone, and each one is nowrap by design, so
+     without this the row runs off the edge instead of folding. */
+  .my-navbar-nav {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.25rem 0.8rem;
+  }
+
+  .my-navbar-link {
+    font-size: 0.92rem;
+  }
+
+  .my-footer-text {
+    font-size: 0.9rem;
+  }
+}

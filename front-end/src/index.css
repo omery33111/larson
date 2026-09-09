@@ -1,0 +1,205 @@
+/* ------------------------- RESET & BASE ------------------------- */
+*, *::before, *::after {
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  direction: rtl;
+  background-color: #0f1115;
+  color: #e8e8e8;
+  font-family: 'Rubik', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue',
+    Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, p {
+  margin: 0;
+}
+
+
+/* ------------------------- SCROLLBARS ------------------------- */
+/* The browser default is a pale slab sitting on top of a dark product rather than inside
+   it. The whole app gets the same treatment used inside the breakdown cards, a little wider
+   here because this is the bar the user actually drags. */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: #2b303b #12151b;
+
+  /* The gutter is always reserved, so a page that grows past one screen - or an overlay
+     that hides the bar - never nudges the layout sideways. */
+  scrollbar-gutter: stable;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background-color: #12151b;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #2b303b;
+  border-radius: 5px;
+  /* The border lets the track show through, so the thumb reads as inset rather than glued on */
+  border: 2px solid #12151b;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #3a4150;
+}
+
+::-webkit-scrollbar-thumb:active {
+  background-color: #f0b90b;
+}
+
+::-webkit-scrollbar-corner {
+  background-color: #12151b;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+
+
+
+
+/* ------------------------- LAYOUT PRIMITIVES ------------------------- */
+.app-container {
+  width: 100%;
+  max-width: 1140px;
+  margin-inline: auto;
+  padding-inline: 1rem;
+}
+
+.App {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
+/* For a page that fills the viewport instead of growing past it. Everything below it can
+   then resolve `flex: 1` against a real number rather than against its own content. */
+.App-fullheight {
+  height: 100dvh;
+}
+
+/* A column, not a block, so a page that wants the height that is left - the chat - can ask
+   for it with `flex: 1` instead of guessing at the navbar and footer in a calc(). Every
+   other page has a single block child, which lays out identically either way. */
+.app-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding-top: 5dvh;
+  padding-bottom: 5dvh;
+}
+
+
+
+
+
+/* ------------------------- FORM PRIMITIVES ------------------------- */
+.app-input {
+  display: block;
+  width: 100%;
+  padding: 0.6rem 0.9rem;
+  background-color: #1b1f27;
+  border: 1px solid #2b303b;
+  border-radius: 6px;
+  color: #e8e8e8;
+  /* 16px minimum stops iOS Safari from zooming the page in on focus */
+  font-size: 16px;
+  font-family: inherit;
+  transition: border-color 0.15s ease-in-out;
+}
+
+.app-input:focus {
+  outline: none;
+  border-color: #f0b90b;
+}
+
+.app-input::placeholder {
+  color: #6b7280;
+}
+
+.app-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  /* 44px is the minimum comfortable touch target */
+  min-height: 44px;
+  padding: 0.5rem 1.4rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 0.15s ease-in-out;
+}
+
+.app-btn:hover {
+  filter: brightness(1.12);
+}
+
+.app-btn-primary {
+  background-color: #f0b90b;
+  color: #0f1115;
+}
+
+.app-btn-dark {
+  background-color: #1b1f27;
+  border-color: #2b303b;
+  color: #e8e8e8;
+}
+
+
+
+
+
+/* ------------------------- LAPTOP RESPONSIVE STYLING ------------------------- */
+@media (min-width: 1025px) and (max-width: 1919px) {
+
+}
+
+
+/* ------------------------- TABLET RESPONSIVE STYLING ------------------------- */
+@media (min-width: 769px) and (max-width: 1024px) {
+  body {
+    font-size: 15px;
+  }
+}
+
+
+/* ------------------------- MOBILE RESPONSIVE STYLING ------------------------- */
+@media (max-width: 768px) {
+  body {
+    font-size: 15px;
+  }
+
+  .app-main {
+    padding-top: 3dvh;
+    padding-bottom: 3dvh;
+  }
+
+  .app-container {
+    padding-inline: 0.85rem;
+  }
+}

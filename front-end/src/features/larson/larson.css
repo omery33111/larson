@@ -1,0 +1,26 @@
+/* ------------------------- THE MARK ------------------------- */
+/* Size is set by whoever places him; 24px is the floor the shape was drawn to, and below it
+   the hair smears into one mass and the visor line stops being readable. */
+.larson-figure {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* The waiting state. The line is already almost flat by design, so the only thing that
+   moves is its opacity - a spinner next to a face would say the same thing twice. */
+.larson-figure-thinking .larson-visor {
+  animation: larson-scan 1.4s ease-in-out infinite;
+}
+
+@keyframes larson-scan {
+  0%, 100% { opacity: 0.35; }
+  50%      { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .larson-figure-thinking .larson-visor {
+    animation: none;
+    opacity: 0.7;
+  }
+}

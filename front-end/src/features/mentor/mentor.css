@@ -1,0 +1,298 @@
+/* ------------------------- THE MENTOR ------------------------- */
+/* Everything structural comes from the chat's stylesheet. What is here is only what makes
+   this screen a debrief rather than a conversation: no sidebar, and an update bar that is
+   the loudest thing on the page. */
+
+/* One conversation, so there is no list to put beside it. The column that the chat gives to
+   the sidebar goes to the thread. */
+.mentor-shell {
+  grid-template-columns: 1fr;
+}
+
+.mentor-topbar {
+  gap: 0.75rem;
+}
+
+/* With no sidebar taking a column, the thread would run the full width of the screen and a
+   line of 140 characters stops being readable. The conversation gets a measure of its own
+   and sits in the middle. */
+.mentor-page .chat-turn,
+.mentor-page .chat-waiting,
+.mentor-page .chat-thread-loading,
+.mentor-composer > * {
+  width: 100%;
+  max-width: 780px;
+  margin-inline: auto;
+}
+
+/* A zero-height item that eats the free space, so the conversation rests on the composer
+   the way a chat does instead of floating at the top of an empty column. `justify-content:
+   flex-end` would do the same and clip the top the moment the thread overflows. */
+.mentor-page .chat-thread::before {
+  content: '';
+  margin-top: auto;
+}
+
+/* The gap this page exists to close, stated in the place a chat puts its title. */
+.mentor-resume {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-inline-start: auto;
+  color: #8b909c;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mentor-resume-dot {
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background-color: #2fa66a;
+}
+
+/* Gold, not red. Being a few days behind is not a failure - it is an invitation, and the
+   product's own colour for "look here" says that better than an alarm does. */
+.mentor-resume-stale {
+  color: #e0b341;
+}
+
+.mentor-resume-stale .mentor-resume-dot {
+  background-color: #f0b90b;
+}
+
+
+/* ------------------------- BEFORE HE KNOWS ANYTHING ------------------------- */
+/* A trader with an empty resume has nothing to be told, so the conversation is replaced by
+   the one thing that would change that. The visor is on `thinking` here on purpose: he is
+   waiting for something, and that is exactly what the state is. */
+.mentor-onboard {
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  max-width: 56ch;
+  padding-block: 1rem;
+}
+
+.mentor-onboard-mark {
+  display: block;
+  width: clamp(76px, 12vw, 104px);
+  aspect-ratio: 1;
+  margin-bottom: 0.9rem;
+}
+
+.mentor-onboard-title {
+  color: #e8e8e8;
+  font-size: clamp(1.3rem, 3vw, 1.75rem);
+  font-weight: 700;
+  line-height: 1.25;
+  margin-bottom: 0.7rem;
+}
+
+.mentor-onboard-text {
+  color: #a8adb8;
+  font-size: 1rem;
+  line-height: 1.75;
+}
+
+.mentor-onboard-text b {
+  color: #e0b341;
+  font-weight: 500;
+}
+
+.mentor-onboard-note {
+  color: #5c6270;
+  font-size: 0.8rem;
+  margin-top: 1.1rem;
+}
+
+
+/* ------------------------- THE UPDATE BAR ------------------------- */
+/* The file is the point of this screen. It is a wide gold-edged target above the text field
+   rather than a paperclip beside it, because the ask - "send me what just happened" - has to
+   be the first thing the eye lands on when the trader closes a session. */
+.mentor-dropzone {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  width: 100%;
+  min-height: 66px;
+  margin-bottom: 0.7rem;
+  padding: 0.75rem 1.1rem;
+  background:
+    linear-gradient(180deg, rgba(240, 185, 11, 0.09) 0%, rgba(240, 185, 11, 0.03) 100%),
+    #1b1f27;
+  border: 1px dashed #6b5a1e;
+  border-radius: 12px;
+  color: #e8e8e8;
+  font-family: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition: border-color 0.15s ease-in-out, background-color 0.15s ease-in-out;
+}
+
+.mentor-dropzone:hover:not(:disabled) {
+  border-color: #f0b90b;
+  border-style: solid;
+}
+
+.mentor-dropzone:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.mentor-dropzone-icon {
+  flex-shrink: 0;
+  color: #f0b90b;
+  font-size: 1.5rem;
+}
+
+.mentor-dropzone-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.mentor-dropzone-text b {
+  color: #e8e8e8;
+  font-size: 0.98rem;
+  font-weight: 600;
+}
+
+/* Said on the button itself, every time. This is the difference between this screen and the
+   general chat, and the trader must never have to remember which one he is on. */
+.mentor-dropzone-note {
+  color: #8b909c;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+
+/* ------------------------- THE FILE WAITING TO BE SENT ------------------------- */
+/* Solid where the dropzone is dashed: the dashed border says "put something here", and this
+   is the thing that was put there. Same gold family, so the two read as one control. */
+.mentor-attached {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  margin-bottom: 0.7rem;
+  padding: 0.6rem 0.9rem;
+  background: #1b1f27;
+  border: 1px solid #6b5a1e;
+  border-radius: 12px;
+}
+
+.mentor-attached-icon {
+  flex-shrink: 0;
+  color: #f0b90b;
+  font-size: 1.05rem;
+}
+
+.mentor-attached-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.mentor-attached-text b {
+  overflow: hidden;
+  color: #e8e8e8;
+  font-size: 0.92rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Says what the X will and will not undo, before he presses it. The trades are already his;
+   only the debrief is still pending, and a chip that stayed silent about that would read as
+   "remove this import". */
+.mentor-attached-note {
+  color: #8b909c;
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.mentor-attached-remove {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-inline-start: auto;
+  background: none;
+  border: none;
+  border-radius: 50%;
+  color: #8b909c;
+  font-size: 1.05rem;
+  cursor: pointer;
+  transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out;
+}
+
+.mentor-attached-remove:hover:not(:disabled) {
+  background-color: #23262f;
+  color: #e8e8e8;
+}
+
+.mentor-attached-remove:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+
+/* ------------------------- LAPTOP RESPONSIVE STYLING ------------------------- */
+@media (min-width: 1025px) and (max-width: 1919px) {
+  .mentor-shell {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* ------------------------- TABLET RESPONSIVE STYLING ------------------------- */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .mentor-shell {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* ------------------------- MOBILE RESPONSIVE STYLING ------------------------- */
+@media (max-width: 768px) {
+  /* The resume line and the title do not fit one row on a phone, and of the two the resume
+     line is the one carrying the reason to be here. */
+  .mentor-topbar .chat-topbar-title {
+    display: none;
+  }
+
+  .mentor-resume {
+    margin-inline-start: 0;
+    font-size: 0.76rem;
+    white-space: normal;
+  }
+
+  .mentor-dropzone {
+    min-height: 60px;
+    padding: 0.65rem 0.8rem;
+    gap: 0.6rem;
+  }
+
+  .mentor-attached {
+    gap: 0.55rem;
+    padding: 0.5rem 0.7rem;
+  }
+
+  .mentor-dropzone-text b {
+    font-size: 0.9rem;
+  }
+
+  .mentor-dropzone-note {
+    font-size: 0.72rem;
+  }
+}

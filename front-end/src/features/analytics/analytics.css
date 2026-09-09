@@ -1,0 +1,978 @@
+/* ------------------------- PAGE ------------------------- */
+.analytics-page {
+  padding-top: 3dvh;
+  padding-bottom: 4dvh;
+}
+
+.analytics-header {
+  text-align: center;
+  margin-bottom: 1rem;
+}
+
+.analytics-title {
+  color: #f0b90b;
+  font-size: clamp(1.5rem, 4vw, 2.1rem);
+  font-weight: 700;
+}
+
+.analytics-subtitle {
+  color: #8b909c;
+  font-size: 0.92rem;
+}
+
+/* The title above stays centred; this row does not. In RTL the first item lands on the
+   right and the last on the left, so the order in the markup is already the order on
+   screen. It wraps rather than squeezing, because the pill has a floor of 44px. */
+.analytics-header-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem 1rem;
+  margin-top: 0.9rem;
+  text-align: start;
+}
+
+.analytics-loading {
+  text-align: center;
+  color: #8b909c;
+  padding-block: 12dvh;
+}
+
+.analytics-empty {
+  text-align: center;
+  padding-top: 8dvh;
+}
+
+.analytics-empty .analytics-subtitle {
+  margin-bottom: 1.5rem;
+}
+
+.pnl-positive { color: #2fa66a; }
+.pnl-negative { color: #d1494e; }
+
+.score-good { color: #2fa66a; }
+.score-mid  { color: #f0b90b; }
+.score-bad  { color: #d1494e; }
+
+
+/* ------------------------- SHARED CARD ------------------------- */
+.score-hero,
+.stat-card,
+.shoulders,
+.written-profile,
+.breakdown-card,
+.metric-strip {
+  background-color: #15181f;
+  border: 1px solid #23262f;
+  border-radius: 12px;
+}
+
+
+/* ------------------------- SCORE HERO ------------------------- */
+.score-hero {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 2rem;
+  align-items: center;
+  padding: 1.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.score-hero-gauge {
+  position: relative;
+  height: 200px;
+}
+
+.score-hero-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.score-hero-number {
+  font-size: 3.4rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.score-hero-grade {
+  color: #8b909c;
+  font-size: 0.95rem;
+  margin-top: 0.25rem;
+}
+
+.score-hero-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #e8e8e8;
+  font-size: 1.15rem;
+  margin-bottom: 1rem;
+}
+
+.pillar-row {
+  margin-bottom: 0.9rem;
+}
+
+.pillar-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.pillar-label {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: #cfd2d8;
+  font-size: 0.92rem;
+}
+
+.pillar-weight {
+  color: #6b7280;
+  font-size: 0.75rem;
+  margin-inline-start: auto;
+}
+
+.pillar-value {
+  font-weight: 700;
+  font-size: 1rem;
+  min-width: 2.2rem;
+  text-align: left;
+}
+
+.pillar-detail {
+  color: #6b7280;
+  font-size: 0.78rem;
+  margin-top: 0.3rem;
+}
+
+
+/* ------------------------- HEADLINE STAT CARDS ------------------------- */
+.headline-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.stat-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.1rem 1.25rem;
+  min-height: 118px;
+}
+
+.stat-card-wide {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+}
+
+.stat-card-gauge {
+  position: relative;
+  width: 92px;
+  height: 62px;
+  flex-shrink: 0;
+}
+
+.stat-card-segments {
+  position: absolute;
+  bottom: -6px;
+  inset-inline: 0;
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+}
+
+.stat-segment {
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.stat-segment-good    { background-color: #14261a; color: #6ee7a0; }
+.stat-segment-neutral { background-color: #23262f; color: #8b909c; }
+.stat-segment-bad     { background-color: #2a1618; color: #f27272; }
+
+.stat-card-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: start;
+}
+
+.stat-card-body-full {
+  width: 100%;
+}
+
+.stat-card-label {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: #8b909c;
+  font-size: 0.85rem;
+}
+
+.stat-card-info {
+  display: inline-flex;
+  color: #5c6270;
+  cursor: help;
+}
+
+.stat-card-info:hover {
+  color: #f0b90b;
+}
+
+.stat-card-value {
+  color: #e8e8e8;
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+
+/* ------------------------- SPLIT BAR ------------------------- */
+.split-bar-wrap {
+  margin-top: 0.85rem;
+}
+
+.split-bar {
+  display: flex;
+  height: 9px;
+  border-radius: 5px;
+  overflow: hidden;
+  background-color: #2b303b;
+}
+
+.split-bar-win  { background-color: #2fa66a; }
+.split-bar-loss { background-color: #d1494e; }
+
+.split-bar-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.35rem;
+  font-size: 0.8rem;
+}
+
+.split-bar-win-label  { color: #2fa66a; }
+.split-bar-loss-label { color: #d1494e; }
+
+
+/* ------------------------- SECONDARY METRICS (COLLAPSIBLE) ------------------------- */
+.secondary-metrics {
+  margin-bottom: 1.25rem;
+}
+
+.metrics-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-inline: auto;
+  /* 44px keeps it a comfortable touch target even though it reads as a quiet link */
+  min-height: 44px;
+  padding: 0 0.9rem;
+  background: none;
+  border: none;
+  color: #6b7280;
+  font-family: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: color 0.15s ease-in-out;
+}
+
+.metrics-toggle:hover {
+  color: #f0b90b;
+}
+
+/* Open, the strip sits directly above the button and the label ends up 16px closer to what
+   is above it than it is when closed - the collapsed state gets its breathing room from the
+   headline grid's own margin, and the strip has none to give. This puts the two states back
+   on the same spacing. */
+.metrics-toggle-open {
+  margin-top: 1rem;
+}
+
+.metrics-toggle-arrow {
+  display: inline-flex;
+  font-size: 1rem;
+}
+
+/* A soft entrance so the strip does not pop in. It animates opacity and a few pixels of
+   offset only - never height - so it can never fight the layout. */
+.secondary-metrics .metric-strip {
+  margin-top: 0.5rem;
+  animation: metrics-in 0.22s ease-out;
+}
+
+@keyframes metrics-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+
+/* ------------------------- METRIC STRIP ------------------------- */
+.metric-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr));
+  gap: 1px;
+  background-color: #23262f;
+  overflow: hidden;
+}
+
+.metric {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.9rem 0.6rem;
+  background-color: #15181f;
+}
+
+.metric-label {
+  color: #6b7280;
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+.metric-value {
+  color: #e8e8e8;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+
+/* ------------------------- THE TWO SHOULDERS ------------------------- */
+/* One card, two halves. They used to be two separate framed cards, which read as two
+   unrelated features - they are the same trader seen from two sides, and the comparison is
+   the whole point. The frame is the product's ordinary card, deliberately: this is a
+   feature among features, not the centrepiece. */
+.shoulders {
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.shoulders-head {
+  margin-bottom: 1.15rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #23262f;
+}
+
+.shoulders-title {
+  color: #e8e8e8;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.shoulders-subtitle {
+  color: #6b7280;
+  font-size: 0.84rem;
+}
+
+/* A single hairline column between the halves instead of two borders around them. */
+.shoulders-body {
+  display: grid;
+  grid-template-columns: 1fr 1px 1fr;
+  gap: 1.5rem;
+  align-items: stretch;
+}
+
+.shoulders-divider {
+  background-color: #23262f;
+}
+
+/* Both halves stretch to the same height, and inside each one every finding gets an equal
+   row. Cards of four different heights beside each other read as four different levels of
+   importance, which is exactly the wrong signal - they are peers. */
+.shoulder {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.shoulder-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+/* Larson with a halo / with horns. Well above the mark's 24px floor, and the two variants
+   share a frame so the pair line up beside each other. */
+.shoulder-icon {
+  width: 5rem;
+  height: 5rem;
+  flex-shrink: 0;
+  display: block;
+}
+
+/* An instruction, not a label. "המלאך שלך" tells the trader nothing to do with the
+   information; the mark beside it already says which side this is. */
+.shoulder-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.shoulder-angel .shoulder-title { color: #6ee7a0; }
+.shoulder-devil .shoulder-title { color: #f27272; }
+
+.shoulder-subtitle {
+  color: #6b7280;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.shoulder-empty {
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+.finding-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  /* An equal row per finding. The tallest card sets the height and the rest match it,
+     so nothing is truncated and nothing looks more important than its neighbour. */
+  grid-auto-rows: 1fr;
+  gap: 0.75rem;
+  flex: 1;
+}
+
+.finding {
+  display: flex;
+  flex-direction: column;
+  padding: 0.85rem 1rem;
+  background-color: #1b1f27;
+  border-radius: 8px;
+  border-inline-start: 3px solid transparent;
+}
+
+/* The evidence line is pinned to the bottom of its card, so the sample sizes line up
+   across the row instead of floating wherever the text happens to end. */
+.finding-evidence {
+  margin-top: auto;
+}
+
+.finding-angel { border-inline-start-color: #2fa66a; }
+.finding-devil { border-inline-start-color: #d1494e; }
+
+.finding-title {
+  color: #e8e8e8;
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin-bottom: 0.3rem;
+}
+
+.finding-detail {
+  color: #a8adb8;
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
+.finding-evidence {
+  display: inline-block;
+  padding-top: 0.45rem;
+  color: #6b7280;
+  font-size: 0.74rem;
+}
+
+
+/* ------------------------- WRITTEN PROFILE (THE CENTREPIECE) ------------------------- */
+/* This is the one thing on the page the model writes, so it is staged rather than listed:
+   centred, lifted off the background, and carrying the only gold action on the screen. */
+.written-profile {
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 1.5rem;
+  padding: 2.5rem 1.75rem;
+  text-align: center;
+  border-color: #3b3320;
+  background:
+    radial-gradient(120% 150% at 50% -20%, rgba(240, 185, 11, 0.10) 0%, rgba(240, 185, 11, 0) 60%),
+    #15181f;
+}
+
+/* A hairline of gold along the top edge - the smallest possible way to say "this one". */
+.written-profile::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  inset-inline: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #f0b90b, transparent);
+}
+
+/* A slow breathing glow behind the empty state, so the eye lands here first. It animates
+   opacity only, never layout. */
+.written-glow {
+  position: absolute;
+  top: -45%;
+  left: 50%;
+  width: 460px;
+  height: 460px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(240, 185, 11, 0.13) 0%, rgba(240, 185, 11, 0) 70%);
+  pointer-events: none;
+}
+
+.written-profile-empty .written-glow {
+  animation: written-breathe 4.5s ease-in-out infinite;
+}
+
+@keyframes written-breathe {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 1; }
+}
+
+.written-inner {
+  position: relative;
+  max-width: 68ch;
+  margin-inline: auto;
+}
+
+.written-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: #f0b90b;
+  font-size: 0.8rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin-bottom: 0.6rem;
+}
+
+/* 24px is the floor the mark was drawn to; below that the hair smears into a mass. */
+.written-mark {
+  display: block;
+  width: 10rem;
+  height: 10rem;
+}
+
+.written-title {
+  color: #e8e8e8;
+  font-size: clamp(1.5rem, 3.6vw, 2.1rem);
+  font-weight: 700;
+  line-height: 1.25;
+  margin-bottom: 0.9rem;
+}
+
+.written-pitch {
+  color: #a8adb8;
+  font-size: 1.02rem;
+  line-height: 1.75;
+  margin-bottom: 0.5rem;
+}
+
+.written-basis {
+  color: #6b7280;
+  font-size: 0.82rem;
+  margin-bottom: 1.5rem;
+}
+
+.written-cta {
+  min-height: 52px;
+  padding-inline: 2.5rem;
+  font-size: 1.02rem;
+  box-shadow: 0 0 0 0 rgba(240, 185, 11, 0.45);
+  animation: written-pulse 2.6s ease-out infinite;
+}
+
+/* The ring expands outward and fades - it never changes the button's own size, so nothing
+   around it shifts. */
+@keyframes written-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(240, 185, 11, 0.40); }
+  70%  { box-shadow: 0 0 0 16px rgba(240, 185, 11, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(240, 185, 11, 0); }
+}
+
+.written-cta:disabled {
+  animation: none;
+}
+
+/* Someone who prefers less motion gets a still page. */
+@media (prefers-reduced-motion: reduce) {
+  .written-cta,
+  .written-profile-empty .written-glow {
+    animation: none;
+  }
+}
+
+.written-text {
+  text-align: start;
+  margin-top: 0.5rem;
+}
+
+/* Tighter than the airy default. The text is short now, and a shorter block wants less
+   leading or it reads as padding rather than breathing room. */
+.written-text p {
+  color: #cfd2d8;
+  font-size: 0.98rem;
+  line-height: 1.8;
+  margin-bottom: 0.85rem;
+}
+
+.written-text p:last-child {
+  margin-bottom: 0;
+}
+
+/* The closing line is the one the trader takes to the screen tomorrow, so it is set apart
+   rather than buried at the end of the last paragraph. */
+.written-closing {
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid #2b303b;
+  color: #f0b90b;
+  font-size: 1.08rem;
+  font-weight: 600;
+  line-height: 1.7;
+}
+
+.written-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid #23262f;
+}
+
+.written-meta {
+  color: #4d525d;
+  font-size: 0.78rem;
+}
+
+.written-update {
+  min-height: 40px;
+  padding-inline: 1.1rem;
+  font-size: 0.88rem;
+}
+
+.written-stale {
+  color: #e0b341;
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+
+/* ------------------------- SECTION HEADING ------------------------- */
+/* A heading that sits above a grid of cards rather than inside one, so the cards below it
+   read as one body of evidence instead of as loose tiles. */
+.section-head {
+  margin-bottom: 0.9rem;
+}
+
+.section-title {
+  color: #e8e8e8;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.section-subtitle {
+  color: #6b7280;
+  font-size: 0.84rem;
+  line-height: 1.55;
+  max-width: 68ch;
+}
+
+
+/* ------------------------- BREAKDOWNS ------------------------- */
+.breakdowns-section {
+  margin-bottom: 1.25rem;
+}
+
+.breakdowns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr));
+  gap: 1rem;
+}
+
+.breakdown-card {
+  padding: 1.25rem;
+}
+
+.breakdown-card-full {
+  grid-column: 1 / -1;
+}
+
+.breakdown-title {
+  color: #e8e8e8;
+  font-size: 1.02rem;
+  margin-bottom: 0.25rem;
+}
+
+.breakdown-hint {
+  color: #6b7280;
+  font-size: 0.78rem;
+  margin-bottom: 0.9rem;
+}
+
+/* Wide content scrolls inside its own box. The default browser scrollbar is a bright grey
+   slab on a dark card, so it is restyled to sit in the palette rather than on top of it. */
+.breakdown-chart,
+.breakdown-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  padding-bottom: 2px;
+
+  /* Firefox and the standard property */
+  scrollbar-width: thin;
+  scrollbar-color: #2b303b transparent;
+}
+
+.breakdown-chart:hover,
+.breakdown-table-wrap:hover {
+  scrollbar-color: #f0b90b transparent;
+}
+
+/* Chromium and Safari */
+.breakdown-chart::-webkit-scrollbar,
+.breakdown-table-wrap::-webkit-scrollbar {
+  height: 8px;
+}
+
+.breakdown-chart::-webkit-scrollbar-track,
+.breakdown-table-wrap::-webkit-scrollbar-track {
+  background-color: #1b1f27;
+  border-radius: 4px;
+}
+
+.breakdown-chart::-webkit-scrollbar-thumb,
+.breakdown-table-wrap::-webkit-scrollbar-thumb {
+  background-color: #2b303b;
+  border-radius: 4px;
+  transition: background-color 0.15s ease-in-out;
+}
+
+.breakdown-chart::-webkit-scrollbar-thumb:hover,
+.breakdown-table-wrap::-webkit-scrollbar-thumb:hover {
+  background-color: #f0b90b;
+}
+
+.breakdown-table {
+  width: 100%;
+  min-width: 380px;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.breakdown-table th {
+  color: #6b7280;
+  font-weight: 600;
+  text-align: right;
+  padding: 0.45rem 0.5rem;
+  border-bottom: 1px solid #2b303b;
+  white-space: nowrap;
+}
+
+.breakdown-table td {
+  color: #cfd2d8;
+  padding: 0.45rem 0.5rem;
+  border-bottom: 1px solid #1f232b;
+  white-space: nowrap;
+}
+
+.breakdown-key {
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+
+
+
+
+/* ------------------------- LAPTOP RESPONSIVE STYLING ------------------------- */
+@media (min-width: 1025px) and (max-width: 1919px) {
+
+}
+
+
+/* ------------------------- TABLET RESPONSIVE STYLING ------------------------- */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .shoulders-body {
+    gap: 1.1rem;
+  }
+
+  .shoulder-icon {
+    width: 4rem;
+    height: 4rem;
+  }
+
+  .score-hero {
+    grid-template-columns: 210px 1fr;
+    gap: 1.25rem;
+    padding: 1.35rem;
+  }
+}
+
+
+/* ------------------------- MOBILE RESPONSIVE STYLING ------------------------- */
+@media (max-width: 768px) {
+  .score-hero {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    padding: 1.1rem;
+  }
+
+  .score-hero-gauge {
+    height: 170px;
+  }
+
+  .score-hero-number {
+    font-size: 2.8rem;
+  }
+
+  .stat-card {
+    padding: 0.95rem 1rem;
+    min-height: 104px;
+  }
+
+  .stat-card-value {
+    font-size: 1.35rem;
+  }
+
+  .shoulders,
+  .breakdown-card {
+    padding: 1rem;
+  }
+
+  /* Stacked, so the hairline becomes a rule between them rather than a column beside them.
+     The mark shrinks too - at 5rem it would take a third of the width of a 320px screen. */
+  .shoulders-body {
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+  }
+
+  .shoulders-divider {
+    height: 1px;
+  }
+
+  .shoulder-icon {
+    width: 3.5rem;
+    height: 3.5rem;
+  }
+
+  .written-profile {
+    padding: 1.75rem 1rem;
+  }
+
+  .written-glow {
+    width: 300px;
+    height: 300px;
+  }
+
+  .written-cta {
+    width: 100%;
+    padding-inline: 1rem;
+  }
+
+  .written-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .written-update {
+    width: 100%;
+  }
+}
+
+
+/* ------------------------- ACCOUNT SELECTOR ------------------------- */
+/* Placement is the header row's job now - this only keeps the trigger from stretching. */
+.account-selector {
+  display: flex;
+}
+
+.account-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  /* 44px keeps it a real touch target */
+  min-height: 44px;
+  padding: 0 0.9rem;
+  background-color: #1b1f27;
+  border: 1px solid #2b303b;
+  border-radius: 999px;
+  color: #e8e8e8;
+  font-family: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease-in-out;
+}
+
+.account-trigger:hover {
+  border-color: #f0b90b;
+}
+
+.account-trigger-icon {
+  display: inline-flex;
+  color: #f0b90b;
+  font-size: 1rem;
+}
+
+.account-trigger-label {
+  max-width: 60vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-trigger-arrow {
+  display: inline-flex;
+  color: #6b7280;
+  font-size: 0.95rem;
+}
+
+.account-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.account-option-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.account-option-label {
+  color: #e8e8e8;
+  font-size: 0.88rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-option-meta {
+  color: #6b7280;
+  font-size: 0.75rem;
+}
+
+.account-divider {
+  height: 1px;
+  margin: 0.35rem 0.75rem;
+  background-color: #2b303b;
+}
+
+.written-mismatch {
+  color: #f0b90b;
+}
+
+.breakdown-key-label {
+  color: #6b7280;
+  font-size: 0.8rem;
+}

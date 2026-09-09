@@ -1,0 +1,74 @@
+.auth-page {
+  display: flex;
+  justify-content: center;
+  padding-top: 4dvh;
+}
+
+.auth-form {
+  width: 100%;
+  max-width: 420px;
+}
+
+.auth-title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  color: #f0b90b;
+  font-size: clamp(1.6rem, 4.5vw, 2.2rem);
+  margin-bottom: 0.5rem;
+}
+
+.auth-subtitle {
+  color: #cfd2d8;
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.auth-field {
+  margin-bottom: 1rem;
+}
+
+.auth-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+.auth-actions .app-btn {
+  width: 100%;
+}
+
+.auth-secondary-btn {
+  max-width: 50%;
+}
+
+
+
+
+
+/* ------------------------- LAPTOP RESPONSIVE STYLING ------------------------- */
+@media (min-width: 1025px) and (max-width: 1919px) {
+
+}
+
+
+/* ------------------------- TABLET RESPONSIVE STYLING ------------------------- */
+@media (min-width: 769px) and (max-width: 1024px) {
+
+}
+
+
+/* ------------------------- MOBILE RESPONSIVE STYLING ------------------------- */
+@media (max-width: 768px) {
+  .auth-page {
+    padding-top: 2dvh;
+  }
+
+  /* On a phone both actions get the full width — a half-width button is too small to hit */
+  .auth-secondary-btn {
+    max-width: 100%;
+  }
+}
