@@ -24,3 +24,220 @@
     opacity: 0.7;
   }
 }
+
+
+/* ------------------------- LARSON PRESENCE ------------------------- */
+/* Larson at a size the state can actually be read at, with the state also written out.
+   Used by the chat, by the mentor and by the written profile, so all three say the same
+   thing the same way.
+
+   Every colour here is one the product already uses: the visor's gold, the loss red and the
+   green from the score. Nothing new was invented for this. */
+
+/* A column, not a row - and that is a centring decision rather than a taste one.
+   Laid out as a row, the disc sits at one end of the badge, so centring the badge leaves the
+   disc visibly off the middle of the bar and centring the disc leaves the badge hanging off
+   to one side. Stacked, the disc is on the badge's own centre line, so **both are centred at
+   once and neither depends on how long the conversation title happens to be.** */
+.larson-presence {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.28rem;
+  min-width: 0;
+}
+
+/* The dark disc the avatar already stands on, at a size where the line inside the visor is
+   legible rather than just tinted. */
+.larson-presence-disc {
+  position: relative;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 76px;
+  height: 76px;
+  padding: 4px;
+  background-color: #12151b;
+  border: 1px solid #3b3320;
+  border-radius: 50%;
+  transition: border-color 0.35s ease-in-out, box-shadow 0.35s ease-in-out;
+}
+
+/* Light around him, not a ring on him. It sits behind the disc and is blurred, so it cannot
+   read as a second border - the same reason the chat's aura lives outside its shell. */
+.larson-presence-halo {
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(240, 185, 11, 0.22) 0%, rgba(240, 185, 11, 0) 70%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.45s ease-in-out;
+}
+
+/* One line, so the badge stays as short as a header can afford. It cannot wrap: a badge that
+   is two lines tall in one state and one in another would change the height of the bar - and
+   the thread underneath it - every time an answer lands. */
+.larson-presence-words {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.larson-presence-headline {
+  color: #cfd2d8;
+  font-size: 0.86rem;
+  font-weight: 700;
+  line-height: 1.3;
+  transition: color 0.35s ease-in-out;
+}
+
+.larson-presence-note {
+  color: #7d8492;
+  font-size: 0.74rem;
+  line-height: 1.35;
+}
+
+/* The separator belongs to the note and disappears with it, so the phone does not end up
+   with a headline trailing a lonely dot. */
+.larson-presence-note::before {
+  content: '·';
+  margin-inline-end: 0.35rem;
+  color: #4a505c;
+}
+
+
+/* ------------- THINKING: the only state that moves */
+.larson-presence-thinking .larson-presence-disc {
+  border-color: #6b5712;
+  box-shadow: 0 0 0 1px rgba(240, 185, 11, 0.10);
+}
+
+.larson-presence-thinking .larson-presence-halo {
+  opacity: 1;
+  animation: larson-presence-breathe 2.4s ease-in-out infinite;
+}
+
+.larson-presence-thinking .larson-presence-headline {
+  color: #e0b341;
+}
+
+/* Opacity only. Nothing here may move layout while an answer is streaming next to it. */
+@keyframes larson-presence-breathe {
+  0%, 100% { opacity: 0.45; }
+  50%      { opacity: 1; }
+}
+
+
+/* ------------- FOUND: he came back with something */
+.larson-presence-found .larson-presence-disc {
+  border-color: #6b5712;
+}
+
+.larson-presence-found .larson-presence-headline {
+  color: #e0b341;
+}
+
+
+/* ------------- THE VERDICT: the two that carry a colour of their own */
+/* These are the ones the size was needed for. At 46px the shape of the line is gone and the
+   colour is all that is left of them, which is exactly the feature that was being missed. */
+.larson-presence-success .larson-presence-disc {
+  border-color: #2a5f45;
+  box-shadow: 0 0 0 1px rgba(53, 189, 121, 0.12);
+}
+
+.larson-presence-success .larson-presence-halo {
+  background: radial-gradient(circle, rgba(53, 189, 121, 0.20) 0%, rgba(53, 189, 121, 0) 70%);
+  opacity: 1;
+}
+
+.larson-presence-success .larson-presence-headline {
+  color: #6ee7a0;
+}
+
+.larson-presence-warning .larson-presence-disc {
+  border-color: #6b2f32;
+  box-shadow: 0 0 0 1px rgba(209, 73, 78, 0.12);
+}
+
+.larson-presence-warning .larson-presence-halo {
+  background: radial-gradient(circle, rgba(209, 73, 78, 0.20) 0%, rgba(209, 73, 78, 0) 70%);
+  opacity: 1;
+}
+
+.larson-presence-warning .larson-presence-headline {
+  color: #e8797d;
+}
+
+
+/* ------------------------- TABLET RESPONSIVE STYLING ------------------------- */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .larson-presence-disc {
+    width: 64px;
+    height: 64px;
+  }
+
+  .larson-presence-note {
+    font-size: 0.72rem;
+  }
+}
+
+
+/* ------------------------- MOBILE RESPONSIVE STYLING ------------------------- */
+@media (max-width: 768px) {
+  .larson-presence {
+    gap: 0.5rem;
+  }
+
+  /* Still clearly larger than the 40px avatar it is meant to stop being confused with,
+     and it keeps its headline - which is the half a phone can least afford to lose. */
+  .larson-presence-disc {
+    width: 54px;
+    height: 54px;
+    padding: 3px;
+  }
+
+  .larson-presence-headline {
+    font-size: 0.78rem;
+  }
+
+  /* The headline is the fact; the note is the explanation of it. On a phone there is room
+     for one of them, and it is not the explanation. */
+  .larson-presence-note {
+    display: none;
+  }
+}
+
+
+/* ------------------------- HIM INSIDE A ROUND FRAME ------------------------- */
+/* Measured, not nudged: in a circle he reads high, and the bounding box is the wrong thing
+   to centre. **At the top of him the ink is the full width of the mane, which runs close to
+   the arc; at the bottom it is a neck 32 units wide, with the arc curving away from it.**
+   So gaps that are equal in a square are nothing like equal in a circle - measured on the
+   shipped shape, the mane reached 0.92 of the radius while the neck reached 0.70.
+
+   5.5% of the box is 11 units of the 200-square. Equalising the reach exactly would take 14,
+   which is a shade too far - it pushes until a thin neck is as close to the rim as a
+   full-width mane, and the eye does not weigh the two the same. 11 is most of the way there
+   and still leaves the neck clear of the arc.
+
+   **It lives on the round frames and not in `FRAME` inside the component**, because it is a
+   correction for the frame rather than a change to the character: the navbar mark, the
+   welcome figure and the written profile all sit in square boxes, where the same shift would
+   make him look low. */
+.larson-disc .larson-figure {
+  transform: translateY(5.5%);
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+  .larson-presence-halo,
+  .larson-presence-disc,
+  .larson-presence-headline {
+    animation: none;
+    transition: none;
+  }
+}

@@ -134,7 +134,7 @@ const ChatMessage = ({ message, isWriting = false, isFound = false }: Props) => 
       {/* The visor is his expression, and a debrief is the one answer that has something to
           express. At this size the shape of the line is lost - what carries is the colour,
           which is exactly why these two states live here and `found` does not. */}
-      <span className="chat-avatar">
+      <span className="chat-avatar larson-disc">
         <LarsonMark state={visorFor(message, isWriting)} />
       </span>
 

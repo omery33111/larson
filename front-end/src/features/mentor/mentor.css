@@ -34,11 +34,15 @@
 }
 
 /* The gap this page exists to close, stated in the place a chat puts its title. */
+/* It used to be pushed to the far end of a flex bar by an auto margin. The bar is a grid
+   now and this sits stacked under the title, in the track that holds "where you are" - so
+   the margin is gone and the width is capped instead, letting the line ellipsize rather
+   than widen its track and shove Larson off centre. */
 .mentor-resume {
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
-  margin-inline-start: auto;
+  max-width: 100%;
   color: #8b909c;
   font-size: 0.8rem;
   white-space: nowrap;

@@ -53,7 +53,8 @@ const WrittenProfile = () => {
   const canGenerate = overview.has_enough_data && !isGenerating;
 
   return (
-    <section className={`written-profile ${profile ? 'written-profile-filled' : 'written-profile-empty'}`}>
+    <section className={`written-profile ${profile ? 'written-profile-filled' : 'written-profile-empty'}`
+      + `${isGenerating ? ' written-profile-working' : ''}`}>
 
       <div className="written-glow" aria-hidden="true" />
 
@@ -71,6 +72,13 @@ const WrittenProfile = () => {
         <span className="written-eyebrow">
           <span className="written-mark">
             <LarsonMark state={isGenerating ? 'thinking' : profile ? 'found' : 'idle'} />
+          </span>
+
+          {/* The visor says it and the glow behind him says it, and neither reaches somebody
+              using a screen reader. This is the same fact in the third channel, announced
+              after whatever is being read rather than cutting into it. */}
+          <span className="app-sr-only" aria-live="polite">
+            {isGenerating ? 'לארסון חושב' : profile ? 'לארסון קרא אותך' : 'לארסון מקשיב'}
           </span>
         </span>
 

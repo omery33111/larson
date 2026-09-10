@@ -437,16 +437,51 @@
   min-width: 0;
 }
 
-/* The header of the conversation itself: which thread you are in on the right, and what
-   Larson is doing on the left. Without it the desktop screen opens with no statement of
-   what it is - and the sidebar highlight alone is a weak way to say where you are. */
+/* The header of the conversation: which thread you are in at the start, and Larson himself
+   in the middle. Without it the desktop screen opens with no statement of what it is - and
+   the sidebar highlight alone is a weak way to say where you are.
+
+   **Three tracks and not flex, because the middle one has to be centred on the COLUMN and
+   not on what is left over.** With flex, Larson would drift sideways with the length of the
+   conversation title - and a status indicator that is somewhere slightly different every
+   time you open the page is one you have to look for.
+
+   **The badge stacks its words under the disc rather than beside it, and that is what makes
+   this centre at all.** Side by side, the disc sits at one end of the badge: centring the
+   badge leaves the disc off the middle of the bar, and centring the disc alone leaves the
+   words hanging off one side so the group reads as lopsided. Both were tried and both were
+   visibly wrong. Stacked, the disc is on the badge's own centre line, so centring the badge
+   centres the disc - one arrangement with no failure mode.
+
+   `minmax(0, 1fr)` and not `1fr`: a plain `1fr` track still refuses to shrink below its
+   content, so a long conversation title or a long verdict line would widen its own side and
+   push the disc off centre - which is the whole thing this is here to prevent. */
 .chat-topbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 1.25rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.045);
+}
+
+
+/* The title, and on the mentor the resume line under it. Stacked rather than in a row: they
+   are one statement about where you are, and side by side they push Larson off centre. */
+.chat-topbar-side {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  padding: 0.55rem 1.25rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.045);
+  min-width: 0;
 }
+
+.chat-topbar-side-stack {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+}
+
+
 
 .chat-topbar-menu {
   display: none;
@@ -472,35 +507,10 @@
   font-weight: 700;
 }
 
-.chat-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  flex-shrink: 0;
-  padding: 0.2rem 0.65rem;
-  background-color: rgba(240, 185, 11, 0.06);
-  border: 1px solid #3b3320;
-  border-radius: 999px;
-  color: #8b909c;
-  font-size: 0.74rem;
-  white-space: nowrap;
-}
-
-.chat-status-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background-color: #8a6a12;
-}
-
-.chat-status-live {
-  color: #e0b341;
-}
-
-.chat-status-live .chat-status-dot {
-  background-color: #f0b90b;
-  animation: chat-breathe 1.6s ease-in-out infinite;
-}
+/* The gold pill with the breathing dot used to live here, saying "לארסון כותב". It was
+   replaced by `LarsonPresence` rather than joined by it: two indicators of the same fact,
+   one small and one large, would have the small one read as a second, different status.
+   Larson's own face is the better of the two, and now it carries the words as well. */
 
 .chat-scrim {
   position: absolute;
@@ -1150,14 +1160,10 @@
     display: flex;
   }
 
+  /* The badge keeps its middle track and stays centred; what goes is the explanation line
+     beside the headline (see larson.css), which is what makes it narrow enough to fit. */
   .chat-topbar {
-    padding-inline: 0.6rem;
-  }
-
-  /* The thread title and the status pill together do not fit a phone, and of the two the
-     title is the one that says where you are. */
-  .chat-status {
-    display: none;
+    padding: 0.35rem 0.6rem;
   }
 
   .chat-thread {
@@ -1203,10 +1209,6 @@
   .chat-disclaimer {
     font-size: 0.68rem;
     margin-top: 0.45rem;
-  }
-
-  .chat-topbar {
-    padding-block: 0.35rem;
   }
 
   .chat-welcome-pitch {

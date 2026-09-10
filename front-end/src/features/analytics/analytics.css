@@ -526,8 +526,20 @@
   pointer-events: none;
 }
 
-.written-profile-empty .written-glow {
+/* Two different reasons for the same movement, and both are honest. Empty, it is an
+   invitation - the block is asking to be pressed. While he is generating, it is the same
+   signal the chat's aura gives: he is working on it right now. A profile already written and
+   nothing happening is the one state that should sit still. */
+.written-profile-empty .written-glow,
+.written-profile-working .written-glow {
   animation: written-breathe 4.5s ease-in-out infinite;
+}
+
+/* Faster and brighter than the invitation, because it is reporting work rather than asking
+   for it - the same distinction the presence badge draws between resting and thinking. */
+.written-profile-working .written-glow {
+  animation-duration: 2.4s;
+  background: radial-gradient(circle, rgba(240, 185, 11, 0.20) 0%, rgba(240, 185, 11, 0) 70%);
 }
 
 @keyframes written-breathe {

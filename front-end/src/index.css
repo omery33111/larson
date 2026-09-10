@@ -171,6 +171,22 @@ a {
 }
 
 
+/* For text that exists only to be read aloud. Not `display: none` and not `visibility:
+   hidden` - both of those take it out of the accessibility tree as well, which is the one
+   place it was put there for. */
+.app-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+
 
 
 
