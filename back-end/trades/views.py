@@ -1,6 +1,6 @@
 import json
 
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
@@ -9,6 +9,8 @@ from django.db import IntegrityError
 from django.shortcuts import get_object_or_404
 
 from analytics.models import TraderProfile
+
+from project.throttling import AIBurstThrottle, AIDailyThrottle
 
 from .models import Trade, TradeFile
 from .parsers import SUPPORTED_EXTENSIONS, parse_file
@@ -23,8 +25,13 @@ MAX_FILE_MB = 20
 # ------------------------- INGESTION START ------------------------- #
 
 # ------------- UPLOAD (parse and preview, nothing is saved to the resume yet):
+# **On the AI meter, because it can reach the model.** A file the column dictionary cannot
+# read falls back to the LLM mapping, so this endpoint is a way to spend money - and until it
+# was listed here it was the one route to the model with no cap on it at all. A file it CAN
+# read costs nothing and the throttle is never the binding constraint on those.
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+@throttle_classes([AIBurstThrottle, AIDailyThrottle])
 def upload(request):
     uploaded = request.FILES.get("file")
 
@@ -45,7 +52,8 @@ def upload(request):
     # This is the one path allowed to fall back to the model for its column mapping: it is a
     # file the trader is deliberately adding to his record.
     try:
-        trades, report = parse_file(file_bytes, uploaded.name, allow_model = True)
+        trades, report = parse_file(file_bytes, uploaded.name, allow_model = True,
+                                    billed_to = request.user)
     except ValueError as e:
         return Response({"error": str(e)}, status = status.HTTP_400_BAD_REQUEST)
 

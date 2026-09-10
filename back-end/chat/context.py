@@ -35,7 +35,15 @@ MODEL = "claude-opus-5"
 # lever the spec picked over routing to a second model.
 EFFORT = "medium"
 
-MAX_TOKENS = 64000
+# **A single answer's ceiling, and it is a liability as much as a setting.** Everything the
+# model generates is billed at output rates, thinking included - so a call allowed to run to
+# 64,000 tokens is a call that can cost $1.60 on its own, forty times an ordinary answer.
+#
+# It cannot simply be cut to the length of the reply, because adaptive thinking draws from
+# the same budget and an answer truncated mid-thought is worse than an expensive one. 16,000
+# leaves several times the room any answer here has ever needed and caps the worst single
+# call at about forty cents; the token budget in `usage/` covers the rest.
+MAX_TOKENS = 16000
 
 # How far back the conversation is replayed. Long enough that a real thread holds together,
 # short enough that the resume is never pushed out by small talk.
@@ -186,6 +194,25 @@ def _as_json(payload):
     return json.dumps(payload, ensure_ascii = False, indent = 1, default = str)
 
 
+# ------------------------- PROMPT CACHING ------------------------- #
+# The breakpoint that pays for everything else here.
+#
+# **Cache reads cost a tenth of ordinary input, and writes cost a quarter more.** So a prefix
+# that is re-sent even twice inside the window is already cheaper cached than not - and this
+# one is re-sent on every single turn of every conversation: the persona and the resume come
+# to about 4,200 tokens and are byte-identical until the trader uploads a file.
+#
+# The minimum cacheable prefix on `claude-opus-5` is 512 tokens, so this clears it eight
+# times over. Below that a marker is silently ignored - no error, just no cache.
+#
+# **5 minutes and not an hour.** A read refreshes the entry's timer for free, so inside a
+# working session - question, answer, follow-up - the entry never expires and the 5-minute
+# TTL is strictly cheaper. The 1-hour TTL costs double to write and would only pay off for
+# gaps of 5 to 60 minutes, which is not the shape of this product: a trader is either in a
+# session or he is gone for the day.
+CACHE = {"type": "ephemeral"}
+
+
 def build_system(user, persona = None):
     """
     Persona first, resume second - two blocks rather than one string.
@@ -194,8 +221,13 @@ def build_system(user, persona = None):
     a different job; everything below the first block is identical for both.
 
     They are separated because they age differently: the persona is fixed and the resume
-    changes with every trade the user uploads. That is also exactly the seam prompt caching
-    would need later, without the seam costing anything now.
+    changes with every trade the user uploads. **That seam is now what makes caching work**:
+    the marker goes on the last block, so persona and resume are cached together and the
+    whole thing is rewritten only when the resume actually changes.
+
+    Nothing dynamic may be interpolated ahead of that marker - no timestamp, no request id,
+    no per-call mode line. Anything of that sort would change the prefix on every request and
+    silently turn every read into a write.
     """
     blocks = [{"type": "text", "text": persona or PERSONA}]
 
@@ -207,6 +239,7 @@ def build_system(user, persona = None):
             "**לסוחר הזה עדיין אין עסקאות במערכת.** אין לך נתונים עליו. אל תמציא כאלה — "
             "ענה על מה שנשאלת באופן כללי, ואם השאלה דורשת את הנתונים שלו, אמור לו שהוא צריך "
             "להעלות קובץ עסקאות קודם."})
+        blocks[-1]["cache_control"] = CACHE
         return blocks
 
     resume = "**הרזומה של הסוחר.** כל המספרים כאן חושבו כבר; אתה מצטט אותם, לא מחשב.\n\n"
@@ -219,6 +252,10 @@ def build_system(user, persona = None):
     resume += "נתוני המסחר שלו:\n" + _as_json(document)
 
     blocks.append({"type": "text", "text": resume})
+
+    # On the LAST block, which caches everything before it too. `tools` render ahead of
+    # `system`, so one marker here would cover those as well if this product ever had any.
+    blocks[-1]["cache_control"] = CACHE
 
     return blocks
 
@@ -256,6 +293,33 @@ def build_messages(conversation):
     # model no context at all.
     while messages and messages[0]["role"] == ASSISTANT:
         messages.pop(0)
+
+    return cache_the_history(messages)
+
+
+def cache_the_history(messages):
+    """
+    A second breakpoint, on the end of the thread.
+
+    **This is the one that pays for follow-up questions**, which are the expensive kind. The
+    whole conversation is re-sent on every turn, so the twentieth question in a thread carries
+    nineteen answers of history with it - measured, that answer costs about 1.8x the first one
+    without caching. With the marker here, each turn reads everything said so far and pays the
+    write premium only on what the last turn added.
+
+    It goes on the last block of the most recent turn even though that block is the new
+    question and will never be read back as itself. The entry it writes is what the NEXT
+    request reads, which is the whole point - and writes bill only the delta past the highest
+    hit, so re-marking the tail each turn is not re-paying for the conversation.
+    """
+    if not messages:
+        return messages
+
+    last = messages[-1]
+
+    # Content is a plain string everywhere else in this module because that is all the API
+    # needs; a marker has to hang off a block, so only the final message is expanded.
+    last["content"] = [{"type": "text", "text": last["content"], "cache_control": CACHE}]
 
     return messages
 

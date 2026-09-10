@@ -3,6 +3,8 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
+from django.core.cache import cache
+from django.test import override_settings
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -47,6 +49,21 @@ def make_trades(user, count = 30):
     return rows
 
 
+def text_of(message):
+    """
+    The words in a message, whichever shape it is in.
+
+    Most turns are sent as a plain string; the last one is a list of blocks so a
+    `cache_control` marker has something to hang off. Tests care about the words.
+    """
+    content = message["content"]
+
+    if isinstance(content, str):
+        return content
+
+    return "".join(block.get("text", "") for block in content)
+
+
 def read_events(response):
     """The SSE body, parsed back into the events the browser would see."""
     body = b"".join(response.streaming_content).decode("utf-8")
@@ -55,12 +72,24 @@ def read_events(response):
             for line in body.split("\n\n") if line.startswith("data: ")]
 
 
+class FakeUsage:
+    """The `usage` block every real response carries, which is what the budget meters."""
+
+    def __init__(self, input_tokens = 1000, output_tokens = 200,
+                 cache_creation_input_tokens = 0, cache_read_input_tokens = 0):
+        self.input_tokens = input_tokens
+        self.output_tokens = output_tokens
+        self.cache_creation_input_tokens = cache_creation_input_tokens
+        self.cache_read_input_tokens = cache_read_input_tokens
+
+
 class FakeStream:
     """Stands in for client.messages.stream(...) so no real call is made in the tests."""
 
-    def __init__(self, chunks, stop_reason = "end_turn"):
+    def __init__(self, chunks, stop_reason = "end_turn", usage = None):
         self.chunks = chunks
         self.stop_reason = stop_reason
+        self.usage = usage if usage is not None else FakeUsage()
 
     def __enter__(self):
         return self
@@ -73,15 +102,15 @@ class FakeStream:
         return iter(self.chunks)
 
     def get_final_message(self):
-        return type("Final", (), {"stop_reason": self.stop_reason})()
+        return type("Final", (), {"stop_reason": self.stop_reason, "usage": self.usage})()
 
 
-def fake_client(chunks, stop_reason = "end_turn", captured = None):
+def fake_client(chunks, stop_reason = "end_turn", captured = None, usage = None):
     class Messages:
         def stream(self, **kwargs):
             if captured is not None:
                 captured.update(kwargs)
-            return FakeStream(chunks, stop_reason)
+            return FakeStream(chunks, stop_reason, usage)
 
     class Client:
         def __init__(self, *args, **kwargs):
@@ -313,6 +342,58 @@ class ContextTests(APITestCase):
 
 
 
+# ------------------------- THE METER ON THE EXPENSIVE ENDPOINT ------------------------- #
+
+# The suite runs with the limits off - the counters outlive a single test - so this class
+# turns them back on at a rate small enough to reach. See project/throttling.py for why the
+# rate is read at request time rather than at import time; without that, this test could not
+# exist at all.
+@override_settings(REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework_simplejwt.authentication.JWTAuthentication",),
+    "DEFAULT_THROTTLE_RATES": {"ai": "2/hour", "ai-day": "50/day",
+                               "user": "100/hour", "anon": "100/hour"},
+})
+class StreamThrottleTests(APITestCase):
+
+    def setUp(self):
+        cache.clear()
+        self.user = User.objects.create_user(username = "omer", password = "pass12345")
+        self.client.force_authenticate(user = self.user)
+        self.conversation = Conversation.objects.create(user = self.user)
+        make_trades(self.user)
+
+    def tearDown(self):
+        cache.clear()
+
+    def ask(self):
+        with self.settings(ANTHROPIC_API_KEY = "test-key"):
+            with patch("anthropic.Anthropic", fake_client(("שלום",))):
+                return self.client.post(
+                    f"/chat/conversations/{self.conversation.id}/stream/",
+                    {"message": "מה אחוז ההצלחה שלי?"})
+
+    def test_the_third_answer_in_the_hour_is_refused(self):
+        # **This is the one that costs money if it is missing.** A retry loop in the client
+        # can spend an unbounded amount here, and every answer is allowed up to 64k output
+        # tokens - so the limit is what stands between a bug and a bill.
+        self.assertEqual(self.ask().status_code, status.HTTP_200_OK)
+        self.assertEqual(self.ask().status_code, status.HTTP_200_OK)
+
+        self.assertEqual(self.ask().status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+    def test_the_two_windows_do_not_share_one_counter(self):
+        # An hourly and a daily cap on the same view have to count separately; sharing a
+        # bucket would silently make the tighter one the only one that exists.
+        from project.throttling import AIBurstThrottle, AIDailyThrottle
+
+        burst, daily = AIBurstThrottle(), AIDailyThrottle()
+        self.assertNotEqual(burst.scope, daily.scope)
+        self.assertEqual(burst.num_requests, 2)
+        self.assertEqual(daily.num_requests, 50)
+
+
+
 # ------------------------- STREAMING ------------------------- #
 
 class StreamTests(APITestCase):
@@ -440,7 +521,7 @@ class AttachmentTests(APITestCase):
         # part of the history it is being compared against.
         self.assertEqual(Trade.objects.count(), 0)
 
-        sent = captured["messages"][0]["content"]
+        sent = text_of(captured["messages"][0])
         self.assertIn("backtest.csv", sent)
         self.assertIn("פער הביצוע", sent)
 

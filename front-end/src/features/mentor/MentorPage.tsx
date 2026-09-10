@@ -8,6 +8,9 @@ import ChatMessage from '../chat/ChatMessage'
 import { clearJumpTarget, selectJumpTargetId } from '../chat/chatSlice'
 import { useTypewriter } from '../chat/useTypewriter'
 import LarsonMark from '../larson/LarsonMark'
+import LarsonPresence, { presenceState } from '../larson/LarsonPresence'
+import UsageNotice from '../usage/UsageNotice'
+import { getUsageAsync } from '../usage/usageSlice'
 import {
   resetIngestion, selectIsUploading, selectResumeVersion, uploadTradesAsync
 } from '../trades/tradesSlice'
@@ -73,6 +76,9 @@ const MentorPage = () => {
       return;
     }
     dispatch(getMentorAsync());
+
+    // Read once, here. After this the fresh figure rides the last event of every answer.
+    dispatch(getUsageAsync());
     // `resumeVersion` moves whenever the resume actually changed - a file confirmed here, a
     // file added from the dialog, a deletion. Re-reading on it is also what puts the newly
     // confirmed file onto the composer, without this screen having to know who confirmed it.
@@ -181,24 +187,39 @@ const MentorPage = () => {
           {/* What he knows and how old it is, in the place a chat puts its title. This strip
               is the reason to be here: it names the gap the page exists to close. */}
           <div className="chat-topbar mentor-topbar">
-            <span className="chat-topbar-title">לארסון המנטור</span>
+            <div className="chat-topbar-side chat-topbar-side-stack">
+              <span className="chat-topbar-title">לארסון המנטור</span>
 
-            {resume.total_trades > 0 ? (
-              <span className={`mentor-resume ${isStale ? 'mentor-resume-stale' : ''}`}>
-                <span className="mentor-resume-dot" aria-hidden="true" />
-                לארסון מכיר {resume.total_trades} עסקאות
-                {resume.days_since !== null && (
-                  <>
-                    {' · '}
-                    {resume.days_since === 0 ? 'עודכן היום'
-                      : resume.days_since === 1 ? 'העסקה האחרונה שראה: אתמול'
-                      : `העסקה האחרונה שראה: לפני ${resume.days_since} ימים`}
-                  </>
-                )}
-              </span>
-            ) : (
-              <span className="mentor-resume">עדיין לא ראה אף עסקה שלך</span>
-            )}
+              {resume.total_trades > 0 ? (
+                <span className={`mentor-resume ${isStale ? 'mentor-resume-stale' : ''}`}>
+                  <span className="mentor-resume-dot" aria-hidden="true" />
+                  לארסון מכיר {resume.total_trades} עסקאות
+                  {resume.days_since !== null && (
+                    <>
+                      {' · '}
+                      {resume.days_since === 0 ? 'עודכן היום'
+                        : resume.days_since === 1 ? 'העסקה האחרונה שראה: אתמול'
+                        : `העסקה האחרונה שראה: לפני ${resume.days_since} ימים`}
+                    </>
+                  )}
+                </span>
+              ) : (
+                <span className="mentor-resume">עדיין לא ראה אף עסקה שלך</span>
+              )}
+            </div>
+
+            {/* This is the screen the presence was built for. The verdict is the whole point
+                of a debrief - green when the new trades kept the rules his own history argues
+                for, red when one broke - and until now it existed only as the tint of a 46px
+                avatar halfway up a scrolling thread. Here it is his face at 76px in the strip
+                that never scrolls, with the verdict also said in words.
+
+                It reads off the last answer, so it survives a refresh: the verdict is stored
+                on the message row rather than only sent in the stream. */}
+            <LarsonPresence
+              state={presenceState(isWaiting || isStreaming, messages)}
+              idleNote={knowsHim ? 'מוכן לתחקיר הבא' : 'מחכה לקובץ הראשון שלך'}
+            />
           </div>
 
           <div className="chat-thread" ref={scroller} onScroll={onScroll}>
@@ -254,6 +275,9 @@ const MentorPage = () => {
           </div>
 
           <div className="chat-composer mentor-composer">
+
+            {/* Nothing at all until there is a reason - see UsageNotice.tsx. */}
+            <UsageNotice />
 
             <input
               ref={picker}

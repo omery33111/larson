@@ -919,7 +919,7 @@ def _missing_required(mapping):
 
 
 def parse_file(file_bytes, filename, source_timezone = DEFAULT_SOURCE_TIMEZONE,
-               mapping = None, allow_model = False):
+               mapping = None, allow_model = False, billed_to = None):
     """
     Reads a file and returns (trades, report).
 
@@ -933,6 +933,10 @@ def parse_file(file_bytes, filename, source_timezone = DEFAULT_SOURCE_TIMEZONE,
     `allow_model` permits the LLM column mapping when the dictionary cannot find the required
     fields. It is off by default: the temporary documents attached in chat go through here
     too, and a comparison file is not worth a model call of its own.
+
+    `billed_to` is who that call is charged to. It travels with `allow_model` and for the
+    same reason - **this is the one model call in the product that does not go through the
+    chat's gate**, so without it the upload screen is a way around the budget.
     """
     df = read_table(file_bytes, filename)
     df = df.dropna(how = "all")
@@ -950,7 +954,7 @@ def parse_file(file_bytes, filename, source_timezone = DEFAULT_SOURCE_TIMEZONE,
 
         # The dictionary goes first, always, and the model only sees files it could not read.
         if allow_model and _missing_required(mapping):
-            found = map_with_model(list(df.columns), sample, mapping)
+            found = map_with_model(list(df.columns), sample, mapping, billed_to = billed_to)
 
             if found:
                 mapping = {**mapping, **found}

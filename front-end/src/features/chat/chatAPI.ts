@@ -1,14 +1,16 @@
 import axios from "axios";
+import { accessToken, freshAccessToken } from "../../app/session";
 import {
     conversationURL, conversationsURL, starMessageURL, starredMessagesURL, streamMessageURL
 } from "../../endpoints/endpoints";
 
 
 
-function accessToken() {
-    const myToken = JSON.parse(localStorage.getItem("token") as string)
-    return myToken ? myToken.access : "";
-}
+// The token now comes from `app/session`, which is also what renews it. These two files are
+// the reason that had to be shared rather than living in the axios interceptor: a stream is
+// opened with `fetch`, so it never passes through the interceptor at all - and a stream
+// cannot be retried after the fact, because by the time the server rejects it the response
+// has already started. So they ask for a token that is good FIRST.
 
 function authConfig() {
     return {
@@ -100,11 +102,15 @@ export const takePendingFile = () => {
 // EventSource would have been the obvious tool for SSE and cannot be used: it sends no
 // headers, so there is nowhere to put the token, and it cannot POST a file.
 
+// The quota state rides the last event of an answer, and the refusal too - which is the one
+// time the client most needs the fresh figure. Nothing polls for it.
+import type { UsagePayload } from '../usage/usageSlice';
+
 export type StreamEvent =
-    | { type: 'start'; message_id: number; question_id: number; title: string }
+    | { type: 'start'; message_id: number; question_id: number; title: string; verdict?: string }
     | { type: 'delta'; text: string }
-    | { type: 'done'; message_id: number }
-    | { type: 'error'; error: string };
+    | { type: 'done'; message_id: number; usage?: UsagePayload }
+    | { type: 'error'; error: string; usage?: UsagePayload };
 
 
 const streamMessage = async (
@@ -120,7 +126,7 @@ const streamMessage = async (
 
     const response = await fetch(streamMessageURL(id), {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${accessToken()}` },
+        headers: { 'Authorization': `Bearer ${await freshAccessToken()}` },
         body,
         signal,
     });

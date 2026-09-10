@@ -89,7 +89,7 @@ Rules:
 
 
 
-def map_with_model(headers, sample, known):
+def map_with_model(headers, sample, known, billed_to = None):
     """
     Returns {field: header} for the fields the dictionary could not find.
 
@@ -135,6 +135,13 @@ def map_with_model(headers, sample, known):
         )
     except Exception:
         return {}
+
+    # Small and rare, but it is a call to the model - and a ledger with a hole in it stops
+    # being a ledger. This is also the only model call the product makes that is NOT behind
+    # the chat's own gate, so without this it would be the way around the budget entirely.
+    if billed_to is not None and getattr(message, "usage", None):
+        from usage import budget
+        budget.record(billed_to, "mapping", message.usage)
 
     if message.stop_reason == "refusal":
         return {}

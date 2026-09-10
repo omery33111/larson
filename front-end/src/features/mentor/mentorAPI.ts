@@ -1,13 +1,15 @@
 import axios from "axios";
+import { accessToken, freshAccessToken } from "../../app/session";
 import { mentorPendingURL, mentorStreamURL, mentorURL } from "../../endpoints/endpoints";
 import { StreamEvent, readEventStream } from "../chat/chatAPI";
 
 
 
-function accessToken() {
-    const myToken = JSON.parse(localStorage.getItem("token") as string)
-    return myToken ? myToken.access : "";
-}
+// The token now comes from `app/session`, which is also what renews it. These two files are
+// the reason that had to be shared rather than living in the axios interceptor: a stream is
+// opened with `fetch`, so it never passes through the interceptor at all - and a stream
+// cannot be retried after the fact, because by the time the server rejects it the response
+// has already started. So they ask for a token that is good FIRST.
 
 
 
@@ -35,7 +37,7 @@ const streamDebrief = async (
     const response = await fetch(mentorStreamURL, {
         method: 'POST',
         headers: {
-            'Authorization': `Bearer ${accessToken()}`,
+            'Authorization': `Bearer ${await freshAccessToken()}`,
             'Content-Type': 'application/json',
         },
         body: JSON.stringify(body),

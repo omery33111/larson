@@ -5,6 +5,8 @@ import { useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import { useAppDispatch, useAppSelector } from '../../app/hooks'
 import { selectIsLogged } from '../authentication/authenticationSlice'
+import LarsonPresence, { presenceState } from '../larson/LarsonPresence'
+import { getUsageAsync } from '../usage/usageSlice'
 import ChatComposer from './ChatComposer'
 import ChatSidebar from './ChatSidebar'
 import ChatThread from './ChatThread'
@@ -13,7 +15,7 @@ import {
   closeDeleteDialog, closeSidebar, deleteConversationAsync, getConversationsAsync,
   getStarredAsync, resetChatMessage, selectActiveId, selectChatMessage, selectConversations,
   selectDeleteTargetId, selectIsDragging, selectIsSidebarOpen, selectIsStreaming,
-  setAttachmentName, setDragging, toggleSidebar
+  selectIsWaiting, selectMessages, setAttachmentName, setDragging, toggleSidebar
 } from './chatSlice'
 import './chat.css'
 
@@ -43,6 +45,8 @@ const ChatPage = () => {
   const activeId = useAppSelector(selectActiveId);
   const deleteTargetId = useAppSelector(selectDeleteTargetId);
   const message = useAppSelector(selectChatMessage);
+  const messages = useAppSelector(selectMessages);
+  const isWaiting = useAppSelector(selectIsWaiting);
 
   useEffect(() => {
     if (!isLogged) {
@@ -51,6 +55,9 @@ const ChatPage = () => {
     }
     dispatch(getConversationsAsync());
     dispatch(getStarredAsync());
+
+    // Read once, here. After this the fresh figure rides the last event of every answer.
+    dispatch(getUsageAsync());
   }, [isLogged, dispatch]);
 
   useEffect(() => {
@@ -109,27 +116,39 @@ const ChatPage = () => {
         >
 
           <div className="chat-topbar">
-            {/* The button only on a phone, where the list is a drawer. On anything wider it
-                would be a button to something already on screen. */}
-            <button
-              className="chat-topbar-menu"
-              onClick={() => dispatch(toggleSidebar())}
-              aria-label="השיחות שלך"
-            >
-              <FiMenu />
-            </button>
+            <div className="chat-topbar-side">
+              {/* The button only on a phone, where the list is a drawer. On anything wider it
+                  would be a button to something already on screen. */}
+              <button
+                className="chat-topbar-menu"
+                onClick={() => dispatch(toggleSidebar())}
+                aria-label="השיחות שלך"
+              >
+                <FiMenu />
+              </button>
 
-            <span className="chat-topbar-title">
-              {conversations.find((c) => c.id === activeId)?.title || 'שיחה עם לארסון'}
-            </span>
+              <span className="chat-topbar-title">
+                {conversations.find((c) => c.id === activeId)?.title || 'שיחה עם לארסון'}
+              </span>
+            </div>
 
-            {/* Says the thing the product is actually promising, in the place where the eye
-                looks for a connection indicator. It is also the honest status: he answers
-                out of the trader's own numbers, not out of the air. */}
-            <span className={`chat-status ${isStreaming ? 'chat-status-live' : ''}`}>
-              <span className="chat-status-dot" aria-hidden="true" />
-              {isStreaming ? 'לארסון כותב' : 'מחובר לרזומה שלך'}
-            </span>
+            {/* Him, at a size the state can be read at, in the fixed strip that never
+                scrolls away. The badge sets `display: contents` inside this bar, so the disc
+                lands on the bar's centre line by itself and the words take the track beside
+                it - centring the pair would have left the disc off to one side. The gold pill that used to sit at the end of this bar said the
+                same thing in 0.74rem text beside a 6px dot - which is exactly the version
+                that was easy to miss.
+
+                The resting line still says what the pill said, because it is the honest
+                promise of this screen: he answers out of the trader's own numbers.
+
+                A verdict is only ever computed for a mentor debrief, so here he moves
+                between thinking and resting. Handing the chat a green or a red would mean
+                inventing one, and a colour that means nothing is worse than no colour. */}
+            <LarsonPresence
+              state={presenceState(isWaiting || isStreaming, messages)}
+              idleNote="מחובר לרזומה שלך"
+            />
           </div>
 
           <ChatThread />

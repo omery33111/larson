@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit"
 import { RootState } from "../../app/store";
+import { usageReported } from "../usage/usageSlice";
 import { sessionExpired } from "../authentication/authenticationSlice";
 import { confirmTradesAsync, resetIngestion, uploadTradesAsync } from "../trades/tradesSlice";
 import { MentorState } from "../../models/Mentor";
@@ -92,8 +93,14 @@ export const sendToMentorAsync = createAsyncThunk(
             else if (event.type === 'delta') {
                 thunkAPI.dispatch(debriefDelta(event.text));
             }
+            else if (event.type === 'done') {
+            // The quota rides the last event of every answer - and the refusal too, which is
+            // the one time the client most needs the fresh figure. Nothing polls for it.
+                thunkAPI.dispatch(usageReported(event.usage));
+            }
             else if (event.type === 'error') {
                 failure = event.error;
+                thunkAPI.dispatch(usageReported(event.usage));
             }
         }, controller.signal);
     } catch (error: any) {

@@ -7,7 +7,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from chat.models import ASSISTANT, USER, Conversation, Message
-from chat.tests import fake_client, read_events
+from chat.tests import fake_client, read_events, text_of
 from trades.models import Trade, TradeFile
 
 from analytics.statistics import compute_statistics
@@ -621,7 +621,7 @@ class TraderNoteTests(APITestCase):
         captured = {}
         self.send(captured, message = "תדבר איתי כמו פרטנר, לא כמו מאמן")
 
-        self.assertEqual(captured["messages"][-1]["content"],
+        self.assertEqual(text_of(captured["messages"][-1]),
                          "תדבר איתי כמו פרטנר, לא כמו מאמן")
 
     def test_a_note_sent_with_a_file_is_not_discarded(self):

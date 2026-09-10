@@ -5,10 +5,12 @@ from django.http import StreamingHttpResponse
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from project.throttling import AIBurstThrottle, AIDailyThrottle
+from usage import budget
 from trades.models import Trade
 from trades.parsers import SUPPORTED_EXTENSIONS, parse_file
 
@@ -187,8 +189,11 @@ def _error_stream(message):
     return _sse(once())
 
 
+# Two windows on the meter, because this is the endpoint that spends money: one
+# answer is allowed up to 64k output tokens. See project/throttling.py.
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+@throttle_classes([AIBurstThrottle, AIDailyThrottle])
 def stream(request, conversation_id):
     # The mentor has its own endpoint, its own persona and its own rules about what a file
     # means. Reaching it through this one would quietly strip all three.
@@ -236,7 +241,8 @@ def stream(request, conversation_id):
     return _sse(_answer(row, question, system, messages))
 
 
-def _answer(row, question, system, messages, prelude = "", verdict = ""):
+def _answer(row, question, system, messages, prelude = "", verdict = "",
+            budget_kind = "chat"):
     """
     Yields the answer token by token, then stores it.
 
@@ -253,6 +259,14 @@ def _answer(row, question, system, messages, prelude = "", verdict = ""):
         import anthropic
     except ImportError:
         yield _event({"type": "error", "error": "חבילת anthropic אינה מותקנת."})
+        return
+
+    # **Checked before the call and not after it.** The rate limits above count requests; this
+    # counts what they cost, and it is the one that stands between a loop and the bill. It
+    # goes out as an error event like everything else here, so the client has one path.
+    if not budget.has_room(row.user):
+        yield _event({"type": "error", "error": budget.exhausted_message(row.user),
+                      "usage": budget.state(row.user)})
         return
 
     client = anthropic.Anthropic(api_key = settings.ANTHROPIC_API_KEY)
@@ -299,7 +313,16 @@ def _answer(row, question, system, messages, prelude = "", verdict = ""):
         # Touched only once the answer exists, so the sidebar orders by real activity.
         row.save()
 
-        yield _event({"type": "done", "message_id": answer.id})
+        # What it actually cost, taken from the response rather than estimated - the API's
+        # figure is the only one that counts the thinking, which is billed as output and can
+        # be several times the answer the trader reads.
+        if getattr(final, "usage", None):
+            budget.record(row.user, budget_kind, final.usage)
+
+        # The fresh state rides the last event, so the meter is current without the client
+        # having to ask for it after every answer.
+        yield _event({"type": "done", "message_id": answer.id,
+                      "usage": budget.state(row.user)})
 
     finally:
         # Runs on every path there is: a finished answer, a failed call, and a browser that

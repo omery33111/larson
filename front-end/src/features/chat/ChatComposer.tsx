@@ -6,6 +6,7 @@ import {
   selectAttachmentName, selectDraft, selectIsStreaming, sendMessageAsync,
   setAttachmentName, setDraft, stopStreaming
 } from './chatSlice'
+import UsageNotice from '../usage/UsageNotice'
 
 
 
@@ -68,6 +69,10 @@ const ChatComposer = () => {
 
   return (
     <div className="chat-composer">
+
+      {/* Above the box he types in, which is where a limit is worth knowing about - and it
+          renders nothing at all until there is a reason. See UsageNotice.tsx. */}
+      <UsageNotice />
 
       {attachmentName && (
         <div className="chat-attachment">

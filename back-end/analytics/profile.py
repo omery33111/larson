@@ -143,6 +143,14 @@ def generate_profile(user, statistics, strengths, leaks, accounts = None):
 
     client = anthropic.Anthropic(api_key = api_key)
 
+    # The same meter the chat and the mentor answer to. Generating a profile is the single
+    # most expensive call in the product - it reads the whole history - so it is the last
+    # place that should be exempt from it.
+    from usage import budget
+
+    if not budget.has_room(user):
+        raise RuntimeError(budget.exhausted_message(user))
+
     try:
         # Streaming keeps a long generation from hitting the HTTP timeout.
         with client.messages.stream(
@@ -154,6 +162,9 @@ def generate_profile(user, statistics, strengths, leaks, accounts = None):
             message = stream.get_final_message()
     except Exception as e:
         raise RuntimeError(f"הקריאה ל-Claude נכשלה: {e}")
+
+    if getattr(message, "usage", None):
+        budget.record(user, "profile", message.usage)
 
     # A safety classifier can decline with HTTP 200 and no usable content.
     if message.stop_reason == "refusal":

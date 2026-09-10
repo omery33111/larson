@@ -1,7 +1,9 @@
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
+
+from project.throttling import AIBurstThrottle, AIDailyThrottle
 
 from trades.models import Trade
 
@@ -156,8 +158,11 @@ def profile(request):
 
 
 # ------------- GENERATE:
+# Two windows on the meter, because this is the endpoint that spends money: one
+# answer is allowed up to 64k output tokens. See project/throttling.py.
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+@throttle_classes([AIBurstThrottle, AIDailyThrottle])
 def generate(request):
     all_trades = list(Trade.objects.filter(user = request.user))
 

@@ -1,0 +1,66 @@
+/* ------------------------- THE QUOTA NOTICE ------------------------- */
+/* It sits above the composer and appears only when there is a reason - see the note in
+   UsageNotice.tsx. Deliberately quiet: no bar, no percentage ring, no colour until the
+   quota is actually gone. A meter that looks like a meter invites rationing. */
+
+.usage-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+  padding: 0.5rem 0.75rem;
+  background-color: rgba(240, 185, 11, 0.05);
+  border: 1px solid #3b3320;
+  border-radius: 10px;
+  color: #a8adb8;
+  font-size: 0.8rem;
+  line-height: 1.6;
+}
+
+.usage-notice b {
+  color: #e0b341;
+  font-weight: 700;
+}
+
+.usage-notice-text {
+  min-width: 0;
+}
+
+/* The renewal time goes on its own line: it is the half that turns a limit into a queue,
+   and beside the headline it reads as a footnote to it. */
+.usage-notice-when {
+  display: block;
+  color: #7d8492;
+  font-size: 0.74rem;
+}
+
+.usage-notice-icon {
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+  color: #e0b341;
+  font-size: 0.95rem;
+}
+
+
+/* ------------- SPENT: the only state that carries a colour of its own */
+.usage-notice-out {
+  background-color: rgba(209, 73, 78, 0.06);
+  border-color: #3a3033;
+}
+
+.usage-notice-out b {
+  color: #e8797d;
+}
+
+.usage-notice-out .usage-notice-icon {
+  color: #e8797d;
+}
+
+
+/* ------------------------- MOBILE RESPONSIVE STYLING ------------------------- */
+@media (max-width: 768px) {
+  .usage-notice {
+    padding: 0.45rem 0.6rem;
+    font-size: 0.76rem;
+  }
+}

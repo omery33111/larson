@@ -20,6 +20,24 @@ export const registerURL = `${myServer}/authentication/register/`;
 
 export const logoutURL = `${myServer}/authentication/logout/`;
 
+// The one that was missing: without it the refresh token issued at login was never spent,
+// and the real session length was the access token's single day.
+export const refreshURL = `${myServer}/authentication/refresh/`;
+
+export const verifyEmailURL = `${myServer}/authentication/verify/`;
+
+export const resendVerificationURL = `${myServer}/authentication/verify/resend/`;
+
+export const changePasswordURL = `${myServer}/authentication/password/change/`;
+
+export const forgotPasswordURL = `${myServer}/authentication/password/forgot/`;
+
+export const resetPasswordURL = `${myServer}/authentication/password/reset/`;
+
+export const exportDataURL = `${myServer}/authentication/export/`;
+
+export const accountURL = `${myServer}/authentication/account/`;
+
 
 
 
@@ -63,6 +81,15 @@ export const streamMessageURL = (id: number) => `${myServer}/chat/conversations/
 export const starredMessagesURL = `${myServer}/chat/starred/`;
 
 export const starMessageURL = (id: number) => `${myServer}/chat/messages/${id}/star/`;
+
+
+
+
+
+// ------------------------- USAGE ENDPOINTS:
+// Read once when a screen opens. After that the fresh state rides the `done` event at the
+// end of every answer, so nothing polls this.
+export const usageURL = `${myServer}/usage/`;
 
 
 

@@ -1,10 +1,11 @@
 from django.conf import settings
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from project.throttling import AIBurstThrottle, AIDailyThrottle
 from chat.models import ASSISTANT, USER, Conversation, Message
 from chat.serializers import MessageSerializer
 from chat.views import _answer, _error_stream, _sse
@@ -149,8 +150,11 @@ def pending(request):
 
 # ------------------------- THE DEBRIEF START ------------------------- #
 
+# Two windows on the meter, because this is the endpoint that spends money: one
+# answer is allowed up to 64k output tokens. See project/throttling.py.
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+@throttle_classes([AIBurstThrottle, AIDailyThrottle])
 def stream(request):
     row = _conversation(request.user)
 
@@ -237,7 +241,8 @@ def stream(request):
     if messages and briefing != text:
         messages[-1]["content"] = briefing
 
-    return _sse(_answer(row, question, system, messages, prelude, verdict))
+    return _sse(_answer(row, question, system, messages, prelude, verdict,
+                        budget_kind = "mentor"))
 
 
 def _currency(trades):

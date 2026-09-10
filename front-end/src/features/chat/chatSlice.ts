@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit"
 import { RootState } from "../../app/store";
+import { usageReported } from "../usage/usageSlice";
 import { sessionExpired } from "../authentication/authenticationSlice";
 import { ChatState } from "../../models/Chat";
 import chatService, { StreamEvent, takePendingFile } from "./chatAPI";
@@ -183,8 +184,14 @@ export const sendMessageAsync = createAsyncThunk("chat/send", async (text: strin
             else if (event.type === 'delta') {
                 thunkAPI.dispatch(streamDelta(event.text));
             }
+            else if (event.type === 'done') {
+            // The quota rides the last event of every answer - and the refusal too, which is
+            // the one time the client most needs the fresh figure. Nothing polls for it.
+                thunkAPI.dispatch(usageReported(event.usage));
+            }
             else if (event.type === 'error') {
                 failure = event.error;
+                thunkAPI.dispatch(usageReported(event.usage));
             }
         }, controller.signal);
     } catch (error: any) {
