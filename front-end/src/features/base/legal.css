@@ -1,0 +1,104 @@
+/* ------------------------- THE LEGAL PAGES ------------------------- */
+/* Terms and privacy. Plain, narrow and readable - these are the two pages in the product
+   where somebody is checking a specific claim rather than being shown something, so the
+   measure is set for reading and nothing competes with the text. */
+
+.legal-page {
+  max-width: 70ch;
+  padding-top: 3dvh;
+  padding-bottom: 4dvh;
+}
+
+.legal-title {
+  color: #e8e8e8;
+  font-size: clamp(1.5rem, 4vw, 2rem);
+  font-weight: 700;
+}
+
+.legal-updated {
+  margin-top: 0.35rem;
+  margin-bottom: 2rem;
+  color: #6b7280;
+  font-size: 0.82rem;
+}
+
+.legal-section {
+  margin-bottom: 1.8rem;
+}
+
+.legal-section h2 {
+  margin-bottom: 0.7rem;
+  color: #f0b90b;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.legal-section p,
+.legal-section li {
+  color: #a8adb8;
+  font-size: 0.92rem;
+  line-height: 1.9;
+}
+
+.legal-section p {
+  margin-bottom: 0.8rem;
+}
+
+.legal-section b {
+  color: #cfd2d8;
+}
+
+.legal-section ul {
+  margin: 0 0 0.9rem;
+  padding-inline-start: 1.2rem;
+}
+
+.legal-section li {
+  margin-bottom: 0.45rem;
+}
+
+/* The two sections somebody actually came here to read: what this is not, and where the
+   data goes. Marked so they are found without reading everything above them. */
+.legal-highlight {
+  padding: 1.1rem 1.25rem;
+  background: linear-gradient(180deg, rgba(240, 185, 11, 0.05) 0%, rgba(240, 185, 11, 0) 100%);
+  border: 1px solid #3b3320;
+  border-radius: 12px;
+}
+
+.legal-note {
+  color: #8b909c;
+  font-size: 0.84rem;
+}
+
+.legal-footer {
+  margin-top: 2.5rem;
+  padding-top: 1.2rem;
+  border-top: 1px solid #23262f;
+  color: #6b7280;
+  font-size: 0.85rem;
+}
+
+.legal-page a {
+  color: #f0b90b;
+}
+
+
+/* ------------------------- LAPTOP RESPONSIVE STYLING ------------------------- */
+@media (min-width: 1025px) and (max-width: 1919px) {
+
+}
+
+
+/* ------------------------- TABLET RESPONSIVE STYLING ------------------------- */
+@media (min-width: 769px) and (max-width: 1024px) {
+
+}
+
+
+/* ------------------------- MOBILE RESPONSIVE STYLING ------------------------- */
+@media (max-width: 768px) {
+  .legal-highlight {
+    padding: 0.9rem 1rem;
+  }
+}

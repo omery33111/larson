@@ -1,13 +1,13 @@
 import axios from "axios";
+import { accessToken } from "../../app/session";
 import { analyticsOverviewURL, generateProfileURL } from "../../endpoints/endpoints";
 
 
 
 function authConfig() {
-    const myToken = JSON.parse(localStorage.getItem("token") as string)
-    const accessToken = myToken ? myToken.access : "";
+    const token = accessToken();
     return {
-        headers: { 'Authorization': `Bearer ${accessToken}` }
+        headers: { 'Authorization': `Bearer ${token}` }
     }
 }
 

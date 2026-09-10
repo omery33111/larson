@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
+from django.contrib.auth.models import User
 from rest_framework.test import APITestCase
 from rest_framework import status
 
@@ -367,9 +368,12 @@ class AnalyticsEndpointTests(APITestCase):
 
     def setUp(self):
         self.client.post("/authentication/register/",
-                         {"username": "omer", "password": "Aa123456", "email": "omer@larson.com"})
+                         {"username": "omer", "password": "Kestrel-Vault-72", "email": "omer@larson.com"})
+        # Registration now leaves the account inactive until the address is confirmed,
+        # so this stands in for the trader opening the mail and clicking the link.
+        User.objects.filter(username = "omer").update(is_active = True)
         tokens = self.client.post("/authentication/login/",
-                                  {"username": "omer", "password": "Aa123456"}).data
+                                  {"username": "omer", "password": "Kestrel-Vault-72"}).data
         self.client.credentials(HTTP_AUTHORIZATION = f"Bearer {tokens['access']}")
 
 
@@ -497,9 +501,10 @@ class AccountSelectionTests(APITestCase):
 
     def setUp(self):
         self.client.post("/authentication/register/",
-                         {"username": "omer", "password": "Aa123456", "email": "omer@larson.com"})
+                         {"username": "omer", "password": "Kestrel-Vault-72", "email": "omer@larson.com"})
+        User.objects.filter(username = "omer").update(is_active = True)
         tokens = self.client.post("/authentication/login/",
-                                  {"username": "omer", "password": "Aa123456"}).data
+                                  {"username": "omer", "password": "Kestrel-Vault-72"}).data
         self.client.credentials(HTTP_AUTHORIZATION = f"Bearer {tokens['access']}")
 
         from django.core.files.uploadedfile import SimpleUploadedFile

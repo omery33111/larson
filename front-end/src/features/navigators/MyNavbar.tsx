@@ -4,9 +4,7 @@ import MenuItem from '@mui/material/MenuItem'
 import { Link, useNavigate } from 'react-router-dom'
 import { AiOutlineUser } from 'react-icons/ai'
 import { FaSignInAlt, FaSignOutAlt } from 'react-icons/fa'
-import {
-  FiActivity, FiBarChart2, FiChevronDown, FiDatabase, FiMessageSquare
-} from 'react-icons/fi'
+import { FiActivity, FiBarChart2, FiChevronDown, FiDatabase, FiMessageSquare, FiUser } from 'react-icons/fi'
 import { useAppDispatch, useAppSelector } from '../../app/hooks'
 import { logoutAsync, selectIsLogged, selectUser } from '../authentication/authenticationSlice'
 import { getMentorAsync, selectResumeState } from '../mentor/mentorSlice'
@@ -161,6 +159,16 @@ const MyNavbar = () => {
                 className="my-navbar-menu-item"
               >
                 <FiDatabase /> הרזומה שלי
+              </MenuItem>
+
+              {/* A page and not a dialog, unlike the resume: the two things here - taking
+                  the record away and ending it - are decisions rather than errands, and one
+                  of them cannot be undone. */}
+              <MenuItem
+                onClick={() => { close(); navigate('/account'); }}
+                className="my-navbar-menu-item"
+              >
+                <FiUser /> החשבון שלי
               </MenuItem>
 
               <div className="my-navbar-menu-line" />

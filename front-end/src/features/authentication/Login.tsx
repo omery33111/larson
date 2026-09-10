@@ -2,7 +2,10 @@ import { useEffect, useState } from 'react'
 import { FaSignInAlt } from 'react-icons/fa'
 import { useAppSelector, useAppDispatch } from "../../app/hooks";
 import { useNavigate } from 'react-router-dom';
-import { loginAsync, reset, selectIsError, selectIsSuccess } from "./authenticationSlice"
+import {
+  clearVerificationPrompt, loginAsync, resendVerificationAsync, reset, selectIsError,
+  selectIsSuccess, selectNeedsVerification, selectUnverifiedEmail
+} from "./authenticationSlice"
 import { toast } from 'react-toastify';
 import './authentication.css';
 
@@ -21,6 +24,10 @@ const Login = () => {
 
   const isSuccess = useAppSelector(selectIsSuccess);
   const isError = useAppSelector(selectIsError);
+  const needsVerification = useAppSelector(selectNeedsVerification);
+  const unverifiedEmail = useAppSelector(selectUnverifiedEmail);
+
+  const [resent, setResent] = useState(false);
 
   useEffect(() =>
   {
@@ -33,10 +40,13 @@ const Login = () => {
   }, [isSuccess, navigate, dispatch])
 
   useEffect(() => {
-    if (isError) {
+    // An unconfirmed address is not a wrong password, and a red toast saying it is would
+    // send the trader off to check a password that was right all along. It gets the panel
+    // below instead, which carries the one thing he can actually do about it.
+    if (isError && !needsVerification) {
       toast.error('הפרטים שגויים. נסה שוב.');
     }
-  }, [isError]);
+  }, [isError, needsVerification]);
 
   const onChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -64,6 +74,8 @@ const Login = () => {
     const submitTime = new Date().toISOString();
     localStorage.setItem('loginTime', submitTime);
 
+    dispatch(clearVerificationPrompt());
+    setResent(false);
     dispatch(loginAsync(userData));
   };
 
@@ -103,6 +115,29 @@ const Login = () => {
           />
         </div>
 
+        {needsVerification && (
+          <div className="auth-prompt">
+            {resent ? (
+              <>שלחנו מייל אישור חדש ל-<b>{unverifiedEmail}</b>. פתח אותו וחזור לכאן.</>
+            ) : (
+              <>
+                הסיסמה נכונה — רק כתובת המייל עוד לא אושרה.
+                {' '}
+                <button
+                  type="button"
+                  className="auth-prompt-link"
+                  onClick={() => {
+                    dispatch(resendVerificationAsync(unverifiedEmail));
+                    setResent(true);
+                  }}
+                >
+                  שלחו לי את המייל שוב
+                </button>
+              </>
+            )}
+          </div>
+        )}
+
         <div className="auth-actions">
           <button type="submit" className="app-btn app-btn-primary">
             התחברות
@@ -112,6 +147,11 @@ const Login = () => {
             הרשמה
           </button>
         </div>
+
+        <button type="button" className="auth-forgot"
+          onClick={() => navigate('/authentication/forgot')}>
+          שכחת סיסמה?
+        </button>
 
       </form>
 

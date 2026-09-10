@@ -196,6 +196,28 @@
   margin-bottom: 4px;
 }
 
+/* Small and quiet: they are there to be found when somebody goes looking, not to compete
+   with the one line above them. */
+.my-footer-links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+  color: #4a505c;
+  font-size: 0.78rem;
+}
+
+.my-footer-links a {
+  color: #6b7280;
+  text-decoration: none;
+}
+
+.my-footer-links a:hover {
+  color: #f0b90b;
+  text-decoration: underline;
+}
+
 .my-footer-disclaimer {
   color: #6b7280;
   font-size: 0.78rem;

@@ -1,4 +1,5 @@
 import axios from "axios";
+import { accessToken } from "../../app/session";
 import {
     confirmTradesURL, resumeURL, tradesSummaryURL, tradesURL, uploadTradesURL
 } from "../../endpoints/endpoints";
@@ -6,10 +7,9 @@ import {
 
 
 function authConfig(extra: any = {}) {
-    const myToken = JSON.parse(localStorage.getItem("token") as string)
-    const accessToken = myToken ? myToken.access : "";
+    const token = accessToken();
     return {
-        headers: { 'Authorization': `Bearer ${accessToken}`, ...extra }
+        headers: { 'Authorization': `Bearer ${token}`, ...extra }
     }
 }
 

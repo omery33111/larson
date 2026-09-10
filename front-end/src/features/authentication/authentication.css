@@ -46,6 +46,183 @@
 }
 
 
+/* A quieter line under the fields: what the rule is, or what to do if the mail never came.
+   Not a subtitle - it explains rather than introduces. */
+.auth-note {
+  color: #8b909c;
+  font-size: 0.82rem;
+  line-height: 1.7;
+  text-align: center;
+  margin-top: 0.9rem;
+}
+
+/* The account exists but the address was never confirmed. It is the one login failure that
+   has something to DO about it, so it gets a panel rather than a toast that scrolls away. */
+.auth-prompt {
+  margin-top: 1.1rem;
+  padding: 0.85rem 1rem;
+  background: linear-gradient(180deg, rgba(240, 185, 11, 0.06) 0%, rgba(240, 185, 11, 0) 100%);
+  border: 1px solid #3b3320;
+  border-radius: 10px;
+  color: #cfd2d8;
+  font-size: 0.86rem;
+  line-height: 1.7;
+  text-align: center;
+}
+
+.auth-prompt-link {
+  display: inline;
+  padding: 0;
+  background: none;
+  border: none;
+  color: #f0b90b;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.auth-forgot {
+  display: block;
+  margin-top: 1rem;
+  color: #8b909c;
+  font-size: 0.84rem;
+  text-align: center;
+  background: none;
+  border: none;
+  width: 100%;
+  cursor: pointer;
+}
+
+.auth-forgot:hover {
+  color: #f0b90b;
+}
+
+/* The verification landing page is a statement, not a form, so the mark carries it. */
+.auth-verify {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.auth-verify-mark {
+  display: block;
+  width: clamp(84px, 14vw, 120px);
+  aspect-ratio: 1;
+  margin-bottom: 0.6rem;
+}
+
+.auth-verify .auth-field {
+  width: 100%;
+}
+
+
+/* ------------------------- THE ACCOUNT ------------------------- */
+.account-page {
+  max-width: 760px;
+  padding-top: 3dvh;
+}
+
+.account-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #e8e8e8;
+  font-size: clamp(1.4rem, 3.6vw, 1.9rem);
+  font-weight: 700;
+}
+
+.account-subtitle {
+  margin-top: 0.35rem;
+  margin-bottom: 1.6rem;
+  color: #8b909c;
+  font-size: 0.9rem;
+}
+
+.account-subtitle b {
+  color: #cfd2d8;
+}
+
+.account-card {
+  padding: 1.15rem 1.25rem;
+  margin-bottom: 1.1rem;
+  background-color: #1a1e26;
+  border: 1px solid #23262f;
+  border-radius: 12px;
+}
+
+.account-card-title {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: #e8e8e8;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.account-card-body {
+  margin: 0.6rem 0 1rem;
+  color: #a8adb8;
+  font-size: 0.88rem;
+  line-height: 1.8;
+}
+
+.account-card-body b {
+  color: #cfd2d8;
+}
+
+.account-card-note {
+  margin-bottom: 1rem;
+  color: #8b909c;
+  font-size: 0.82rem;
+}
+
+/* Red on the frame and not on the whole card: the section is dangerous, the page is not. */
+.account-danger {
+  border-color: #3a3033;
+}
+
+.account-danger-title {
+  color: #d1494e;
+}
+
+.account-label {
+  display: block;
+  margin-top: 0.9rem;
+  margin-bottom: 0.35rem;
+  color: #8b909c;
+  font-size: 0.82rem;
+}
+
+.account-label b {
+  color: #e8e8e8;
+}
+
+.account-danger-arm {
+  border-color: #3a3033;
+}
+
+.account-danger-actions {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 1.1rem;
+}
+
+.account-danger-go {
+  background-color: #d1494e;
+  border-color: #d1494e;
+  color: #ffffff;
+}
+
+.account-danger-go:disabled {
+  background-color: #2a2226;
+  border-color: #3a3033;
+  color: #6b7280;
+  cursor: not-allowed;
+}
+
+
 
 
 
@@ -70,5 +247,13 @@
   /* On a phone both actions get the full width — a half-width button is too small to hit */
   .auth-secondary-btn {
     max-width: 100%;
+  }
+
+  .account-danger-actions {
+    flex-direction: column;
+  }
+
+  .account-danger-actions .app-btn {
+    width: 100%;
   }
 }
