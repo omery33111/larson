@@ -1,0 +1,4 @@
+# Everything here is either the marketing page or a screen that needs a login, so there is
+# nothing to hide from a crawler and nothing behind these paths it could reach anyway.
+User-agent: *
+Allow: /

@@ -20,6 +20,7 @@
   },
   "scripts": {
     "dev": "vite",
+    "icons": "node tools/render-mark.mjs && node tools/make-icons.mjs",
     "build": "tsc && vite build",
     "preview": "vite preview"
   },

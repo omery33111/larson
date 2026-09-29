@@ -3,8 +3,44 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="לארסון — המנטור שמבין את המסחר שלך." />
+
+    <!-- Kept as the bare brand on purpose: App.tsx sets a per-screen title on every
+         navigation, and anything longer here would show for a moment and then be replaced. -->
     <title>Larson</title>
+    <meta name="description" content="לארסון קורא את יומן המסחר שלך, בונה ממנו תעודת זהות מסחרית, ומתחקר איתך כל סשן." />
+
+    <!-- The ground the product is painted on, so the browser chrome on mobile matches the page
+         instead of framing it in white. -->
+    <meta name="theme-color" content="#0f1115" />
+
+    <!-- ------------------------- ICONS ------------------------- -->
+    <!-- SVG first for anything modern, so the mark stays sharp however the tab is scaled; the
+         .ico is what Windows and older browsers ask for by name. -->
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="alternate icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.json" />
+
+    <!-- ------------------------- SHARING ------------------------- -->
+    <!-- What WhatsApp, Twitter and LinkedIn draw when the link is pasted. The absolute URL is
+         required - a crawler will not resolve a relative one - so it comes from VITE_SITE_URL
+         and has to be set to the real domain on the production build. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Larson" />
+    <meta property="og:locale" content="he_IL" />
+    <meta property="og:title" content="לארסון — המנטור שמבין את המסחר שלך" />
+    <meta property="og:description" content="מעלים ייצוא עסקאות, ולארסון בונה ממנו תעודת זהות מסחרית — ואז מתחקר איתך כל סשן מול הכללים שההיסטוריה שלך עצמה מייצרת." />
+    <meta property="og:url" content="%VITE_SITE_URL%/" />
+    <meta property="og:image" content="%VITE_SITE_URL%/og.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="לארסון — ראש מכונה עם ויזור שמציג גרף מסחר" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="לארסון — המנטור שמבין את המסחר שלך" />
+    <meta name="twitter:description" content="מעלים ייצוא עסקאות, ולארסון בונה ממנו תעודת זהות מסחרית — ואז מתחקר איתך כל סשן." />
+    <meta name="twitter:image" content="%VITE_SITE_URL%/og.png" />
   </head>
   <body>
     <div id="root"></div>
