@@ -1,6 +1,11 @@
 import json
+import logging
 
 from django.conf import settings
+
+
+
+log = logging.getLogger("larson")
 
 
 
@@ -134,6 +139,10 @@ def map_with_model(headers, sample, known, billed_to = None):
                                                                default = str)}],
         )
     except Exception:
+        # An empty mapping is also what a file the model genuinely could not read looks like,
+        # and what a missing key and a network failure look like. This line is the only way
+        # to tell the four of them apart after the fact.
+        log.exception("Column mapping call failed")
         return {}
 
     # Small and rare, but it is a call to the model - and a ledger with a hole in it stops

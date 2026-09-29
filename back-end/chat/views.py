@@ -1,4 +1,5 @@
 import json
+import logging
 
 from django.conf import settings
 from django.http import StreamingHttpResponse
@@ -22,6 +23,12 @@ from .serializers import ConversationSerializer, MessageSerializer, StarredMessa
 
 MAX_ATTACHMENT_MB = 20
 TITLE_LENGTH = 60
+
+# Everything below turns a failure into a sentence for the trader. Each of those places
+# writes a line here as well, because a sentence he reads is not a record anybody can look
+# at afterwards - and an exception caught inside a generator never reaches Django's own
+# request logger, so without this it exists nowhere at all.
+log = logging.getLogger("larson")
 
 
 
@@ -132,6 +139,12 @@ def _attachment_digest(uploaded):
         # A file the parser chokes on in some other way still has to come back as a sentence.
         # Left to raise, it would 500 before the stream opens, and the client - which only
         # knows how to read events - would report it as a dropped connection.
+        #
+        # **Warning and not error, deliberately.** A file somebody exported wrong is an outcome
+        # this function is built to have, not a fault in the server. At error level the SDK
+        # would raise a ticket and send mail every time a trader picks the wrong export, which
+        # is how a monitor becomes something people stop reading.
+        log.warning("Attachment %s could not be parsed", uploaded.name, exc_info = True)
         return None, "לא הצלחנו לקרוא את הקובץ. ודא שזה ייצוא עסקאות תקין."
 
     if not parsed:
@@ -301,6 +314,7 @@ def _answer(row, question, system, messages, prelude = "", verdict = "",
                 final = handle.get_final_message()
 
         except Exception as e:
+            log.exception("Claude stream failed (conversation %s)", row.id)
             yield _event({"type": "error", "error": f"הקריאה ל-Claude נכשלה: {e}"})
             return
 

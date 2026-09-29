@@ -398,11 +398,21 @@ if not DEBUG:
 # ship exactly the thing the privacy policy promises stays here. Cookies, headers and bodies
 # are all withheld - what goes is the traceback and where it happened.
 #
+# **The DSN does not have to be Sentry's.** What is wired here is the Sentry SDK, and its
+# protocol is spoken by other servers too - GlitchTip hosts it free, Bugsink runs it in one
+# container - so switching vendor is this one value and no code. On a small free quota set
+# SENTRY_TRACES_RATE=0: performance samples are counted as events there, and they would eat
+# the allowance that the errors need.
+#
 # NOTE: switching this on means a third party processes technical error reports, and the
 # privacy policy should say so before it is used in production.
 SENTRY_DSN = os.environ.get('SENTRY_DSN', '')
 
-if SENTRY_DSN:
+# **Never under `manage.py test`.** The suite stages failures on purpose - a stream that dies
+# mid-answer, a file the parser cannot read - and every one of them is logged, which the SDK
+# turns into an event. Left on, a single test run spends the monthly allowance on failures
+# that were scripted, and mails about them.
+if SENTRY_DSN and not TESTING:
     import sentry_sdk
 
     sentry_sdk.init(

@@ -1,10 +1,15 @@
 import json
+import logging
 
 from django.conf import settings
 from django.utils import timezone as django_timezone
 
 from .formatting import money, percent, ratio
 from .models import TraderProfile
+
+
+
+log = logging.getLogger("larson")
 
 
 
@@ -161,6 +166,7 @@ def generate_profile(user, statistics, strengths, leaks, accounts = None):
         ) as stream:
             message = stream.get_final_message()
     except Exception as e:
+        log.exception("Claude call failed while writing the profile (user %s)", user.id)
         raise RuntimeError(f"הקריאה ל-Claude נכשלה: {e}")
 
     if getattr(message, "usage", None):
