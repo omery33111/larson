@@ -74,6 +74,10 @@
 - **`src/index.tsx` מחזיק את כל ה־Routes** (`BrowserRouter` → `Routes` → `Route`), עטוף ב־`Provider store` וב־`React.StrictMode`. **`src/App.tsx` הוא ה־layout בלבד**: `ToastContainer` + `MyNavbar` + `<Outlet />` + `MyFooter`, ואפקטים גלובליים (כותרת הדף, בדיקת טוקן, ScrollToTop).
 - `src/app/store.ts` + `src/app/hooks.ts` (`useAppDispatch` / `useAppSelector`) — בדיוק ה־boilerplate של RTK.
 - `src/endpoints/endpoints.ts` — קבוע `myServer` יחיד + קבוע URL לכל endpoint, מסודר בבאנרים.
+  **`myServer` נקרא מ־`VITE_API_URL` עם ברירת מחדל מקומית**, ולא נכתב קשיח. קודם הוא היה
+  `http://127.0.0.1:8000` עם כתובת הייצור בהערה מעליו — **בנייה ששוכחת להחליף עולה לאוויר
+  ומפנה כל בקשה למחשב של המפתח, ושום דבר לא אומר זאת**: האתר נטען וכל מסך נכשל. הוא נאפה
+  לתוך ה־build, ולכן נקבע לפני `npm run build` ולא אחריו — בדיוק כמו `VITE_SITE_URL`.
 - `src/features/<domain>/` — `<domain>API.ts` (axios, מייצא `<domain>Service` כברירת מחדל) + `<domain>Slice.ts` (`createSlice`, thunks בשם `xxxAsync`, סלקטורים בשם `selectXxx` בתחתית הקובץ) + הקומפוננטות + `<domain>.css`.
 - `src/models/<Domain>.ts` — ה־interfaces.
 - `src/vite-env.d.ts` מכיל `/// <reference types="vite/client" />` — זה מה שמצהיר על `import './x.css'` ועל `import.meta.env`. **אין לפזר `// @ts-expect-error` מעל ייבואי CSS**; אם ייבוא CSS מסמן שגיאה, הקובץ הזה חסר או ש־`include` ב־`tsconfig.json` לא מכסה אותו — מתקנים שם.

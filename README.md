@@ -255,6 +255,54 @@ not after.
 
 ---
 
+## Running it in production
+
+```
+release: python manage.py migrate --noinput && python manage.py collectstatic --noinput
+web: gunicorn project.wsgi:application --bind 0.0.0.0:$PORT --worker-class gthread      --workers 1 --threads 8 --timeout 120 --access-logfile - --error-logfile -
+```
+
+That is `back-end/Procfile`, which Render, Railway and Heroku all read. Three of those flags
+are not decoration:
+
+**`--timeout 120`.** Gunicorn kills a worker that has been busy for 30 seconds by default, and
+an answer here streams for longer than that quite normally. At the default, a long debrief is
+cut off mid-sentence and the log says the worker timed out rather than that anything was wrong.
+
+**`--worker-class gthread --threads 8`.** Every streamed answer holds its worker for the whole
+length of the answer. With the default sync worker, three people talking to Larson at once is
+three occupied processes; threads let one process carry all of them, because the time is spent
+waiting on the network rather than on the CPU.
+
+**`--workers 1`, and this one is about money.** The rate limits and the spending budget count
+in process memory, so each extra worker is another full allowance: two workers make the
+site-wide daily cap two site-wide daily caps. One worker keeps the number on the tin true.
+Setting `REDIS_URL` moves the counters into a shared cache, and then workers can be added.
+
+`collectstatic` has to run on every deploy. WhiteNoise serves the admin's own CSS through the
+manifest backend, which refuses to serve a file it has no hash for - so a missed collectstatic
+fails at deploy rather than quietly in somebody's browser.
+
+**The uploaded files need S3, or they are lost on the next push.** On every host worth using
+the disk is thrown away each deploy, and the original exports are the thing this product
+promises it can re-ingest from. Set `AWS_STORAGE_BUCKET_NAME` and the storage backend switches;
+leave it empty and everything stays on the local disk, unchanged.
+
+```
+AWS_STORAGE_BUCKET_NAME=larson-uploads
+AWS_S3_REGION_NAME=eu-central-1
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
+```
+
+And once a week, so the blacklist does not grow without end:
+
+```bash
+python manage.py flushexpiredtokens
+```
+
+---
+
 ## Behind a proxy, one variable matters
 
 ```

@@ -3,9 +3,16 @@
 
 
 // ------------------------- MYSERVER ENDPOINTS:
-export const myServer = "http://127.0.0.1:8000";
-
-// export const myServer = "https://larson-backend.onrender.com";
+// Still one constant, and still the only place an address is written - but read from the
+// environment rather than edited by hand before a build.
+//
+// **It was a hardcoded `127.0.0.1` with the production address commented out above it.** A
+// build that forgot the swap would go live pointing every request at the developer's own
+// machine, and nothing would say so: the site loads, and every screen fails to fetch.
+//
+// Vite bakes this in at build time, so it has to be set **before** `npm run build`. The
+// default is the local server, which is what development wants and what the suite wants.
+export const myServer = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
 
 

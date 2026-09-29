@@ -249,6 +249,12 @@ MIDDLEWARE = [
 
     'django.middleware.security.SecurityMiddleware',
 
+    # **The only thing that serves the admin's own CSS once DEBUG is off.** Django stops
+    # serving static files itself in production and expects a web server to do it; on a host
+    # that gives you one process and no nginx, this is that web server. Directly after the
+    # security middleware, which is where it has to be to see every response.
+    'whitenoise.middleware.WhiteNoiseMiddleware',
+
     # **Above CommonMiddleware, which is the only placement that works.** Common answers some
     # requests by itself - a missing trailing slash becomes a redirect - and a response that
     # leaves before this middleware runs carries no CORS headers at all. The browser then
@@ -376,9 +382,10 @@ STATIC_URL = '/static/'
 MEDIA_URL = '/media/'
 
 
-STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, 'static'),
-]
+# **No project-level static directory.** The only static files this backend has are the
+# admin's own, and those come from the app that ships them. `back-end/static` existed to hold
+# the uploaded files, which now live in `media/` - and a STATICFILES_DIRS entry pointing at a
+# folder that is not there makes `collectstatic` warn on every deploy.
 
 
 # **Outside anything called `static`, and that is the whole point of the name.** These are
@@ -400,6 +407,43 @@ if TESTING:
     import tempfile
     MEDIA_ROOT = Path(tempfile.mkdtemp(prefix = "larson-test-media-"))
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+
+# ------------------------- WHERE FILES LIVE -------------------------
+# **The uploaded files are the half that matters.** On every host worth using, the disk is
+# thrown away on each deploy - so a trader's original export, which this product promises to
+# keep as the thing it can re-ingest from, would vanish on the next push. The resume in the
+# database would survive and the file behind it would not.
+#
+# Wired and inert, like the mail server and the error monitor: with no bucket name it stays
+# on the local disk and nothing changes. `collectstatic` has to run at deploy either way -
+# the manifest backend below refuses to serve a file it has no hash for, which is the point
+# of it: a missing asset fails loudly at deploy rather than silently in a browser.
+AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME', '')
+
+STORAGES = {
+    'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+    'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage'},
+}
+
+if AWS_STORAGE_BUCKET_NAME:
+    STORAGES['default'] = {
+        'BACKEND': 'storages.backends.s3.S3Storage',
+        'OPTIONS': {
+            'bucket_name': AWS_STORAGE_BUCKET_NAME,
+            'region_name': os.environ.get('AWS_S3_REGION_NAME', ''),
+            # **Private, and not a detail.** These are other people's trading records; a
+            # bucket that defaults to public-read would publish every one of them.
+            'default_acl': 'private',
+            'querystring_auth': True,
+            'file_overwrite': False,
+        },
+    }
+
+# The suite must not reach for a bucket, whatever the environment says.
+if TESTING:
+    STORAGES['default'] = {'BACKEND': 'django.core.files.storage.FileSystemStorage'}
+    STORAGES['staticfiles'] = {'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage'}
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
