@@ -1,4 +1,5 @@
 import json
+import os
 
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import IsAuthenticated
@@ -61,6 +62,15 @@ def upload(request):
         return Response({"error": "לא נמצאו עסקאות תקינות בקובץ."}, status = status.HTTP_400_BAD_REQUEST)
 
     uploaded.seek(0)
+
+    # **The name is stripped to its last component before it is stored.** Django refuses a
+    # path that tries to climb out of the media folder - it raises `SuspiciousFileOperation`
+    # and the traversal never happens - but that refusal is an exception, and an exception
+    # here is a 500 rather than a sentence. Browsers send a bare filename; a crafted client
+    # does not have to. The name the trader sees is kept as it arrived, because it is only
+    # ever displayed.
+    uploaded.name = os.path.basename(str(uploaded.name).replace("\\", "/"))
+
     trade_file = TradeFile.objects.create(
         user = request.user,
         file = uploaded,

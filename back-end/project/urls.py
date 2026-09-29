@@ -1,3 +1,5 @@
+import os
+
 from django.contrib import admin
 from django.http import JsonResponse
 from django.urls import path, include
@@ -17,7 +19,11 @@ def health(request):
 urlpatterns = [
     path('healthz/', health),
 
-    path('admin/', admin.site.urls),
+    # **Django's own login form, and nothing in this project rate-limits it.** The DRF
+    # throttles cover the API; the admin is a plain Django view and every bot on the internet
+    # knows to try `/admin/`. Moving it is not a lock - it is turning off the porch light, and
+    # it costs one environment variable. The real lock is a host rule or an IP allowlist.
+    path(os.environ.get('DJANGO_ADMIN_PATH', 'admin') + '/', admin.site.urls),
     path('authentication/', include('authentication.urls')),
     path('trades/', include('trades.urls')),
     path('analytics/', include('analytics.urls')),
@@ -27,7 +33,11 @@ urlpatterns = [
 ]
 
 
-urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+# **Media is deliberately not served, at any setting.** `static()` is inert once DEBUG is
+# off, so this was only ever a development route - but in development it answered
+# `/media/trade_files/<name>` for anybody at all, with no token and no owner check, and the
+# names are the ones the traders' own computers gave the files. Nothing in the product ever
+# linked to it: the export screen fetches through an authenticated request and always did.
 urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 
 urlpatterns += staticfiles_urlpatterns()

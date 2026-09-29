@@ -255,6 +255,21 @@ not after.
 
 ---
 
+## Behind a proxy, one variable matters
+
+```
+TRUSTED_PROXY_COUNT=1     on Render, Railway, or anything that terminates TLS for you
+TRUSTED_PROXY_COUNT=0     running the server directly (the default)
+```
+
+It decides what a rate limit counts. At 0 the limits count the address the socket came from,
+which is right with nothing in front and merely strict behind a proxy. **Unset in code, the
+framework trusts the `X-Forwarded-For` header instead - and the caller writes that header**, so
+a different value on each request buys a fresh allowance every time. Measured before this was
+set: eight wrong passwords in a row, not one of them refused.
+
+---
+
 ## Error monitoring
 
 Set `SENTRY_DSN` in `back-end/.env` and errors are reported to Sentry; leave it empty and

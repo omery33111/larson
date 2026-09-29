@@ -1,5 +1,5 @@
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
@@ -7,10 +7,11 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 
-from django.contrib.auth.models import User
+from django.contrib.auth.models import User, UnicodeUsernameValidator
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.tokens import default_token_generator
 from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
 from django.db import transaction
 from django.db.models import Q
 
@@ -98,6 +99,7 @@ def _agreed(value):
 
 # ------------- REGISTRATION:
 @api_view(["POST"])
+@permission_classes([AllowAny])
 @throttle_classes([RegisterThrottle])
 def register(request):
     username = (request.data.get("username") or "").strip()
@@ -112,6 +114,25 @@ def register(request):
     if not _agreed(request.data.get("accepted_terms")):
         return Response({"error": "צריך לאשר את תנאי השימוש ומדיניות הפרטיות."},
                         status=status.HTTP_400_BAD_REQUEST)
+
+    # **Nor was the username.** It reaches the navbar, the token claims and the body of
+    # every mail this product sends, and nothing stopped it being a line of HTML or a
+    # lookalike of somebody else's name. Django's own validator is what every one of its
+    # forms uses: letters, digits, and @ . + - _ only.
+    try:
+        UnicodeUsernameValidator()(username)
+    except ValidationError:
+        return Response(
+            {"error": "שם המשתמש יכול להכיל אותיות, ספרות והתווים . + - _ @ בלבד."},
+            status=status.HTTP_400_BAD_REQUEST)
+
+    # **Never checked before this.** `create_user` runs no validators - the same gap that let
+    # the password "1" through - so an address that cannot receive mail was accepted, and the
+    # account it opened could never be verified by the one mail that would have activated it.
+    try:
+        validate_email(email)
+    except ValidationError:
+        return Response({"error": "כתובת המייל אינה תקינה."}, status=status.HTTP_400_BAD_REQUEST)
 
     if User.objects.filter(Q(username=username) | Q(email=email)).exists():
         return Response({"error": "שם המשתמש או כתובת האימייל כבר בשימוש."}, status=status.HTTP_400_BAD_REQUEST)
@@ -146,6 +167,7 @@ def register(request):
 
 # ------------- EMAIL VERIFICATION:
 @api_view(["POST"])
+@permission_classes([AllowAny])
 @throttle_classes([EmailThrottle])
 def verify_email(request):
     user = unpack_uid(request.data.get("uid") or "")
@@ -168,6 +190,7 @@ def verify_email(request):
 
 
 @api_view(["POST"])
+@permission_classes([AllowAny])
 @throttle_classes([EmailThrottle])
 def resend_verification(request):
     email = (request.data.get("email") or "").strip().lower()
@@ -249,6 +272,7 @@ def _free_username(email, name):
 
 
 @api_view(["POST"])
+@permission_classes([AllowAny])
 @throttle_classes([LoginThrottle])
 def google_login(request):
     """
@@ -364,6 +388,7 @@ def logout(request):
 # ------------------------- FORGOTTEN PASSWORD START ------------------------- #
 
 @api_view(["POST"])
+@permission_classes([AllowAny])
 @throttle_classes([EmailThrottle])
 def forgot_password(request):
     """
@@ -396,6 +421,7 @@ def end_other_sessions(user):
 
 
 @api_view(["POST"])
+@permission_classes([AllowAny])
 @throttle_classes([EmailThrottle])
 def reset_password(request):
     user = unpack_uid(request.data.get("uid") or "")

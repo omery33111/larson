@@ -3,7 +3,7 @@ back-end/.venv/
 back-end/.env
 back-end/project/mydatabase.db
 back-end/staticfiles/
-back-end/static/files/
+back-end/media/
 __pycache__/
 *.pyc
 

@@ -315,7 +315,12 @@ def _answer(row, question, system, messages, prelude = "", verdict = "",
 
         except Exception as e:
             log.exception("Claude stream failed (conversation %s)", row.id)
-            yield _event({"type": "error", "error": f"הקריאה ל-Claude נכשלה: {e}"})
+            # **The exception text is logged, not shown.** It comes from a third party's
+            # client library and describes our infrastructure, not anything the trader can
+            # act on - request ids, endpoints, whatever the SDK chose to say. He gets a
+            # sentence he can do something with; the detail is on the line above.
+            yield _event({"type": "error",
+                          "error": "הקריאה ל-Claude נכשלה. נסה שוב בעוד רגע."})
             return
 
         # A safety classifier declines with HTTP 200 and no usable content, so the stop

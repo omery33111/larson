@@ -2,6 +2,8 @@ from datetime import timedelta
 from pathlib import Path
 import os
 import sys
+
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 
@@ -14,6 +16,14 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
+
+# **Refused at startup rather than at the first request that needs it.** Without this the
+# process comes up perfectly happily and fails later, somewhere inside signing - which is to
+# say inside password reset links, session tokens and the mail they are sent in.
+if not SECRET_KEY:
+    raise ImproperlyConfigured(
+        "DJANGO_SECRET_KEY is not set. Every signature this product makes depends on it: "
+        "session tokens, password-reset links and email verification links.")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 #
@@ -61,6 +71,29 @@ REST_FRAMEWORK = {
 
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
+
+    # ~~~~~~~~~~ WHO MAY CALL A VIEW THAT DID NOT SAY
+    # DRF's own default is `AllowAny`, which means **a view that forgets its decorator is
+    # public** - and every screen in this product is somebody's private trading record. Every
+    # view today declares its own and nothing changes for them; what changes is the direction
+    # the next one fails in. The handful that are deliberately open say `AllowAny` out loud.
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
+
+    # ~~~~~~~~~~ WHICH ADDRESS A RATE LIMIT COUNTS AGAINST
+    # **Left unset, DRF takes the whole `X-Forwarded-For` header as the caller's identity -
+    # and that header is written by the caller.** Sending a different one on every request
+    # buys a fresh bucket each time, which walks straight past the login, registration and
+    # mail limits. Measured before this line existed: eight wrong passwords in a row, none of
+    # them blocked.
+    #
+    # The number is how many proxies sit in front of this server, so DRF can count back past
+    # them to the address that is actually the client's. **0 is the honest default** - it
+    # ignores the header entirely and uses the socket address, which is right with no proxy
+    # and merely strict behind one. On a host that terminates TLS for you this must be set to
+    # 1, or every visitor shares the proxy's address and therefore one bucket.
+    'NUM_PROXIES': int(os.environ.get('TRUSTED_PROXY_COUNT', '0')),
 
     # ~~~~~~~~~~ RATE LIMITS
     # The three endpoints that call Claude cost real money per request and are the only ones
@@ -167,8 +200,23 @@ CACHES = {
 
 
 
+# **Fifteen minutes, and the number is the security of "log out everywhere".**
+#
+# Blacklisting reaches refresh tokens only. An access token is a signed bearer with nothing to
+# check it against - no database lookup, by design, which is what makes it fast - so from the
+# moment it is issued it is good until it expires and there is no way to take it back. At a day
+# that meant: the trader presses "disconnect all other sessions", the product tells him it is
+# done, and the session on the machine he was worried about keeps working for another 23 hours.
+# Measured: the refresh was refused with 401 and the old access token still answered 200.
+#
+# The same applies to a password reset, which is the moment somebody most believes another
+# person is inside the account.
+#
+# It costs nothing to shorten now: `app/session.ts` renews on its own, and did not exist when
+# this was set. It does mean a rotation every fifteen minutes for an active tab, so the
+# blacklist table grows faster - `flushexpiredtokens` on a schedule is what keeps that in hand.
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(days = 1),
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes = 15),
     "REFRESH_TOKEN_LIFETIME": timedelta(days = 90),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
@@ -195,7 +243,19 @@ SIMPLE_JWT = {
 
 
 MIDDLEWARE = [
+    # First, so a caller who is not allowed near the admin never reaches a session, a form or
+    # a database query. Inert until DJANGO_ADMIN_ALLOWED_IPS is set.
+    'project.admin_gate.AdminAllowlist',
+
     'django.middleware.security.SecurityMiddleware',
+
+    # **Above CommonMiddleware, which is the only placement that works.** Common answers some
+    # requests by itself - a missing trailing slash becomes a redirect - and a response that
+    # leaves before this middleware runs carries no CORS headers at all. The browser then
+    # reports a CORS failure for a request the server actually handled, which is the most
+    # misleading error in the stack to debug.
+    'corsheaders.middleware.CorsMiddleware',
+
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     # Back on, and it costs the API nothing: DRF wraps every APIView in `csrf_exempt`, and
@@ -206,7 +266,6 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
 ]
 
 ROOT_URLCONF = 'project.urls'
@@ -322,7 +381,24 @@ STATICFILES_DIRS = [
 ]
 
 
-MEDIA_ROOT = BASE_DIR / 'static/files'
+# **Outside anything called `static`, and that is the whole point of the name.** These are
+# the traders' own exports - the raw record the product promises to keep - and they used to
+# sit in `static/files`. Nothing here served them, but the folder was one careless static
+# configuration away from handing every uploaded file to anyone who could guess a name, and
+# the names are the ones the traders' own computers gave them.
+MEDIA_ROOT = BASE_DIR / 'media'
+
+# **The suite writes real files, and the test database is the only thing thrown away.**
+# Django isolates the database for a test run and nothing else, so every upload a test made
+# landed in the real media directory and stayed there after the rows that pointed at it were
+# gone. Found by counting: 265 files on disk against one row in the database.
+#
+# They are copies of trade exports with nothing pointing at them, which also means neither
+# "delete my resume" nor "delete my account" would ever have reached them - those walk the
+# rows.
+if TESTING:
+    import tempfile
+    MEDIA_ROOT = Path(tempfile.mkdtemp(prefix = "larson-test-media-"))
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # Default primary key field type

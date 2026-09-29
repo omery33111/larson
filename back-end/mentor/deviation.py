@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 # The outcome rules are subtle - the journal's own status column wins over the sign of the
 # P&L, and a scratch is neither a win nor a loss. Re-deriving them here would be a second
 # definition of "did this trade work", and the two would drift.
-from analytics.statistics import REVENGE_WINDOW_MINUTES, _is_loss, _is_win
+from analytics.statistics import REVENGE_WINDOW_MINUTES, _is_loss, _is_win, clean_label
 from analytics.formatting import minutes as minutes_text
 from analytics.formatting import money, percent, ratio
 from analytics.formatting import trades as trade_count
@@ -293,8 +293,12 @@ def _setups(baseline, recent, ctx):
     def tags(rows):
         found = defaultdict(int)
         for trade in rows:
+            # **Cleaned for the same reason the breakdowns are**, and this is the second door
+            # into the same room: a setup name goes from here into a finding, and a finding
+            # goes into the prompt. A cell holding several lines of prose would arrive there
+            # whole. See `clean_label`.
             for tag in (trade.setups or "").split(","):
-                tag = tag.strip()
+                tag = clean_label(tag)
                 if tag:
                     found[tag] += 1
         return found
@@ -359,8 +363,9 @@ def _bright_spot(baseline, recent, ctx):
     by_setup = defaultdict(list)
     for trade in recent:
         for tag in (trade.setups or "").split(","):
-            if tag.strip():
-                by_setup[tag.strip()].append(trade.pnl or 0.0)
+            label = clean_label(tag)
+            if label:
+                by_setup[label].append(trade.pnl or 0.0)
 
     by_hour = defaultdict(list)
     for trade in recent:

@@ -39,7 +39,9 @@ _keys = None
 def _key_client():
     global _keys
     if _keys is None:
-        _keys = PyJWKClient(CERTS_URL, cache_keys = True)
+        # **With a timeout.** This runs inside a request; a connection that hangs holds
+        # a worker for as long as the socket does, and a handful of those is the server.
+        _keys = PyJWKClient(CERTS_URL, cache_keys = True, timeout = 5)
     return _keys
 
 

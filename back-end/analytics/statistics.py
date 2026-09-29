@@ -107,7 +107,7 @@ def compute_statistics(trades, timezone_name = "Asia/Jerusalem"):
         "currency": currency,
         "date_from": trades[0].executed_at,
         "date_to": trades[-1].executed_at,
-        "accounts": sorted({t.account_id for t in trades if t.account_id}),
+        "accounts": sorted({clean_label(t.account_id) for t in trades if t.account_id}),
         "flat_band": round(flat_band, 2),
         "outcome_from_file": sum(1 for t in trades
                                  if getattr(t, "outcome", None) in (WIN, LOSS, BREAKEVEN)),
@@ -504,7 +504,10 @@ def _group_stats(key, group, label = None):
     decided = len(wins) + len(losses)
 
     return {
-        "key": key,
+        # Cleaned here rather than at each caller, because this is the one place every
+        # breakdown passes through - hours and weekdays included, which are numbers and are
+        # left alone.
+        "key": clean_label(key) if isinstance(key, str) else key,
         # A recognisable name for the chart when we have one, the ticker itself otherwise.
         "label": label(key) if label else None,
         "trades": len(group),
@@ -517,10 +520,37 @@ def _group_stats(key, group, label = None):
     }
 
 
+# A label is meant to be a few words a trader typed into a column: "breakout", "fomo",
+# "revenge entry". **Nothing about the file guarantees that**, and whatever is in that cell
+# becomes a key in the statistics document, which is handed to the model inside the system
+# prompt and printed on the screen.
+#
+# Both of those break on a long one, and one of them breaks badly: a cell holding several
+# lines of prose arrives in the system block verbatim, newlines and headings intact, which is
+# a place for instructions rather than data. Proved against the real prompt builder with a
+# setup column carrying a blank line and then a heading that ordered the model to ignore
+# its instructions - it landed whole, at the highest authority the request has.
+#
+# **The fix is what a label already is**: one line, no runs of whitespace, and short. Nothing
+# a real journal writes is touched by this; the uploaded file is stored untouched either way,
+# so nothing is lost that a re-ingestion could not recover.
+MAX_LABEL_LENGTH = 80
+
+
+def clean_label(value):
+    """One line, collapsed, and bounded. Returns "" for anything that had no content."""
+    text = " ".join(str(value).split())
+
+    if len(text) > MAX_LABEL_LENGTH:
+        text = text[:MAX_LABEL_LENGTH].rstrip() + "…"
+
+    return text
+
+
 def _split_tags(value):
     if not value:
         return []
-    return [part.strip() for part in value.split(",") if part.strip()]
+    return [label for label in (clean_label(part) for part in str(value).split(",")) if label]
 
 
 def _duration_bucket(trade):

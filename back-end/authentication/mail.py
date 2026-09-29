@@ -18,6 +18,7 @@ from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 
 from django.conf import settings
+from django.utils.html import escape
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import EmailMultiAlternatives
 
@@ -272,6 +273,17 @@ def _mark():
     return image
 
 
+def _escaped(name):
+    """
+    The name as it is safe to drop into an HTML body.
+
+    Registration validates the username now, so nothing shaped like markup can reach here -
+    **and a template that trusts its inputs is one validator away from being wrong anyway.**
+    The plain-text half needs nothing; only the HTML half interpolates into markup.
+    """
+    return escape(name)
+
+
 def _send(subject, text, html, address):
     """
     Delivery failure is logged and swallowed, deliberately.
@@ -310,7 +322,7 @@ def send_verification(user):
         VERIFY_SUBJECT,
         VERIFY_TEXT.format(name = user.username, link = link, hours = HOURS),
         _html(VERIFY_HEADING,
-              VERIFY_BODY.format(name = user.username),
+              VERIFY_BODY.format(name = _escaped(user.username)),
               VERIFY_FOOTER.format(hours = HOURS),
               link, "אישור הכתובת"),
         user.email)
@@ -324,7 +336,7 @@ def send_password_reset(user):
         RESET_SUBJECT,
         RESET_TEXT.format(name = user.username, link = link, hours = HOURS),
         _html(RESET_HEADING,
-              RESET_BODY.format(name = user.username),
+              RESET_BODY.format(name = _escaped(user.username)),
               RESET_FOOTER.format(hours = HOURS),
               link, "בחירת סיסמה חדשה"),
         user.email)
@@ -346,6 +358,6 @@ def send_password_changed(user):
         CHANGED_SUBJECT,
         CHANGED_TEXT.format(name = user.username),
         _html(CHANGED_HEADING,
-              CHANGED_BODY.format(name = user.username),
+              CHANGED_BODY.format(name = _escaped(user.username)),
               CHANGED_FOOTER),
         user.email)

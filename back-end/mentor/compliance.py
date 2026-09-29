@@ -1,7 +1,7 @@
 from collections import defaultdict
 from zoneinfo import ZoneInfo
 
-from analytics.statistics import (MIN_TRADES_FOR_BREAKDOWN, REVENGE_WINDOW_MINUTES,
+from analytics.statistics import (MIN_TRADES_FOR_BREAKDOWN, REVENGE_WINDOW_MINUTES, clean_label,
                                   _duration_bucket, _is_loss, _split_tags)
 from analytics.formatting import money, percent
 from analytics.formatting import trades as trade_count
@@ -197,7 +197,8 @@ def _describe(trade, tz, currency):
     """One offending trade, named the way a trader would recognise it."""
     when = trade.executed_at.astimezone(tz)
 
-    line = f"{when:%d/%m} {when:%H:%M} · {trade.symbol}"
+    # The ticker comes out of the file too, and this sentence is quoted to the model.
+    line = f"{when:%d/%m} {when:%H:%M} · {clean_label(trade.symbol)}"
 
     if trade.duration_seconds is not None:
         line += (f" · {int(trade.duration_seconds)} שניות"

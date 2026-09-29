@@ -1,10 +1,12 @@
 import re
+from datetime import timedelta
 from unittest.mock import patch
 
 from rest_framework.test import APITestCase
 from rest_framework import status
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 
+from django.conf import settings
 from django.contrib.auth.models import User
 from django.core import mail
 from django.test import override_settings
@@ -763,9 +765,18 @@ LIMITS = {
 }
 
 
-@override_settings(REST_FRAMEWORK = {**LIMITS,
-                                     "DEFAULT_AUTHENTICATION_CLASSES": (
-                                         "rest_framework_simplejwt.authentication.JWTAuthentication",)})
+# **The rest of the real configuration comes with them.** `override_settings` replaces the
+# whole dictionary rather than merging into it, so a key left out here is simply absent while
+# these run - and `NUM_PROXIES` is the one that decides what a limit is even counting.
+REAL = {
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework_simplejwt.authentication.JWTAuthentication",),
+    "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
+    "NUM_PROXIES": 0,
+}
+
+
+@override_settings(REST_FRAMEWORK = {**REAL, **LIMITS})
 class ThrottleTests(SignUpBase):
 
     def setUp(self):
@@ -807,6 +818,40 @@ class ThrottleTests(SignUpBase):
         response = self.sign_in(password = "guessing-away")
 
         self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+
+    def test_a_forged_forwarded_header_does_not_buy_a_new_bucket(self):
+        """
+        **The header the limit used to trust is written by the caller.**
+
+        Left to its own defaults, DRF takes the whole `X-Forwarded-For` value as the caller's
+        identity - so a different one on each request is a fresh allowance every time, and the
+        cap on password guessing is decoration. Measured before `NUM_PROXIES` was set: eight
+        wrong passwords in a row, not one of them refused.
+        """
+        codes = []
+
+        for n in range(8):
+            response = self.client.post(
+                "/authentication/login/",
+                {"username": "omer", "password": "guessing-away"},
+                HTTP_X_FORWARDED_FOR = f"10.0.0.{n}")
+            codes.append(response.status_code)
+
+        self.assertIn(status.HTTP_429_TOO_MANY_REQUESTS, codes)
+
+
+    def test_the_mail_endpoints_cannot_be_spoofed_open_either(self):
+        """Same header, and here it would deliver our mail to an address of their choosing."""
+        codes = []
+
+        for n in range(8):
+            response = self.client.post("/authentication/password/forgot/",
+                                        {"email": "omer@larson.com"},
+                                        HTTP_X_FORWARDED_FOR = f"10.0.0.{n}")
+            codes.append(response.status_code)
+
+        self.assertIn(status.HTTP_429_TOO_MANY_REQUESTS, codes)
 
 # ------------------------- RATE LIMIT TESTS END ------------------------- #
 
@@ -1087,3 +1132,138 @@ class HealthTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.json(), {"status": "ok"})
+
+
+# ------------------------- WHAT THE SESSION PROMISES ------------------------- #
+
+class SessionExposureTests(SignUpBase):
+    """
+    How long a session survives after somebody has been told it was ended.
+
+    **Blacklisting reaches refresh tokens only.** An access token is a signed bearer with
+    nothing to check it against - no database lookup, by design - so from the moment it is
+    issued it is good until it expires and there is no way to take it back. Its lifetime is
+    therefore the true length of "disconnect all other sessions", and of a password reset.
+    """
+
+    def test_the_access_token_is_short_enough_for_the_promise_to_be_true(self):
+        lifetime = settings.SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"]
+
+        # At a day, the session on the machine somebody was worried about kept working for
+        # another twenty-three hours after the product said it had been cut.
+        self.assertLessEqual(lifetime, timedelta(minutes = 30))
+
+
+    def test_the_other_refresh_token_really_is_dead(self):
+        self.register()
+        self.verify()
+
+        elsewhere = self.sign_in().data
+        here = self.sign_in().data
+
+        self.client.credentials(HTTP_AUTHORIZATION = f"Bearer {here['access']}")
+        self.client.post("/authentication/sessions/end/")
+
+        refused = self.client.post("/authentication/refresh/", {"refresh": elsewhere["refresh"]})
+
+        self.assertEqual(refused.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+
+class UsernameValidationTests(SignUpBase):
+    """
+    The name reaches the navbar, the token claims and the body of every mail sent.
+
+    **Nothing checked it before**, for the same reason nothing checked the password:
+    `create_user` runs no validators, only forms and serializers do.
+    """
+
+    def test_markup_is_refused(self):
+        response = self.register(username = "<img src=x onerror=alert(1)>")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(User.objects.count(), 0)
+
+
+    def test_a_name_with_spaces_is_refused(self):
+        response = self.register(username = "omer yanai")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+    def test_an_ordinary_name_still_registers(self):
+        self.assertEqual(self.register().status_code, status.HTTP_201_CREATED)
+
+
+    def test_the_html_mail_escapes_it_even_so(self):
+        """A template that trusts its inputs is one validator away from being wrong."""
+        from .mail import _escaped
+
+        self.assertEqual(_escaped("<b>x</b>"), "&lt;b&gt;x&lt;/b&gt;")
+
+
+
+class AddressValidationTests(SignUpBase):
+    """An address that cannot receive mail opens an account that can never be verified."""
+
+    def test_a_malformed_address_is_refused(self):
+        response = self.register(email = "not-an-address")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(User.objects.count(), 0)
+
+
+    def test_a_header_injection_attempt_is_refused(self):
+        response = self.register(email = "omer@larson.com\nBcc: someone@else.com")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(User.objects.count(), 0)
+
+
+    def test_an_ordinary_address_still_registers(self):
+        response = self.register()
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+
+
+class PublicEndpointTests(SignUpBase):
+    """
+    The project now refuses a request to any view that did not say who may call it.
+
+    **That is a direction, not a feature**: DRF's own default is `AllowAny`, so a view that
+    forgets its decorator used to be public - and every screen here is somebody's private
+    trading record. These lock the handful that are open on purpose.
+    """
+
+    def test_the_doors_that_are_meant_to_be_open_still_are(self):
+        for path, body in (
+            ("/authentication/register/", {**self.user_data, "username": "new", "email": "new@larson.com"}),
+            ("/authentication/verify/", {"uid": "x", "token": "y"}),
+            ("/authentication/verify/resend/", {"email": "nobody@larson.com"}),
+            ("/authentication/password/forgot/", {"email": "nobody@larson.com"}),
+            ("/authentication/password/reset/", {"uid": "x", "token": "y", "password": "x"}),
+            ("/authentication/login/google/", {"credential": ""}),
+        ):
+            response = self.client.post(path, body)
+
+            self.assertNotEqual(response.status_code, status.HTTP_401_UNAUTHORIZED,
+                                f"{path} became unreachable without a token")
+
+
+    def test_everything_else_is_closed(self):
+        for method, path in (
+            ("get", "/authentication/"),
+            ("get", "/authentication/export/"),
+            ("post", "/authentication/sessions/end/"),
+            ("post", "/authentication/password/change/"),
+            ("get", "/trades/"),
+            ("get", "/analytics/"),
+            ("get", "/chat/conversations/"),
+            ("get", "/mentor/"),
+            ("get", "/usage/"),
+        ):
+            response = getattr(self.client, method)(path)
+
+            self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED,
+                             f"{path} answered without a token")

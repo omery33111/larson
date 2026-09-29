@@ -1,6 +1,7 @@
 import hashlib
 import io
 import re
+import zipfile
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
@@ -279,14 +280,54 @@ BREAKEVEN_RISK_FRACTION = 0.30
 
 
 
+# ------------- HOW BIG THE FILE REALLY IS:
+# **An xlsx is a zip, and the upload limit measures the zip.** Twenty megabytes of highly
+# compressible XML unpacks to gigabytes, and the reader unpacks all of it into memory before
+# anything else looks at it - so a file well inside the limit can take the server down. It
+# costs one person one upload.
+#
+# The zip's own directory says how large each entry will be before any of it is read, which is
+# the cheap moment to say no.
+#
+# The ceiling is deliberately generous: a real twenty-megabyte export of a hundred thousand
+# trades unpacks to a few hundred megabytes of verbose XML, and refusing that would be
+# refusing a customer. What it stops is the shape that has no honest version - a thousand to
+# one and upwards.
+MAX_UNCOMPRESSED_MB = 400
+
+
+def _refuse_a_bomb(file_bytes):
+    try:
+        with zipfile.ZipFile(io.BytesIO(file_bytes)) as archive:
+            declared = sum(entry.file_size for entry in archive.infolist())
+    except zipfile.BadZipFile:
+        # Not a zip at all - an .xls, or something broken. The reader below will say so in
+        # its own words; this check has nothing to add.
+        return
+
+    if declared > MAX_UNCOMPRESSED_MB * 1024 * 1024:
+        raise ValueError(
+            f"הקובץ נפתח לגודל חריג ({declared // (1024 * 1024)}MB) ולכן לא נקרא. "
+            "אם זה ייצוא אמיתי, נסה לייצא אותו כ-CSV.")
+
+
 # ------------- READING THE FILE:
 def read_table(file_bytes, filename):
     """Turns an uploaded file into a DataFrame. Raises ValueError with a message for the user."""
     name = (filename or "").lower()
 
     if name.endswith((".xlsx", ".xlsm", ".xls")):
+        # Before the reader, not inside its try: this refusal has its own sentence, and
+        # wrapping it would replace that with "the file may be corrupt".
+        _refuse_a_bomb(file_bytes)
+
         try:
             return pd.read_excel(io.BytesIO(file_bytes))
+        except ImportError:
+            # `.xls` is the old binary format and pandas needs `xlrd` for it. Said plainly
+            # rather than as "the file may be corrupt", which sends somebody to re-export a
+            # file that was fine.
+            raise ValueError("קובץ xls ישן אינו נתמך בשרת הזה. שמור אותו כ-xlsx או כ-CSV ונסה שוב.")
         except Exception:
             raise ValueError("לא הצלחנו לקרוא את קובץ האקסל. ודא שהוא לא פגום ושהעסקאות נמצאות בגיליון הראשון.")
 

@@ -167,7 +167,11 @@ def generate_profile(user, statistics, strengths, leaks, accounts = None):
             message = stream.get_final_message()
     except Exception as e:
         log.exception("Claude call failed while writing the profile (user %s)", user.id)
-        raise RuntimeError(f"הקריאה ל-Claude נכשלה: {e}")
+        # **The exception text is logged, not shown.** It comes from a third party's
+        # client library and describes our infrastructure, not anything the trader can
+        # act on - request ids, endpoints, whatever the SDK chose to say. He gets a
+        # sentence he can do something with; the detail is on the line above.
+        raise RuntimeError("הקריאה ל-Claude נכשלה. נסה שוב בעוד רגע.")
 
     if getattr(message, "usage", None):
         budget.record(user, "profile", message.usage)
