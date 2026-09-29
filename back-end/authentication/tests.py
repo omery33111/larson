@@ -13,6 +13,9 @@ from analytics.models import TraderProfile
 from chat.models import Conversation, Message
 from trades.models import Trade, TradeFile
 
+from .google import GoogleError
+from .models import TERMS_VERSION, GoogleIdentity, TermsAcceptance
+
 
 PASSWORD = "Kestrel-Vault-72"
 
@@ -29,7 +32,8 @@ class SignUpBase(APITestCase):
 
     def setUp(self):
         mail.outbox = []
-        self.user_data = {"username": "omer", "password": PASSWORD, "email": "omer@larson.com"}
+        self.user_data = {"username": "omer", "password": PASSWORD, "email": "omer@larson.com",
+                          "accepted_terms": True}
 
 
     def register(self, **overrides):
@@ -805,3 +809,281 @@ class ThrottleTests(SignUpBase):
         self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
 
 # ------------------------- RATE LIMIT TESTS END ------------------------- #
+
+
+# ------------------------- SIGNING IN WITH GOOGLE ------------------------- #
+
+GOOGLE_CLIENT = "larson-test.apps.googleusercontent.com"
+
+
+def google_claims(subject = "108", email = "omer@larson.com", name = "Omer Yanai"):
+    return {"subject": subject, "email": email, "name": name}
+
+
+@override_settings(GOOGLE_CLIENT_ID = GOOGLE_CLIENT)
+class GoogleSignInTests(SignUpBase):
+    """
+    The button that both registers and signs in.
+
+    The signature check itself is Google's library against Google's keys, so it is replaced
+    here by its result. **What is worth testing is the part we wrote**: which account a given
+    token lands in.
+    """
+
+    def google(self, claims = None):
+        with patch("authentication.views.claims_from_credential",
+                   return_value = claims or google_claims()):
+            return self.client.post("/authentication/login/google/", {"credential": "x"})
+
+
+    def test_a_new_google_account_is_created_and_signed_in(self):
+        response = self.google()
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("access", response.data)
+        self.assertIn("refresh", response.data)
+
+        user = User.objects.get(email = "omer@larson.com")
+        self.assertTrue(user.is_active)
+        self.assertEqual(user.username, "omer")
+
+        # No password at all, rather than a random one nobody knows.
+        self.assertFalse(user.has_usable_password())
+
+
+    def test_it_records_that_the_terms_were_accepted(self):
+        self.google()
+
+        acceptance = TermsAcceptance.objects.get(user__email = "omer@larson.com")
+        self.assertEqual(acceptance.via, TermsAcceptance.VIA_GOOGLE)
+        self.assertEqual(acceptance.version, TERMS_VERSION)
+
+
+    def test_a_second_sign_in_uses_the_same_account(self):
+        self.google()
+        self.google()
+
+        self.assertEqual(User.objects.filter(email = "omer@larson.com").count(), 1)
+
+
+    def test_it_links_to_an_account_that_registered_with_a_password(self):
+        self.register()
+        self.verify()
+
+        self.google()
+
+        self.assertEqual(User.objects.count(), 1)
+        user = User.objects.get()
+
+        # The password still works - linking adds a way in, it does not replace one.
+        self.assertTrue(user.has_usable_password())
+        self.assertTrue(GoogleIdentity.objects.filter(user = user).exists())
+
+
+    def test_it_follows_the_subject_and_not_the_address(self):
+        """
+        The address on a Google account can be changed by its owner, and Google can hand a
+        freed address to somebody else. The stored link is what a later sign-in follows.
+        """
+        self.google()
+        user = User.objects.get()
+
+        self.google(google_claims(email = "omer@gmail.com"))
+
+        self.assertEqual(User.objects.count(), 1)
+        self.assertEqual(GoogleIdentity.objects.get(user = user).email, "omer@gmail.com")
+
+
+    def test_a_different_google_account_on_the_same_address_is_refused(self):
+        """
+        **The address links once and once only.** A second Google subject arriving on an
+        address that already has one means Google handed that address to a different account,
+        and opening the existing record for them is the takeover the subject link exists to
+        prevent. Refusing also keeps one address to one account, which registration relies on.
+        """
+        self.google()
+
+        response = self.google(google_claims(subject = "999"))
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(User.objects.count(), 1)
+        self.assertEqual(GoogleIdentity.objects.get().subject, "108")
+
+
+    def test_google_proves_the_address_of_an_unverified_account(self):
+        self.register()
+        self.assertFalse(User.objects.get().is_active)
+
+        self.google()
+
+        self.assertTrue(User.objects.get().is_active)
+
+
+    def test_a_taken_username_does_not_collide(self):
+        User.objects.create_user(username = "omer", password = PASSWORD, email = "someone@else.com")
+
+        self.google()
+
+        self.assertEqual(User.objects.get(email = "omer@larson.com").username, "omer2")
+
+
+    @override_settings(GOOGLE_CLIENT_ID = "")
+    def test_it_is_off_when_the_client_id_is_not_configured(self):
+        response = self.client.post("/authentication/login/google/", {"credential": "x"})
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("גוגל", response.data["error"])
+
+
+    def test_a_rejected_credential_creates_nothing(self):
+        with patch("authentication.views.claims_from_credential",
+                   side_effect = GoogleError("bad token")):
+            response = self.client.post("/authentication/login/google/", {"credential": "x"})
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(User.objects.count(), 0)
+
+
+
+@override_settings(GOOGLE_CLIENT_ID = GOOGLE_CLIENT)
+class PasswordlessAccountTests(SignUpBase):
+    """What the screens built around a password do when there is not one."""
+
+    def setUp(self):
+        super().setUp()
+
+        with patch("authentication.views.claims_from_credential", return_value = google_claims()):
+            response = self.client.post("/authentication/login/google/", {"credential": "x"})
+
+        self.access = response.data["access"]
+        self.user = User.objects.get()
+        self.client.credentials(HTTP_AUTHORIZATION = f"Bearer {self.access}")
+
+
+    def test_the_account_says_it_has_no_password(self):
+        response = self.client.get("/authentication/")
+
+        self.assertFalse(response.data["has_password"])
+        self.assertEqual(response.data["google_email"], "omer@larson.com")
+
+
+    def test_changing_the_password_points_at_the_reset_mail_instead(self):
+        response = self.client.post("/authentication/password/change/",
+                                    {"current_password": "", "password": "Kestrel-Vault-99"})
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("גוגל", response.data["error"])
+
+
+    def test_the_reset_mail_is_how_it_gains_one(self):
+        self.client.post("/authentication/password/forgot/", {"email": "omer@larson.com"})
+        uid, token = link_parts(mail.outbox[-1])
+
+        response = self.client.post("/authentication/password/reset/",
+                                    {"uid": uid, "token": token, "password": "Kestrel-Vault-99"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(User.objects.get().has_usable_password())
+
+
+    def test_deleting_it_needs_the_linked_google_account(self):
+        with patch("authentication.views.claims_from_credential", return_value = google_claims()):
+            response = self.client.delete("/authentication/account/", {"google_credential": "x"},
+                                          format = "json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(User.objects.count(), 0)
+
+
+    def test_a_different_google_account_cannot_delete_it(self):
+        with patch("authentication.views.claims_from_credential",
+                   return_value = google_claims(subject = "999", email = "someone@else.com")):
+            response = self.client.delete("/authentication/account/", {"google_credential": "x"},
+                                          format = "json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(User.objects.count(), 1)
+
+
+    def test_the_typed_word_alone_cannot_delete_it(self):
+        """A stolen access token must not be enough to finish the one irreversible action."""
+        response = self.client.delete("/authentication/account/", {}, format = "json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(User.objects.count(), 1)
+
+
+
+class ConsentTests(SignUpBase):
+    """The tick box, and the record behind it."""
+
+    def test_registration_without_it_is_refused(self):
+        response = self.register(accepted_terms = False)
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(User.objects.count(), 0)
+
+
+    def test_registration_records_what_was_accepted(self):
+        self.register()
+
+        acceptance = TermsAcceptance.objects.get()
+        self.assertEqual(acceptance.via, TermsAcceptance.VIA_FORM)
+        self.assertEqual(acceptance.version, TERMS_VERSION)
+
+
+    def test_it_leaves_with_the_trader(self):
+        self.register()
+        self.verify()
+        access = self.sign_in().data["access"]
+
+        self.client.credentials(HTTP_AUTHORIZATION = f"Bearer {access}")
+        response = self.client.get("/authentication/export/")
+
+        self.assertEqual(response.data["account"]["signs_in_with"], "password")
+        self.assertEqual(response.data["account"]["terms_accepted"][0]["version"], TERMS_VERSION)
+
+
+
+class EndSessionsTests(SignUpBase):
+    """Closing every other door without changing a password that is perfectly good."""
+
+    def setUp(self):
+        super().setUp()
+        self.register()
+        self.verify()
+
+        self.elsewhere = self.sign_in().data["refresh"]
+        self.here = self.sign_in().data
+
+        self.client.credentials(HTTP_AUTHORIZATION = f"Bearer {self.here['access']}")
+
+
+    def test_the_other_session_stops_working(self):
+        response = self.client.post("/authentication/sessions/end/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        refused = self.client.post("/authentication/refresh/", {"refresh": self.elsewhere})
+        self.assertEqual(refused.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+    def test_this_one_keeps_working(self):
+        """Otherwise the safe action logs you out, which teaches people not to take it."""
+        response = self.client.post("/authentication/sessions/end/")
+
+        kept = self.client.post("/authentication/refresh/", {"refresh": response.data["refresh"]})
+        self.assertEqual(kept.status_code, status.HTTP_200_OK)
+
+
+
+class HealthTests(APITestCase):
+    def test_it_answers_without_touching_anything(self):
+        """
+        A health check that can fail for a second reason tells the host to restart a server
+        that was fine, so this one reads no model and needs no authentication.
+        """
+        response = self.client.get("/healthz/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json(), {"status": "ok"})

@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { ThemeProvider } from '@mui/material/styles';
 import { Provider } from 'react-redux';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
+import ErrorBoundary from './features/base/ErrorBoundary';
 import App from './App';
 import { store } from './app/store';
 import { registerAuthInterceptor } from './app/interceptors';
@@ -32,6 +33,12 @@ const root = createRoot(container);
 root.render(
   <React.StrictMode>
     <Provider store={store}>
+
+{/* Outside the router and inside the store, on purpose. **A render that throws anywhere
+    below here unmounts the whole application, not the screen** - navbar, footer, routes and
+    the toast layer that would otherwise have said something - and leaves a white window. Put
+    inside the router it would catch nothing that happens while the router itself renders. */}
+<ErrorBoundary>
 
 <ThemeProvider theme={muiTheme}>
 
@@ -72,6 +79,8 @@ root.render(
 </BrowserRouter>
 
 </ThemeProvider>
+
+</ErrorBoundary>
 
 </Provider>
   </React.StrictMode>

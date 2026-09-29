@@ -3,8 +3,10 @@ import { AiOutlineUser } from 'react-icons/ai';
 import { FiMail } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
+import { Link } from 'react-router-dom';
 import { useAppDispatch } from "../../app/hooks";
-import { registerAsync, resendVerificationAsync, reset } from "./authenticationSlice";
+import { googleLoginAsync, registerAsync, resendVerificationAsync, reset } from "./authenticationSlice";
+import GoogleSignIn, { GOOGLE_ENABLED } from './GoogleSignIn';
 import './authentication.css';
 
 
@@ -26,6 +28,12 @@ const Register = () => {
     const [sent, setSent] = useState(false)
     const [resent, setResent] = useState(false)
 
+    // **Unticked to begin with, and the server refuses a registration without it.** Consent
+    // that the product assumed rather than asked for is not consent, and this one matters
+    // here in particular: the privacy policy is where it says that a summary of the trading
+    // record is sent to a third party to answer him.
+    const [accepted, setAccepted] = useState(false)
+
     const navigate = useNavigate()
     const dispatch = useAppDispatch()
 
@@ -42,7 +50,9 @@ const Register = () => {
       // rule used to be stricter here than in Django, so a perfectly good passphrase with no
       // capital letter was refused by the browser and never reached the validators that
       // would have accepted it.
-      if (password.length < 8) {
+      if (!accepted) {
+        toast.error("צריך לאשר את תנאי השימוש ומדיניות הפרטיות.");
+      } else if (password.length < 8) {
         toast.error("הסיסמה צריכה להיות באורך 8 תווים לפחות.");
       } else if (password !== password2) {
         toast.error("הסיסמאות לא זהות");
@@ -50,7 +60,8 @@ const Register = () => {
         const userData = {
           username,
           email,
-          password
+          password,
+          accepted_terms: accepted
         };
 
         dispatch(registerAsync(userData))
@@ -161,6 +172,18 @@ const Register = () => {
               />
             </div>
 
+            <label className="auth-consent">
+              <input
+                type="checkbox"
+                checked={accepted}
+                onChange={(event) => setAccepted(event.target.checked)}
+              />
+              <span>
+                קראתי ואני מאשר את <Link to="/terms">תנאי השימוש</Link> ואת{' '}
+                <Link to="/privacy">מדיניות הפרטיות</Link>.
+              </span>
+            </label>
+
             <div className="auth-actions">
               <button type="submit" className="app-btn app-btn-primary">
                 הירשמות
@@ -170,6 +193,30 @@ const Register = () => {
                 כבר יש לי חשבון
               </button>
             </div>
+
+            {GOOGLE_ENABLED && (
+              <>
+                <div className="auth-divider"><span>או</span></div>
+
+                {/* The same tick box governs this route: pressing it without accepting is
+                    refused here, rather than opening an account whose consent nobody
+                    recorded. */}
+                <GoogleSignIn
+                  text="signup_with"
+                  onCredential={(credential) => {
+                    if (!accepted) {
+                      toast.error("צריך לאשר את תנאי השימוש ומדיניות הפרטיות.");
+                      return;
+                    }
+
+                    dispatch(googleLoginAsync({ credential, remember: false }))
+                      .then((action) => {
+                        if (action.meta.requestStatus === "fulfilled") navigate("/mentor");
+                      });
+                  }}
+                />
+              </>
+            )}
 
           </form>
 

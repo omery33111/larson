@@ -16,6 +16,8 @@ export const authenticationURL = `${myServer}/authentication`;
 
 export const loginURL = `${myServer}/authentication/login/`;
 
+export const googleLoginURL = `${myServer}/authentication/login/google/`;
+
 export const registerURL = `${myServer}/authentication/register/`;
 
 export const logoutURL = `${myServer}/authentication/logout/`;
@@ -33,6 +35,8 @@ export const changePasswordURL = `${myServer}/authentication/password/change/`;
 export const forgotPasswordURL = `${myServer}/authentication/password/forgot/`;
 
 export const resetPasswordURL = `${myServer}/authentication/password/reset/`;
+
+export const endSessionsURL = `${myServer}/authentication/sessions/end/`;
 
 export const exportDataURL = `${myServer}/authentication/export/`;
 

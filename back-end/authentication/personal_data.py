@@ -13,6 +13,8 @@ from analytics.models import TraderProfile
 from chat.models import Conversation, Message
 from trades.models import Trade, TradeFile
 
+from .models import GoogleIdentity, TermsAcceptance
+
 
 
 def export(user):
@@ -27,6 +29,8 @@ def export(user):
     files = TradeFile.objects.filter(user = user).order_by("uploaded_at")
     profile = TraderProfile.objects.filter(user = user).first()
     conversations = Conversation.objects.filter(user = user).order_by("created_at")
+    google = GoogleIdentity.objects.filter(user = user).first()
+    acceptances = TermsAcceptance.objects.filter(user = user)
 
     return {
         "account": {
@@ -35,6 +39,19 @@ def export(user):
             "joined_at": user.date_joined.isoformat(),
             "last_login": user.last_login.isoformat() if user.last_login else None,
             "email_verified": user.is_active,
+
+            # How the account is opened, and what was agreed to when it was. Both are things
+            # we hold about him, so both leave with him - the second one especially, because
+            # consent that only we can see is a claim rather than a record.
+            "signs_in_with": "google" if google else "password",
+            "google_email": google.email if google else None,
+            "google_linked_at": google.linked_at.isoformat() if google else None,
+
+            "terms_accepted": [{
+                "version": row.version,
+                "accepted_at": row.accepted_at.isoformat(),
+                "via": row.via,
+            } for row in acceptances],
         },
 
         "resume": {

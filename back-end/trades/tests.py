@@ -300,7 +300,7 @@ class OutcomeIngestionTests(APITestCase):
 
     def test_the_outcome_is_stored_on_the_trade_row(self):
         self.client.post("/authentication/register/",
-                         {"username": "omer", "password": "Kestrel-Vault-72", "email": "omer@larson.com"})
+                         {"username": "omer", "password": "Kestrel-Vault-72", "email": "omer@larson.com", "accepted_terms": True})
         # Registration now leaves the account inactive until the address is confirmed,
         # so this stands in for the trader opening the mail and clicking the link.
         User.objects.filter(username = "omer").update(is_active = True)
@@ -448,7 +448,7 @@ class IngestionFlowTests(APITestCase):
 
     def setUp(self):
         self.client.post("/authentication/register/",
-                         {"username": "omer", "password": "Kestrel-Vault-72", "email": "omer@larson.com"})
+                         {"username": "omer", "password": "Kestrel-Vault-72", "email": "omer@larson.com", "accepted_terms": True})
         User.objects.filter(username = "omer").update(is_active = True)
         tokens = self.client.post("/authentication/login/",
                                   {"username": "omer", "password": "Kestrel-Vault-72"}).data
@@ -528,7 +528,7 @@ class IngestionFlowTests(APITestCase):
         file_id = upload.data["trade_file"]["id"]
 
         self.client.post("/authentication/register/",
-                         {"username": "other", "password": "Marlin-Harbor-58", "email": "other@larson.com"})
+                         {"username": "other", "password": "Marlin-Harbor-58", "email": "other@larson.com", "accepted_terms": True})
         User.objects.filter(username = "other").update(is_active = True)
         tokens = self.client.post("/authentication/login/",
                                   {"username": "other", "password": "Marlin-Harbor-58"}).data
@@ -544,7 +544,7 @@ class IngestionFlowTests(APITestCase):
         self.client.post("/trades/confirm/", {"trade_file_id": upload.data["trade_file"]["id"]})
 
         self.client.post("/authentication/register/",
-                         {"username": "other", "password": "Marlin-Harbor-58", "email": "other@larson.com"})
+                         {"username": "other", "password": "Marlin-Harbor-58", "email": "other@larson.com", "accepted_terms": True})
         User.objects.filter(username = "other").update(is_active = True)
         tokens = self.client.post("/authentication/login/",
                                   {"username": "other", "password": "Marlin-Harbor-58"}).data

@@ -11,11 +11,14 @@ from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.tokens import default_token_generator
 from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.db.models import Q
 
 from project.throttling import EmailThrottle, LoginThrottle, RegisterThrottle
 
+from .google import GoogleError, claims_from_credential
 from .mail import send_password_changed, send_password_reset, send_verification
+from .models import TERMS_VERSION, GoogleIdentity, TermsAcceptance
 from .personal_data import erase, export
 from .tokens import unpack_uid, verification_token
 
@@ -25,7 +28,17 @@ from .tokens import unpack_uid, verification_token
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def index(request):
-    return Response({"username": request.user.username, "email": request.user.email})
+    """
+    **`has_password` is not a detail.** An account opened with Google has no password at all,
+    and three screens are built on the assumption that one exists: changing it, and deleting
+    the account, both of which ask for the current one. The client has to know which of them
+    to offer before the trader is standing in front of a field he can never fill.
+    """
+    google = GoogleIdentity.objects.filter(user = request.user).first()
+
+    return Response({"username": request.user.username, "email": request.user.email,
+                     "has_password": request.user.has_usable_password(),
+                     "google_email": google.email if google else ""})
 # ------------------------- HOME PAGE END ------------------------- #
 
 
@@ -69,6 +82,20 @@ def password_problem(password, user = None):
 
 # ------------------------- AUTHENTICATION START ------------------------- #
 
+def _agreed(value):
+    """
+    Whether a tick box came back ticked.
+
+    **A form post carries `False` as the string "False", and every non-empty string is true.**
+    Reading this with a plain truth test accepts an unticked box, which is the one thing the
+    box exists to prevent.
+    """
+    if isinstance(value, str):
+        return value.strip().lower() in ("true", "1", "yes", "on")
+
+    return bool(value)
+
+
 # ------------- REGISTRATION:
 @api_view(["POST"])
 @throttle_classes([RegisterThrottle])
@@ -79,6 +106,12 @@ def register(request):
 
     if not (username and password and email):
         return Response({"error": "אנא מלא את כל השדות"}, status=status.HTTP_400_BAD_REQUEST)
+
+    # **Enforced here and not only in the form.** A tick box that the server does not insist on
+    # is a graphic, and the record of what was agreed to is the thing that has to exist later.
+    if not _agreed(request.data.get("accepted_terms")):
+        return Response({"error": "צריך לאשר את תנאי השימוש ומדיניות הפרטיות."},
+                        status=status.HTTP_400_BAD_REQUEST)
 
     if User.objects.filter(Q(username=username) | Q(email=email)).exists():
         return Response({"error": "שם המשתמש או כתובת האימייל כבר בשימוש."}, status=status.HTTP_400_BAD_REQUEST)
@@ -99,6 +132,9 @@ def register(request):
 
     user.is_staff = False
     user.save()
+
+    TermsAcceptance.objects.create(user = user, version = TERMS_VERSION,
+                                   via = TermsAcceptance.VIA_FORM)
 
     send_verification(user)
 
@@ -178,6 +214,112 @@ class MyTokenObtainPairView(TokenObtainPairView):
                             status=status.HTTP_403_FORBIDDEN)
 
         return super().post(request, *args, **kwargs)
+
+
+
+# ------------- SIGNING IN WITH GOOGLE:
+
+def _pair_for(user):
+    """The same token pair the password login issues, claims included."""
+    token = MyTokenObtainPairSerializer.get_token(user)
+    return {"access": str(token.access_token), "refresh": str(token)}
+
+
+def _free_username(email, name):
+    """
+    A username nobody has. Google does not supply one, and this product shows it everywhere.
+
+    The address' local part first, because that is what the person already calls themselves;
+    their display name second; and a number only if both are taken.
+    """
+    for candidate in (email.split("@")[0], name.replace(" ", "")):
+        base = "".join(c for c in candidate if c.isalnum() or c in "._-")[:140]
+        if not base:
+            continue
+
+        if not User.objects.filter(username__iexact = base).exists():
+            return base
+
+        for n in range(2, 200):
+            taken = f"{base}{n}"
+            if not User.objects.filter(username__iexact = taken).exists():
+                return taken
+
+    return f"trader{User.objects.count() + 1}"
+
+
+@api_view(["POST"])
+@throttle_classes([LoginThrottle])
+def google_login(request):
+    """
+    One button that both registers and signs in, because from where the trader is standing
+    those are the same act and asking him which one he meant is a question he cannot answer.
+
+    **The order of the lookups is the security of the whole thing:**
+
+    1. **The stored link first.** Once an account is tied to a Google subject, that is what a
+       later sign-in follows - not the address, which can be changed on Google's side.
+    2. **A verified address second, and only to link.** This is what lets somebody who
+       registered with a password here press the Google button and land in the account they
+       already have, instead of quietly opening a second one beside it. It is safe only
+       because `claims_from_credential` refuses a token whose address Google has not proved.
+    3. **A new account last**, with no usable password: there is nothing to guess, and the way
+       to gain one is the ordinary reset mail, which proves the mailbox all over again.
+    """
+    try:
+        claims = claims_from_credential(request.data.get("credential") or "")
+    except GoogleError as problem:
+        return Response({"error": str(problem)}, status=status.HTTP_400_BAD_REQUEST)
+
+    identity = GoogleIdentity.objects.filter(subject = claims["subject"]).select_related("user").first()
+
+    if identity:
+        user = identity.user
+
+        # The address on the Google account can change, and the row should follow it so the
+        # account page keeps telling the truth about which account this is.
+        if identity.email != claims["email"]:
+            identity.email = claims["email"]
+            identity.save(update_fields = ["email"])
+    else:
+        with transaction.atomic():
+            user = User.objects.filter(email__iexact = claims["email"]).first()
+            created = user is None
+
+            # **The address links once and once only.** Arriving here with a second Google
+            # subject on an address that already has one means Google handed that address to
+            # a different account - and opening the existing record for them is exactly the
+            # takeover the subject link exists to prevent. Refusing also keeps one address to
+            # one account, which registration already relies on.
+            if user and GoogleIdentity.objects.filter(user = user).exists():
+                return Response(
+                    {"error": "כתובת המייל הזו כבר מקושרת לחשבון גוגל אחר. "
+                              "אפשר להתחבר עם סיסמה, או לאפס סיסמה דרך \"שכחתי סיסמה\"."},
+                    status=status.HTTP_400_BAD_REQUEST)
+
+            if created:
+                user = User.objects.create(username = _free_username(claims["email"], claims["name"]),
+                                           email = claims["email"], is_active = True)
+                # **No password rather than a random one.** An unusable password cannot be
+                # guessed, cannot be brute-forced, and makes `has_usable_password` tell the
+                # truth to every screen that asks.
+                user.set_unusable_password()
+                user.save()
+
+                TermsAcceptance.objects.create(user = user, version = TERMS_VERSION,
+                                               via = TermsAcceptance.VIA_GOOGLE)
+
+            GoogleIdentity.objects.create(user = user, subject = claims["subject"],
+                                          email = claims["email"])
+
+    # Somebody who registered here, never opened the verification mail, and then arrived
+    # through Google has just had the address proved by Google itself. Sending him back to an
+    # inbox to prove it again would be asking for something he has already given.
+    if not user.is_active:
+        user.is_active = True
+        user.save(update_fields = ["is_active"])
+
+    return Response(_pair_for(user))
 
 
 
@@ -297,6 +439,15 @@ def change_password(request):
     current = request.data.get("current_password") or ""
     password = request.data.get("password") or ""
 
+    # **An account opened with Google has no current password to give.** Letting it set one
+    # from inside the session would mean an access token left on a shared machine is enough to
+    # fit the account with a second, permanent door. The reset mail is the way in, and it
+    # proves the mailbox rather than merely holding a token.
+    if not request.user.has_usable_password():
+        return Response({"error": "החשבון הזה נפתח עם גוגל ואין לו סיסמה. "
+                                  "כדי לקבוע סיסמה, השתמש ב\"שכחתי סיסמה\" ונאמת את כתובת המייל."},
+                        status=status.HTTP_400_BAD_REQUEST)
+
     if not request.user.check_password(current):
         return Response({"error": "הסיסמה הנוכחית שגויה."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -324,6 +475,27 @@ def change_password(request):
 
 # ------------------------- THE ACCOUNT ITSELF START ------------------------- #
 
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def end_sessions(request):
+    """
+    Sign out of everywhere else, without changing the password.
+
+    The machinery already existed and only a password change could reach it. **The situation
+    it is for does not always involve a password**: a session left open on somebody else's
+    laptop, a phone that was lost, a shared machine at a prop firm. Making that person change
+    a password they are happy with, in order to close a door, is a tax on doing the safe thing.
+    """
+    end_other_sessions(request.user)
+
+    # Including this caller's, so a fresh pair goes back with the answer for the same reason
+    # the password change returns one: the safe action must not log you out of the device you
+    # did it from.
+    pair = RefreshToken.for_user(request.user)
+
+    return Response({"success": "כל שאר החיבורים לחשבון נותקו.",
+                     "access": str(pair.access_token), "refresh": str(pair)})
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def export_data(request):
@@ -350,9 +522,25 @@ def delete_account(request):
     unlike deleting the resume, there is no account left afterwards to notice it happened.
     """
     password = request.data.get("password") or ""
+    credential = request.data.get("google_credential") or ""
 
-    if not request.user.check_password(password):
-        return Response({"error": "הסיסמה שגויה."}, status=status.HTTP_400_BAD_REQUEST)
+    # **An account opened with Google still has to prove itself, with the thing it actually
+    # has.** Accepting the typed confirmation alone would make this the one destructive action
+    # in the product that a stolen access token can finish on its own.
+    if request.user.has_usable_password():
+        if not request.user.check_password(password):
+            return Response({"error": "הסיסמה שגויה."}, status=status.HTTP_400_BAD_REQUEST)
+    else:
+        try:
+            claims = claims_from_credential(credential)
+        except GoogleError as problem:
+            return Response({"error": str(problem)}, status=status.HTTP_400_BAD_REQUEST)
+
+        linked = GoogleIdentity.objects.filter(user = request.user).first()
+
+        if not linked or linked.subject != claims["subject"]:
+            return Response({"error": "חשבון הגוגל שאושר אינו החשבון המקושר."},
+                            status=status.HTTP_400_BAD_REQUEST)
 
     removed = erase(request.user)
 

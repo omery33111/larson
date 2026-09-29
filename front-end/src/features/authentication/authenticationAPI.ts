@@ -1,20 +1,21 @@
 import axios from "axios";
 import {
-  accountURL, authenticationURL, changePasswordURL, exportDataURL, forgotPasswordURL,
-  loginURL, logoutURL,
+  accountURL, authenticationURL, changePasswordURL, endSessionsURL, exportDataURL,
+  forgotPasswordURL, googleLoginURL, loginURL, logoutURL,
   registerURL, resendVerificationURL, resetPasswordURL, verifyEmailURL
 } from "../../endpoints/endpoints";
-import { accessToken, clearTokens, writeTokens } from "../../app/session";
+import {
+  accessToken, clearSession, rememberSession, readTokens, writeItem, writeTokens
+} from "../../app/session";
+import { forgetGoogleSession } from "./GoogleSignIn";
 import { Login, Register } from "../../models/Authentication";
 import { toast } from 'react-toastify';
 
 
 
 export function getIndex() {
-    const myToken = JSON.parse(localStorage.getItem("token") as string)
-    const accessToken = myToken ? myToken.access : "";
     let config = {
-        headers: { 'Authorization': `Bearer ${accessToken}` }
+        headers: { 'Authorization': `Bearer ${accessToken()}` }
       }
     return new Promise<{ data: any }>((resolve =>
       axios.get(`${authenticationURL}/`, config)
@@ -51,27 +52,71 @@ const register = async (userData: Register) => {
 
 
 const login = async (userData: Login) => {
-    const response = await axios.post(loginURL, userData);
+    const { remember, ...credentials } = userData;
+
+    const response = await axios.post(loginURL, credentials);
 
     if (response.data) {
+        // **Before the write, not after.** This is what decides which storage the pair lands
+        // in, and writing first would put it in the previous session's store.
+        rememberSession(Boolean(remember));
         writeTokens(response.data);
+        writeItem('loginTime', new Date().toISOString());
     }
 
     return response.data;
 };
 
 
+/**
+ * Signing in with Google.
+ *
+ * The browser has already got an ID token from Google; all that travels here is that token,
+ * and the server checks its signature against Google's own keys before it means anything.
+ * **No password is involved anywhere in this path**, in either direction.
+ */
+const googleLogin = async (credential: string, remember: boolean) => {
+    const response = await axios.post(googleLoginURL, { credential });
+
+    if (response.data) {
+        rememberSession(Boolean(remember));
+        writeTokens(response.data);
+        writeItem('loginTime', new Date().toISOString());
+    }
+
+    return response.data;
+};
+
+
+/**
+ * Sign out of every other session, keeping this one.
+ *
+ * The server blacklists every refresh token the account has out - this caller's included -
+ * and hands back a fresh pair, which is stored here. Without that, the safe action would log
+ * you out of the device you took it from.
+ */
+const endSessions = async () => {
+    const response = await axios.post(endSessionsURL, {},
+      { headers: { Authorization: `Bearer ${accessToken()}` } });
+
+    if (response.data?.access) writeTokens(response.data);
+
+    return response.data;
+};
+
+
 const logout = async () => {
-  const myToken = JSON.parse(localStorage.getItem("token") as string)
-  const accessToken = myToken ? myToken.access : "";
+  // Told to Google as well, or its library keeps treating this as the chosen account and One
+  // Tap offers to put him straight back into the session he just left.
+  forgetGoogleSession();
+
+  const pair = readTokens();
   let config = {
-      headers: { 'Authorization': `Bearer ${accessToken}` }
+      headers: { 'Authorization': `Bearer ${pair?.access || ""}` }
   }
 
     try {
-      const refreshToken = myToken ? myToken.refresh : "";
-
-      const response = await axios.post(logoutURL, { refresh_token: refreshToken }, config);
+      const response = await axios.post(logoutURL, { refresh_token: pair?.refresh || "" }, config);
 
       return response.data;
     } catch (error) {
@@ -161,18 +206,23 @@ const exportData = async () => {
 };
 
 
-const deleteAccount = async (password: string) => {
+/**
+ * `googleCredential` rather than a password, for an account that never had one.
+ *
+ * Exactly one of the two is sent and the server decides which it needs. **Neither is a
+ * formality**: this is the only irreversible action in the product that a stolen access token
+ * could otherwise finish on its own, and unlike deleting the resume there is no account left
+ * afterwards to notice that it happened.
+ */
+const deleteAccount = async (password: string, googleCredential = "") => {
   const response = await axios.delete(accountURL, {
     headers: { Authorization: `Bearer ${accessToken()}` },
-    data: { password },
+    data: { password, google_credential: googleCredential },
   });
 
   // There is no account left to be logged into, so the local session goes with it rather
   // than waiting for the next request to be rejected.
-  clearTokens();
-  localStorage.removeItem("userName");
-  localStorage.removeItem("is_staff");
-  localStorage.removeItem("loginTime");
+  clearSession();
 
   return response.data;
 };
@@ -181,6 +231,8 @@ const deleteAccount = async (password: string) => {
 const authenticationService = {
     register,
     login,
+    googleLogin,
+    endSessions,
     logout,
     verifyEmail,
     resendVerification,

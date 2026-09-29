@@ -226,6 +226,86 @@
 
 
 
+/* ------------------------- STAYING SIGNED IN, AND AGREEING ------------------------- */
+/* Both are a box and a line of text, so they are one shape. 44px of height because that is
+   the floor for anything meant to be tapped. */
+.auth-remember,
+.auth-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  min-height: 44px;
+  margin: 0.2rem 0 1rem;
+  color: #cfd2d8;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.auth-remember input,
+.auth-consent input {
+  width: 1.15rem;
+  height: 1.15rem;
+  margin-top: 0.15rem;
+  accent-color: #f0b90b;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.auth-consent a {
+  color: #f0b90b;
+  text-decoration: underline;
+}
+
+
+/* ------------------------- THE OTHER WAY IN ------------------------- */
+/* A rule with a word sitting in it, which is what says "instead of" rather than "as well as".
+   The line is drawn by the two sides of a flex row, so it needs no pseudo-element and no
+   fixed width to line up with the form above it. */
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  margin: 1.4rem 0 1rem;
+  color: #8b909c;
+  font-size: 0.85rem;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: #2a2f3a;
+}
+
+.google-signin {
+  display: flex;
+  justify-content: center;
+}
+
+/* Google renders its own markup - sometimes an iframe on its origin - into this, and it takes
+   a pixel width rather than a percentage, so the slot is what gets measured.
+   **No max-width and no min-height here.** Both fought the button rather than framing it: a
+   ceiling narrower than the frame Google asks for squeezes the frame and cuts the logo off the
+   end, and a floor taller than the button stretches it, because a flex child stretches by
+   default. The form's own max-width already bounds this. */
+.google-signin-slot {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* The one rule that has to win over the global `* { max-width: 100% }`. Google's frame is
+   deliberately wider than the button and pulled back with negative margins, so a ceiling of
+   100% clips exactly the part that overhangs - the logo. A class and an element beat the
+   universal selector on specificity, so this needs no `!important`. */
+.google-signin-slot iframe {
+  max-width: none;
+}
+
+
 /* ------------------------- LAPTOP RESPONSIVE STYLING ------------------------- */
 @media (min-width: 1025px) and (max-width: 1919px) {
 

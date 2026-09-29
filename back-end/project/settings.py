@@ -384,6 +384,17 @@ if not DEBUG:
     SECURE_REFERRER_POLICY = 'same-origin'
 
 
+# ------------------------- SIGNING IN WITH GOOGLE -------------------------
+# Inert until this is set, exactly like the mail server and the error monitor: the button does
+# not render and the endpoint says so plainly, rather than half-working.
+#
+# It is a public value - it travels to the browser and is meant to - and it is the `aud` every
+# incoming Google token is checked against. **That check is the whole point of it being here:**
+# a token minted for somebody else's site is a perfectly valid Google token, and without the
+# audience check their login would be ours.
+GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
+
+
 # ------------------------- ERROR MONITORING -------------------------
 # Off unless SENTRY_DSN is set, exactly like the mail server: the code is wired and inert
 # until somebody supplies the one value that turns it on.

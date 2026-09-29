@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
-import { FiAlertTriangle, FiDownload, FiKey, FiUser } from 'react-icons/fi'
+import { FiAlertTriangle, FiDownload, FiKey, FiLogOut, FiUser } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import { useAppDispatch, useAppSelector } from '../../app/hooks'
 import {
-  changePasswordAsync, deleteAccountAsync, exportDataAsync, selectIsLogged, selectIsLoading,
-  selectUser
+  changePasswordAsync, deleteAccountAsync, endSessionsAsync, exportDataAsync, getIndexAsync,
+  selectGoogleEmail, selectHasPassword, selectIsLogged, selectIsLoading, selectUser
 } from './authenticationSlice'
+import GoogleSignIn from './GoogleSignIn'
 import './authentication.css'
 
 
@@ -31,6 +32,11 @@ const AccountPage = () => {
   const isLoading = useAppSelector(selectIsLoading);
   const userName = useAppSelector(selectUser);
 
+  // **Which doors this account actually has.** An account opened with Google has no password,
+  // and two of the three cards below are built on the assumption that one exists.
+  const hasPassword = useAppSelector(selectHasPassword);
+  const googleEmail = useAppSelector(selectGoogleEmail);
+
   const [isArmed, setIsArmed] = useState(false);
   const [typed, setTyped] = useState('');
   const [password, setPassword] = useState('');
@@ -47,6 +53,10 @@ const AccountPage = () => {
   useEffect(() => {
     if (!isLogged && !deleting.current) navigate('/authentication/login');
   }, [isLogged, navigate]);
+
+  // Asked for on arrival rather than assumed from the session: the answer decides which
+  // version of two whole cards is drawn.
+  useEffect(() => { dispatch(getIndexAsync()); }, [dispatch]);
 
   const download = async () => {
     const result = await dispatch(exportDataAsync());
@@ -76,9 +86,20 @@ const AccountPage = () => {
     toast.success('הסיסמה הוחלפה. שאר החיבורים לחשבון נותקו.');
   };
 
-  const erase = async () => {
+  const endEverywhereElse = async () => {
+    const result = await dispatch(endSessionsAsync());
+
+    if (endSessionsAsync.rejected.match(result)) {
+      toast.error(result.payload as string);
+      return;
+    }
+
+    toast.success('כל שאר החיבורים לחשבון נותקו. כאן נשארת מחובר.');
+  };
+
+  const erase = async (googleCredential = '') => {
     deleting.current = true;
-    const result = await dispatch(deleteAccountAsync(password));
+    const result = await dispatch(deleteAccountAsync({ password, googleCredential }));
 
     if (deleteAccountAsync.rejected.match(result)) {
       deleting.current = false;
@@ -94,7 +115,10 @@ const AccountPage = () => {
     <div className="app-container account-page">
 
       <h1 className="account-title"><FiUser /> החשבון שלי</h1>
-      <p className="account-subtitle">מחובר בתור <b>{userName}</b></p>
+      <p className="account-subtitle">
+        מחובר בתור <b>{userName}</b>
+        {googleEmail && <> · מקושר לחשבון גוגל <b>{googleEmail}</b></>}
+      </p>
 
 
       {/* ------------- TAKING IT ------------- */}
@@ -112,10 +136,46 @@ const AccountPage = () => {
       </section>
 
 
+      {/* ------------- CLOSING THE OTHER DOORS ------------- */}
+      {/* Separate from the password card on purpose. **The situation this is for does not
+          always involve a password** - a session left open on somebody else's laptop, a phone
+          that was lost - and making him change a password he is happy with in order to close
+          a door is a tax on doing the safe thing. */}
+      <section className="account-card">
+        <h2 className="account-card-title"><FiLogOut /> ניתוק החיבורים האחרים</h2>
+
+        <p className="account-card-body">
+          מנתק את החשבון מכל דפדפן ומכל מכשיר אחר שמחוברים אליו עכשיו — כאן תישאר מחובר.
+          שימושי אם נשארת מחובר במחשב של מישהו אחר, או אם אבד לך מכשיר.
+        </p>
+
+        <button className="app-btn app-btn-dark" onClick={endEverywhereElse} disabled={isLoading}>
+          לנתק את כל השאר
+        </button>
+      </section>
+
+
       {/* ------------- CHANGING THE KEY ------------- */}
       <section className="account-card">
-        <h2 className="account-card-title"><FiKey /> החלפת סיסמה</h2>
+        <h2 className="account-card-title"><FiKey /> {hasPassword ? 'החלפת סיסמה' : 'קביעת סיסמה'}</h2>
 
+        {!hasPassword ? (
+          /* **The reset mail rather than a field here**, and that is the security of it: a
+             session that only holds an access token must not be able to fit the account with
+             a second, permanent door. The mail proves the mailbox all over again. */
+          <>
+            <p className="account-card-body">
+              החשבון הזה נפתח עם גוגל ואין לו סיסמה, אז אין מה להחליף. אפשר להמשיך להתחבר
+              עם גוגל תמיד — ואם בכל זאת תרצה גם סיסמה, נשלח אליך קישור למייל.
+            </p>
+
+            <button className="app-btn app-btn-dark"
+              onClick={() => navigate('/authentication/forgot')}>
+              לקבוע סיסמה דרך המייל
+            </button>
+          </>
+        ) : (
+        <>
         <p className="account-card-body">
           {/* Said up front, because it is a consequence and not a footnote: somebody who
               changes a password because he suspects a break-in needs to know the other side
@@ -146,6 +206,8 @@ const AccountPage = () => {
             החלפת הסיסמה
           </button>
         </div>
+        </>
+        )}
       </section>
 
 
@@ -177,15 +239,19 @@ const AccountPage = () => {
               <b> כל השיחות עם לארסון</b>, ו<b>המשתמש עצמו</b>. אי אפשר לשחזר.
             </p>
 
-            <label className="account-label" htmlFor="account-password">הסיסמה שלך</label>
-            <input
-              id="account-password"
-              type="password"
-              className="app-input"
-              value={password}
-              placeholder="סיסמה"
-              onChange={(event) => setPassword(event.target.value)}
-            />
+            {hasPassword && (
+              <>
+                <label className="account-label" htmlFor="account-password">הסיסמה שלך</label>
+                <input
+                  id="account-password"
+                  type="password"
+                  className="app-input"
+                  value={password}
+                  placeholder="סיסמה"
+                  onChange={(event) => setPassword(event.target.value)}
+                />
+              </>
+            )}
 
             <label className="account-label" htmlFor="account-confirm">
               הקלד <b>{CONFIRM_WORD}</b> כדי לאשר
@@ -199,19 +265,38 @@ const AccountPage = () => {
               onChange={(event) => setTyped(event.target.value)}
             />
 
+            {/* An account with no password proves itself with the thing it does have. The
+                button appears only once the word is typed, because Google's own button cannot
+                be disabled and an armed control that ignores you is worse than one that is
+                not there yet. */}
+            {!hasPassword && typed.trim() === CONFIRM_WORD && (
+              <p className="account-card-note">
+                לאישור אחרון, התחבר שוב עם חשבון הגוגל המקושר. המחיקה תתבצע מיד אחרי זה.
+              </p>
+            )}
+
             <div className="account-danger-actions">
               <button className="app-btn app-btn-dark"
                 onClick={() => { setIsArmed(false); setTyped(''); setPassword(''); }}>
                 ביטול
               </button>
 
-              <button
-                className="app-btn account-danger-go"
-                disabled={typed.trim() !== CONFIRM_WORD || !password || isLoading}
-                onClick={erase}
-              >
-                למחוק את החשבון
-              </button>
+              {hasPassword ? (
+                <button
+                  className="app-btn account-danger-go"
+                  disabled={typed.trim() !== CONFIRM_WORD || !password || isLoading}
+                  onClick={() => erase()}
+                >
+                  למחוק את החשבון
+                </button>
+              ) : (
+                typed.trim() === CONFIRM_WORD && (
+                  <GoogleSignIn
+                    text="continue_with"
+                    onCredential={(credential) => erase(credential)}
+                  />
+                )
+              )}
             </div>
           </>
         )}

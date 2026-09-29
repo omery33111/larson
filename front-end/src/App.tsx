@@ -3,6 +3,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useAppDispatch, useAppSelector } from './app/hooks';
+import { isRemembered, readItem } from './app/session';
 import { logoutAsync, selectIsLogged } from './features/authentication/authenticationSlice';
 import MyFooter from './features/navigators/MyFooter';
 import MyNavbar from './features/navigators/MyNavbar';
@@ -27,8 +28,14 @@ function App() {
 
   const isLogged = useAppSelector(selectIsLogged);
 
+  // **Skipped entirely for a session the trader asked to keep.** This cap is what made
+  // "stay signed in" meaningless before: whatever the refresh token was good for, the app
+  // signed him out after a day anyway. Unticked, the session is in `sessionStorage` and dies
+  // with the tab in any case, and the cap is the belt to that pair of braces.
   useEffect(() => {
-    const storedloginTime = localStorage.getItem('loginTime');
+    if (isRemembered()) return;
+
+    const storedloginTime = readItem('loginTime');
 
     if (storedloginTime && isLogged) {
       const submitTime = new Date(storedloginTime);

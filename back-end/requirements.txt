@@ -3,6 +3,8 @@ anthropic==1.0.0
 anyio==4.14.2
 asgiref==3.12.1
 certifi==2026.7.22
+cffi==2.1.1
+cryptography==50.0.1
 Django==6.1
 django-cors-headers==4.9.0
 djangorestframework==3.18.0
@@ -17,6 +19,7 @@ jiter==0.16.0
 numpy==2.5.2
 openpyxl==3.1.5
 pandas==3.0.5
+pycparser==3.0
 pydantic==2.13.4
 pydantic_core==2.46.4
 PyJWT==2.13.0

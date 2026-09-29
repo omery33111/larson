@@ -3,9 +3,10 @@ import { FaSignInAlt } from 'react-icons/fa'
 import { useAppSelector, useAppDispatch } from "../../app/hooks";
 import { useNavigate } from 'react-router-dom';
 import {
-  clearVerificationPrompt, loginAsync, resendVerificationAsync, reset, selectIsError,
-  selectIsSuccess, selectNeedsVerification, selectUnverifiedEmail
+  clearVerificationPrompt, googleLoginAsync, loginAsync, resendVerificationAsync, reset,
+  selectIsError, selectIsSuccess, selectNeedsVerification, selectUnverifiedEmail
 } from "./authenticationSlice"
+import GoogleSignIn, { GOOGLE_ENABLED } from './GoogleSignIn';
 import { toast } from 'react-toastify';
 import './authentication.css';
 
@@ -28,6 +29,11 @@ const Login = () => {
   const unverifiedEmail = useAppSelector(selectUnverifiedEmail);
 
   const [resent, setResent] = useState(false);
+
+  // **Off by default, and that is the decision.** Ticking it keeps the session after the
+  // browser closes; leaving it means the session dies with the tab. On a borrowed machine the
+  // safe answer has to be the one that happens when nobody touches anything.
+  const [remember, setRemember] = useState(false);
 
   useEffect(() =>
   {
@@ -66,13 +72,9 @@ const Login = () => {
         return;
     }
 
-    const userData = {
-        username,
-        password,
-    };
-
-    const submitTime = new Date().toISOString();
-    localStorage.setItem('loginTime', submitTime);
+    // `loginTime` is written by the API once the pair comes back, because until then it is
+    // not known which storage the session belongs in.
+    const userData = { username, password, remember };
 
     dispatch(clearVerificationPrompt());
     setResent(false);
@@ -138,6 +140,15 @@ const Login = () => {
           </div>
         )}
 
+        <label className="auth-remember">
+          <input
+            type="checkbox"
+            checked={remember}
+            onChange={(e) => setRemember(e.target.checked)}
+          />
+          <span>להישאר מחובר בדפדפן הזה</span>
+        </label>
+
         <div className="auth-actions">
           <button type="submit" className="app-btn app-btn-primary">
             התחברות
@@ -152,6 +163,20 @@ const Login = () => {
           onClick={() => navigate('/authentication/forgot')}>
           שכחת סיסמה?
         </button>
+
+        {/* Below the form and not above it: the password is how most accounts here were
+            opened, and putting a third party's button first suggests otherwise. */}
+        {GOOGLE_ENABLED && (
+          <>
+            <div className="auth-divider"><span>או</span></div>
+
+            <GoogleSignIn
+              oneTap
+              text="signin_with"
+              onCredential={(credential) => dispatch(googleLoginAsync({ credential, remember }))}
+            />
+          </>
+        )}
 
       </form>
 

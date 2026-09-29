@@ -22,9 +22,92 @@ import { refreshURL } from '../endpoints/endpoints';
 type Pair = { access: string; refresh: string };
 
 
+// ------------------------- WHERE THE SESSION IS KEPT -------------------------
+/**
+ * Everything the session consists of. Named here because both stores have to be cleared of
+ * all of it - a leftover `userName` in the store that is not in use is a name on the navbar
+ * belonging to nobody.
+ */
+const KEYS = ['token', 'userName', 'is_staff', 'loginTime'];
+
+/**
+ * **"Stay signed in" is this one choice and nothing else.** `localStorage` survives the
+ * browser closing; `sessionStorage` does not survive the tab. That is the whole difference,
+ * and it is the difference the tick box on the login screen is describing honestly.
+ *
+ * It matters for this product in particular: the session is a ninety-day refresh token, and
+ * this is somebody's trading record. On a borrowed machine, leaving the box unticked means
+ * the session really is gone when the window closes rather than merely out of sight.
+ */
+let chosen: Storage | null = null;
+
+function store(): Storage {
+  if (chosen) return chosen;
+
+  try {
+    // Resolved by looking rather than by a flag of its own. A flag is a second thing that can
+    // disagree with where the token actually is, and the token is the session.
+    chosen = sessionStorage.getItem('token') ? sessionStorage : localStorage;
+  } catch {
+    // Private windows and locked-down browsers can throw on the accessor itself.
+    chosen = localStorage;
+  }
+
+  return chosen;
+}
+
+
+/** Called at sign-in, before anything is written. */
+export function rememberSession(remember: boolean) {
+  chosen = remember ? localStorage : sessionStorage;
+
+  const other = remember ? sessionStorage : localStorage;
+  KEYS.forEach((key) => { try { other.removeItem(key); } catch { /* nothing to remove */ } });
+}
+
+
+/** Whether this session was told to outlive the browser closing. */
+export function isRemembered(): boolean {
+  return store() === localStorage;
+}
+
+
+export function readItem(key: string): string | null {
+  try {
+    return store().getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+
+export function writeItem(key: string, value: string) {
+  try {
+    store().setItem(key, value);
+  } catch { /* a browser refusing to store is not a reason to fail the sign-in */ }
+}
+
+
+export function removeItem(key: string) {
+  try {
+    store().removeItem(key);
+  } catch { /* already gone as far as anybody can tell */ }
+}
+
+
+/** The whole session, out of both stores. */
+export function clearSession() {
+  [localStorage, sessionStorage].forEach((where) => {
+    KEYS.forEach((key) => { try { where.removeItem(key); } catch { /* nothing to remove */ } });
+  });
+
+  chosen = null;
+}
+
+
 export function readTokens(): Pair | null {
   try {
-    const raw = localStorage.getItem('token');
+    const raw = readItem('token');
     return raw ? JSON.parse(raw) : null;
   } catch {
     // A corrupted entry is the same situation as no entry, and throwing here would take the
@@ -36,12 +119,12 @@ export function readTokens(): Pair | null {
 
 export function writeTokens(pair: Partial<Pair>) {
   const current = readTokens();
-  localStorage.setItem('token', JSON.stringify({ ...current, ...pair }));
+  writeItem('token', JSON.stringify({ ...current, ...pair }));
 }
 
 
 export function clearTokens() {
-  localStorage.removeItem('token');
+  removeItem('token');
 }
 
 

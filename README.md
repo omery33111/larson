@@ -162,6 +162,65 @@ axios interceptor.
 
 ---
 
+## Signing in with Google
+
+Optional, and off until a client id is set. Where it comes from: Google Cloud Console →
+APIs & Services → Credentials → **Create OAuth client ID** → *Web application*, with the
+site's address under *Authorised JavaScript origins* (`http://localhost:5173` in development,
+the real domain in production). No client secret is involved — this flow only verifies an ID
+token, and the client id is public by design.
+
+The same value goes in two places:
+
+```
+back-end/.env     GOOGLE_CLIENT_ID=...
+front-end/.env    VITE_GOOGLE_CLIENT_ID=...
+```
+
+Leave them empty and the button does not render and the endpoint says so plainly. Nothing else
+changes; the password form is a complete way in.
+
+**Google is the whole integration** — no django-allauth, no social-auth, no identity service in
+the middle. The browser gets a signed ID token, posts it to `/authentication/login/google/`,
+and `authentication/google.py` checks the signature against Google's published keys. Three
+checks carry it: the signature, that `aud` is our own client id (a token minted for another
+site is a valid Google token, and without this their login would be ours), and that Google
+says the address is verified.
+
+The account link is stored on Google's **subject id**, not on the email address. An address can
+be changed by its owner and reassigned by Google; a subject is issued once. The address is used
+only to attach a first Google sign-in to an account that already registered with a password
+here — after that the stored row decides.
+
+An account opened this way has **no password at all**, so two screens change shape: changing a
+password sends it to the reset mail instead, and deleting the account asks it to sign in with
+Google again rather than for a password it never had.
+
+---
+
+## Staying signed in
+
+The tick box on the login form chooses which storage holds the token pair: `localStorage`
+when it is ticked, `sessionStorage` when it is not. Unticked, the session really is gone when
+the window closes rather than merely out of sight — which is the answer that matters on a
+borrowed machine, and it is why the box starts unticked.
+
+`app/session.ts` owns that choice, and everything else reads storage through it.
+
+---
+
+## Health check
+
+```
+GET /healthz/   →   {"status": "ok"}
+```
+
+For the host to ping. It touches no database, no model and no authentication on purpose: a
+health check that can fail for a second reason tells the host to restart a server that was
+fine.
+
+---
+
 ## Tests
 
 ```bash
