@@ -7,9 +7,6 @@
 **An AI mentor for traders.** Upload your trade history, and Larson tells you what you keep
 doing — in your own numbers, not in generalities.
 
-[Architecture](docs/architecture.md) · [Configuration](docs/configuration.md) ·
-[Deployment](docs/deployment.md) · [Development](docs/development.md)
-
 </div>
 
 ---
@@ -101,14 +98,10 @@ beta.
 
 ## Documentation
 
-| | |
-|---|---|
-| [docs/architecture.md](docs/architecture.md) | How it is put together: layout, the ingestion engine, sessions |
-| [docs/configuration.md](docs/configuration.md) | Every external service, and what happens without one |
-| [docs/deployment.md](docs/deployment.md) | Running it for other people, and what each number costs |
-| [docs/development.md](docs/development.md) | Running it on a workstation |
-| [CLAUDE.md](CLAUDE.md) | The full decision record — why each thing is the way it is |
-| [trading-mentor-spec-v2.md](trading-mentor-spec-v2.md) | The product specification |
+[CLAUDE.md](CLAUDE.md) is the decision record: what was built, how to run it, and why each
+thing is the way it is — including what was tried and rejected. The product specification is
+[trading-mentor-spec-v2.md](trading-mentor-spec-v2.md), and every configuration value is
+listed with a note on it in [`back-end/.env.example`](back-end/.env.example).
 
 ---
 

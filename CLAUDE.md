@@ -1758,7 +1758,37 @@ assignment** — המילון ש־`Trade(**t)` מקבל בנוי ממפתחות 
 - **תיקון באג ידוע מה-repositories:** `isSuccess` משותף ל-`registerAsync` ול-`loginAsync`. לכן `Register` עושה `dispatch(reset())` לפני ניווט ל-`Login` — אחרת ה-`useEffect` ב-`Login` היה מזהה `isSuccess` ומיד קופץ ל-`/`.
 
 ## פקודות הרצה
-מלא ב-`README.md`. בקצרה — שני טרמינלים:
-- באק-אנד: `cd back-end && .venv\Scripts\python.exe manage.py runserver 8000`
+**הרשימה המלאה היא כאן ולא ב־README.** ה־README הוא עמוד מוצר, ותיעוד תפעולי שיושב בשני
+מקומות נסחף באחד מהם — והעותק שנסחף הוא זה שאף אחד לא קורא שוב.
+
+**בפיתוח — שני טרמינלים:**
+- באק־אנד: `cd back-end && .venv\Scripts\python.exe manage.py runserver 8000`
 - פרונט: `cd front-end && npm run dev` → http://localhost:5173
 - טסטים: `cd back-end && .venv\Scripts\python.exe manage.py test`
+- מיגרציה: `cd back-end && .venv\Scripts\python.exe manage.py migrate`
+
+**נכסי המותג — `cd front-end && npm run icons`.** מייצר מחדש את כל מה שב־`public/`: ה־favicon
+על שלושת גדליו, `apple-touch-icon`, שני אייקוני ה־manifest, האייקון ה־maskable, וכרטיס
+השיתוף. **שום דבר שם לא צויר ביד** — `tools/render-mark.mjs` מרנדר את `LarsonMark.tsx` עצמו
+ל־SVG עצמאי, ו־`tools/make-icons.mjs` מרסטר אותו בכרום או ב־Edge שכבר מותקנים, headless.
+להחליף אייקון = להריץ את הפקודה.
+
+**בייצור — `back-end/Procfile`**, שכל מארח קורא:
+```
+release: python manage.py migrate --noinput && python manage.py collectstatic --noinput
+web: gunicorn project.wsgi:application --bind 0.0.0.0:$PORT --worker-class gthread      --workers 1 --threads 8 --timeout 120 --access-logfile - --error-logfile -
+```
+**שלושה מהדגלים נושאים משקל, ואף אחד מהם אינו ברירת מחדל:**
+- **`--timeout 120`** — גונייקורן הורג worker שעסוק 30 שניות כברירת מחדל, **והתשובות כאן
+  זורמות יותר מזה באופן שגרתי.** בברירת המחדל תחקיר ארוך נקטע באמצע משפט, והלוג מאשים את
+  ה־worker במקום את השעון.
+- **`gthread` עם threads** — כל תשובה זורמת מחזיקה את ה־worker שלה לכל אורכה, והזמן הזה
+  מבוזבז על המתנה לרשת ולא על מעבד.
+- **`--workers 1`, וזה על כסף** — המונים של מגבלות הקצב ושל התקציב יושבים **בזיכרון
+  התהליך**, ולכן worker שני הוא הקצבה שנייה שלמה: התקרה היומית של כל האתר הופכת בשקט לשתיים.
+  `REDIS_URL` הופך את המונים למשותפים, ורק אז אפשר להוסיף workers.
+
+**`collectstatic` חייב לרוץ בכל דחיפה.** ה־manifest backend של whitenoise מסרב להגיש קובץ
+שאין לו hash עבורו — וזו הכוונה: חוסר נכשל בזמן ההעלאה ולא בשקט בדפדפן של מישהו.
+
+**וכל משתני הסביבה, עם הערה על כל אחד, יושבים ב־`back-end/.env.example`** ו־`front-end/.env`.
