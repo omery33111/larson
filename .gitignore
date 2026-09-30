@@ -1,6 +1,8 @@
 # ------------------------- BACK-END:
 back-end/.venv/
 back-end/.env
+# The production values that are set on the server. Holds the database password.
+back-end/.env.production
 back-end/project/mydatabase.db
 back-end/staticfiles/
 back-end/media/

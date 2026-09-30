@@ -432,9 +432,18 @@ if AWS_STORAGE_BUCKET_NAME:
         'OPTIONS': {
             'bucket_name': AWS_STORAGE_BUCKET_NAME,
             'region_name': os.environ.get('AWS_S3_REGION_NAME', ''),
-            # **Private, and not a detail.** These are other people's trading records; a
-            # bucket that defaults to public-read would publish every one of them.
-            'default_acl': 'private',
+            # **No ACL is sent, and that is the private setting, not the absence of one.**
+            # This used to say `'default_acl': 'private'`, which reads like the safer line and
+            # is in fact the broken one: a bucket created today defaults to
+            # `BucketOwnerEnforced`, where object ACLs are turned off entirely and S3 answers
+            # any request carrying an ACL header with `AccessControlListNotSupported`. Every
+            # upload would have failed - the first time a trader handed us a file, not in a
+            # test.
+            #
+            # What actually keeps the record private is the bucket: public access is blocked at
+            # the account and bucket level, and nothing may grant it per object. That is a
+            # stronger guarantee than a per-object ACL, because it cannot be undone one file at
+            # a time.
             'querystring_auth': True,
             'file_overwrite': False,
         },
