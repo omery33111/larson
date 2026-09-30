@@ -43,6 +43,35 @@ TESTING = 'test' in sys.argv
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get(
     'DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1,[::1]').split(',') if h.strip()]
 
+# Behind a load balancer, one caller does not use the site's name: the balancer's own health
+# check is addressed to the instance's private address, because that is what it is talking to.
+# Without that address on the list Django answers 400, the balancer reads 400 as a dead
+# instance, and it replaces a server that was working perfectly - **the failure looks like a
+# crash and is a configuration line.** The address is assigned at boot and is different on
+# every instance, so it cannot be written into a variable by hand.
+#
+# Read only when `RUNNING_ON_EB` says to. The metadata address is not routable off AWS, and an
+# unguarded attempt would spend its timeout on every local start and every test run.
+if os.environ.get('RUNNING_ON_EB') == '1':
+    try:
+        import urllib.request
+
+        # IMDSv2: a short-lived token first, then the question. The older unauthenticated form
+        # is what made instance metadata reachable through a server-side request forgery.
+        token = urllib.request.urlopen(urllib.request.Request(
+            'http://169.254.169.254/latest/api/token',
+            headers = {'X-aws-ec2-metadata-token-ttl-seconds': '60'},
+            method = 'PUT'), timeout = 2).read().decode()
+
+        ALLOWED_HOSTS.append(urllib.request.urlopen(urllib.request.Request(
+            'http://169.254.169.254/latest/meta-data/local-ipv4',
+            headers = {'X-aws-ec2-metadata-token': token}), timeout = 2).read().decode())
+
+    except Exception:
+        # A site that refuses to start is worse than one whose health check complains, and the
+        # health check complaining is exactly how this failure announces itself.
+        pass
+
 
 
 # Application definition
@@ -503,6 +532,19 @@ PASSWORD_RESET_TIMEOUT = 60 * 60 * 24
 if not DEBUG:
     SECURE_SSL_REDIRECT = os.environ.get('SECURE_SSL_REDIRECT', 'True').lower() == 'true'
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+    # The health check is the one thing that may answer over plain HTTP, and it has to be.
+    #
+    # A load balancer probes the instance directly, over HTTP and without the
+    # `X-Forwarded-Proto` header that tells Django the outside connection was encrypted. With
+    # the redirect applying to it, every probe would come back 301 - and a 301 says only that
+    # the middleware is alive, not that the application behind it can serve anything. Either
+    # the balancer is taught to accept a redirect as health, which makes the check almost
+    # meaningless, or the check is allowed to reach the view. This is the second.
+    #
+    # It gives nothing away: the view touches no database, no model and no authentication, and
+    # answers the same three characters to everyone.
+    SECURE_REDIRECT_EXEMPT = [r'^healthz/$']
     SECURE_HSTS_SECONDS = 60 * 60 * 24 * 365
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
