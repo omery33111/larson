@@ -19,11 +19,6 @@ def health(request):
 urlpatterns = [
     path('healthz/', health),
 
-    # **Django's own login form, and nothing in this project rate-limits it.** The DRF
-    # throttles cover the API; the admin is a plain Django view and every bot on the internet
-    # knows to try `/admin/`. Moving it is not a lock - it is turning off the porch light, and
-    # it costs one environment variable. The real lock is a host rule or an IP allowlist.
-    path(os.environ.get('DJANGO_ADMIN_PATH', 'admin') + '/', admin.site.urls),
     path('authentication/', include('authentication.urls')),
     path('trades/', include('trades.urls')),
     path('analytics/', include('analytics.urls')),
@@ -38,6 +33,26 @@ urlpatterns = [
 # `/media/trade_files/<name>` for anybody at all, with no token and no owner check, and the
 # names are the ones the traders' own computers gave the files. Nothing in the product ever
 # linked to it: the export screen fetches through an authenticated request and always did.
+# **The admin is off unless something explicitly asks for it, and in production nothing does.**
+#
+# It is Django's own login form, and nothing in this project rate-limits it: the DRF throttles
+# cover the API, while the admin is a plain Django view that every bot on the internet knows to
+# try. Moving its path is turning off the porch light, not a lock.
+#
+# **What was tried instead and rejected: an allowlist of IP addresses.** It reads as the strong
+# answer and is the fragile one for a single operator - a home connection whose address changes,
+# a router somebody else reconfigures, a change of provider nobody announces, and the lock has
+# locked out the only person who holds the key, on the one day he needed it.
+#
+# **Off is stronger than guarded, and it costs nothing here**, because every day-to-day thing
+# lives in the product's own screens. When it is genuinely needed it comes back for as long as
+# it is needed, by setting one variable and taking it away afterwards - a door that is opened
+# deliberately and closed again, instead of one that stands ajar behind a rule.
+if settings.DEBUG or os.environ.get('DJANGO_ADMIN_ENABLED') == '1':
+    urlpatterns.append(
+        path(os.environ.get('DJANGO_ADMIN_PATH', 'admin') + '/', admin.site.urls))
+
+
 urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 
 urlpatterns += staticfiles_urlpatterns()

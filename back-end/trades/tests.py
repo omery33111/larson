@@ -10,7 +10,7 @@ from rest_framework import status
 
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from analytics.models import TraderProfile
@@ -1109,10 +1109,16 @@ class LabelBoundsTests(TestCase):
 
 # ------------------------- THE ADMIN, AND THE NAME OF AN UPLOAD ------------------------- #
 
+@override_settings(ROOT_URLCONF = "project.urls_with_admin")
 class AdminAllowlistTests(APITestCase):
     """
     Nothing in this project rate-limits Django's own login form, and every bot tries
     `/admin/`. Moving the path is the porch light; this is the lock.
+
+    **In production the admin is not mounted at all**, which is stronger than any lock - see
+    the note in `project/urls.py`. The lock still has to work, because that is what stands
+    between the internet and the form on the day it is deliberately switched on for an hour.
+    These tests therefore run against a URL map that does mount it.
     """
 
     def test_it_is_off_until_a_list_is_set(self):
