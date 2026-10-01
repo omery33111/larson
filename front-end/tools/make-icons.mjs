@@ -100,6 +100,12 @@ reduce(180, "apple-touch-icon.png");
 // The smaller of the two the manifest asks for by name.
 reduce(192, "icon-192.png");
 
+// Google's OAuth consent screen, which asks for 120x120 square and shows it beside the app
+// name when somebody signs in with Google. Generated here rather than exported by hand for the
+// same reason as everything else in this file: the mark changes in one place, and nothing is
+// left behind still showing the old one.
+reduce(120, "google-consent-120.png");
+
 
 // ------------------------- FAVICON.ICO -------------------------
 // Old browsers and Windows itself still ask for /favicon.ico by name. PNG payloads inside an
