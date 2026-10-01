@@ -75,11 +75,18 @@ if (!svg.includes("xmlns=")) {
 }
 svg = svg.replace("<svg", '<svg width="200" height="200"');
 
+mkdirSync(join(root, "public"), { recursive: true });
+
+// **Two files, because the figure needs a ground in some places and must not have one in
+// others.** Google's consent dialog is white and draws the logo itself, so the dark ground
+// below reads there as a black tile rather than as a mark. Rendered bare on white it is the
+// dark contour around each strand that carries it - checked by rendering both side by side
+// rather than assumed, because the pale end of the mane looked like it would disappear.
+writeFileSync(join(root, "public", "mark-transparent.svg"), svg + "\n", "utf8");
+
 // The ground the product puts him on. Without it the steel head sits on whatever colour the
 // browser paints behind a tab, which is the one place the figure was never designed for.
 svg = svg.replace(/(<svg[^>]*>)/, '$1<rect width="200" height="200" fill="#12151b"/>');
-
-mkdirSync(join(root, "public"), { recursive: true });
 writeFileSync(join(root, "public", "favicon.svg"), svg + "\n", "utf8");
 
 console.log("public/favicon.svg written,", svg.length, "chars");

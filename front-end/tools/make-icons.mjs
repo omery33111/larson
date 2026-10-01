@@ -37,7 +37,7 @@ const GROUND = "#12151b";
 // exactly to the size asked for, where the bare file would render at its own 200px and leave
 // the rest of the frame empty.
 
-function shot(html, width, height, outFile) {
+function shot(html, width, height, outFile, { transparent = false, dir = publicDir } = {}) {
   const page = join(work, `page-${outFile}.html`);
   writeFileSync(page, html, "utf8");
 
@@ -46,16 +46,19 @@ function shot(html, width, height, outFile) {
     "--disable-gpu",
     "--hide-scrollbars",
     "--force-device-scale-factor=1",
+    // Chrome paints white behind a page unless told otherwise, and white behind a figure
+    // meant to float is indistinguishable from a white tile until it lands on a dark surface.
+    ...(transparent ? ["--default-background-color=00000000"] : []),
     // Its own profile, so this never collides with the browser the user has open.
     `--user-data-dir=${join(work, "profile")}`,
     // Long enough for the webfont on the share card. Everything else is local and instant.
     "--virtual-time-budget=8000",
     `--window-size=${width},${height}`,
-    `--screenshot=${join(publicDir, outFile)}`,
+    `--screenshot=${join(dir, outFile)}`,
     `file:///${page.replace(/\\/g, "/")}`,
   ], { stdio: "ignore" });
 
-  const bytes = readFileSync(join(publicDir, outFile)).length;
+  const bytes = readFileSync(join(dir, outFile)).length;
   console.log(`  ${outFile.padEnd(24)} ${width}x${height}  ${(bytes / 1024).toFixed(1)} KB`);
 }
 
@@ -65,6 +68,29 @@ const markPage = (inset = 0) => `<!doctype html><meta charset="utf-8">
   img { position: absolute; inset: ${inset}%; width: ${100 - inset * 2}%; height: ${100 - inset * 2}%; }
 </style>
 <img src="file:///${join(publicDir, "favicon.svg").replace(/\\/g, "/")}">`;
+
+// The consent tile: the ground, rounded, and nothing outside it.
+//
+// **Rounded is safe whichever way Google draws it.** If their dialog masks the logo to a
+// circle the corners are cropped away and the radius costs nothing; if it shows the file as
+// it is, a hard-cornered square reads as raw beside their own rounded surfaces. The corners
+// themselves are transparent rather than white, so the tile keeps its shape on a dark dialog
+// as well as a light one.
+const consentPage = () => `<!doctype html><meta charset="utf-8">
+<style>
+  html, body { margin: 0; height: 100%; background: transparent; }
+  .tile { position: absolute; inset: 0; background: ${GROUND}; border-radius: 22%; overflow: hidden; }
+  img { position: absolute; inset: 0; width: 100%; height: 100%; }
+</style>
+<div class="tile"><img src="file:///${join(publicDir, "mark-transparent.svg").replace(/\\/g, "/")}"></div>`;
+
+// The same page with no ground, for the one icon that must float rather than sit on a tile.
+const barePage = () => `<!doctype html><meta charset="utf-8">
+<style>
+  html, body { margin: 0; height: 100%; background: transparent; }
+  img { position: absolute; inset: 0; width: 100%; height: 100%; }
+</style>
+<img src="file:///${join(publicDir, "mark-transparent.svg").replace(/\\/g, "/")}">`;
 
 
 // ------------------------- THE SIZES, AND WHY EACH ONE -------------------------
@@ -83,8 +109,8 @@ shot(markPage(18), 512, 512, "icon-maskable-512.png");
 
 const master = decode(readFileSync(join(publicDir, "icon-512.png")));
 
-function reduce(size, name) {
-  const bytes = encode(resize(master, size));
+function reduce(size, name, from = master) {
+  const bytes = encode(resize(from, size));
   writeFileSync(join(publicDir, name), bytes);
   console.log(`  ${name.padEnd(24)} ${size}x${size}  ${(bytes.length / 1024).toFixed(1)} KB`);
 }
@@ -100,11 +126,15 @@ reduce(180, "apple-touch-icon.png");
 // The smaller of the two the manifest asks for by name.
 reduce(192, "icon-192.png");
 
-// Google's OAuth consent screen, which asks for 120x120 square and shows it beside the app
-// name when somebody signs in with Google. Generated here rather than exported by hand for the
-// same reason as everything else in this file: the mark changes in one place, and nothing is
-// left behind still showing the old one.
-reduce(120, "google-consent-120.png");
+// Google's OAuth consent screen: 120x120 square, shown beside the app name when somebody signs
+// in with Google. **It keeps the ground, and that was decided rather than inherited.** A
+// transparent mark has to hold up on whatever surface Google paints behind it, and that
+// surface is white for some users and dark for others; the tile looks identical in both. It
+// is also the same image the trader already met in the tab and the navbar, instead of a
+// second version of the figure to keep in step. Rendered at 512 and reduced, because Chrome
+// will not open a window small enough to screenshot 120 directly.
+shot(consentPage(), 512, 512, "consent-master.png", { transparent: true, dir: work });
+reduce(120, "google-consent-120.png", decode(readFileSync(join(work, "consent-master.png"))));
 
 
 // ------------------------- FAVICON.ICO -------------------------
