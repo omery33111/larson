@@ -596,6 +596,7 @@ SENTRY_DSN = os.environ.get('SENTRY_DSN', '')
 # that were scripted, and mails about them.
 if SENTRY_DSN and not TESTING:
     import sentry_sdk
+    from django.core.exceptions import DisallowedHost
 
     sentry_sdk.init(
         dsn = SENTRY_DSN,
@@ -607,6 +608,17 @@ if SENTRY_DSN and not TESTING:
         # A sample of traffic rather than all of it, because performance data is a nice to
         # have and the free tier is not large.
         traces_sample_rate = float(os.environ.get('SENTRY_TRACES_RATE', '0.05')),
+
+        # **`DisallowedHost` is not a fault, it is the defence working.** Every scanner on the
+        # internet eventually asks the load balancer's bare IP address for a page, Django
+        # refuses because that address is not on `ALLOWED_HOSTS`, and the refusal is logged at
+        # error level - which mails an alert and spends one of the month's allowance. The
+        # answer is never to add the address: it is to stop reporting a rejection that is the
+        # intended outcome. A genuine misconfiguration announces itself differently, as the
+        # site's own name being refused on every request rather than a stranger's IP once.
+        # The class and not its dotted name: string matching here depends on how the SDK
+        # spells a type, and a rule that silently stops matching is worse than no rule.
+        ignore_errors = [DisallowedHost],
     )
 
 

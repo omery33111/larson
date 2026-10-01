@@ -114,7 +114,14 @@ const GoogleSignIn = ({ onCredential, oneTap = false, text = 'continue_with' }: 
           shape: 'pill',
           text,
           locale: 'he',
-          logo_alignment: 'center',
+          // **`left` and not `center`, and the difference is the gap.** With `center` Google
+          // centres the logo and the label together as one block, so the mark ends up pressed
+          // against the first letter with nothing between them. With `left` the mark sits at
+          // the button's starting edge and the label is centred in what is left, which is the
+          // spacing their own buttons have everywhere else. In a right-to-left page `left`
+          // means the starting edge, so the mark lands on the right - which is where it
+          // belongs here.
+          logo_alignment: 'left',
           // **Twenty less than the space there is, because Google renders the button into a
           // frame 20px wider than the width asked for** and bleeds it outwards with negative
           // margins. Asking for the full width made that frame overflow the slot, and the
