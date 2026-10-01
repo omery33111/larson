@@ -113,15 +113,17 @@ const GoogleSignIn = ({ onCredential, oneTap = false, text = 'continue_with' }: 
           size: 'large',
           shape: 'pill',
           text,
-          locale: 'he',
-          // **`left` and not `center`, and the difference is the gap.** With `center` Google
-          // centres the logo and the label together as one block, so the mark ends up pressed
-          // against the first letter with nothing between them. With `left` the mark sits at
-          // the button's starting edge and the label is centred in what is left, which is the
-          // spacing their own buttons have everywhere else. In a right-to-left page `left`
-          // means the starting edge, so the mark lands on the right - which is where it
-          // belongs here.
-          logo_alignment: 'left',
+          // **English, deliberately, to match the direction the slot forces.** The label is
+          // Google's own wording and they publish no Hebrew for it; asking for `he` produced
+          // English anyway, which left a right-to-left box around left-to-right words. Saying
+          // `en` makes the pair honest rather than accidental.
+          locale: 'en',
+          // **`center`, and it only looks right because the slot is `dir="ltr"`** - see the
+          // markup below. Google lays the mark and the label out as one centred group with a
+          // gap between them, so nothing in the button sits off its middle. The two were
+          // decided together: in a right-to-left box the same setting pressed the mark into
+          // the label with nothing between, which is what made it look wrong.
+          logo_alignment: 'center',
           // **Twenty less than the space there is, because Google renders the button into a
           // frame 20px wider than the width asked for** and bleeds it outwards with negative
           // margins. Asking for the full width made that frame overflow the slot, and the
@@ -146,7 +148,15 @@ const GoogleSignIn = ({ onCredential, oneTap = false, text = 'continue_with' }: 
 
   return (
     <div className="google-signin">
-      <div className="google-signin-slot" ref={slot} />
+      {/*
+        **`dir="ltr"`, and this one attribute is what makes the button look right.** Google
+        renders it inside an iframe on their own origin, so no stylesheet here reaches a single
+        pixel of it - the direction of the box around it is the only thing that still carries
+        in. The page is Hebrew and right to left; the button's words are English, and laid out
+        right to left they came out with the mark jammed against the text and the label sitting
+        off the middle. Turned back the way its own language reads, the spacing is Google's own.
+      */}
+      <div className="google-signin-slot" dir="ltr" ref={slot} />
     </div>
   );
 };
