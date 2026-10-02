@@ -40,6 +40,9 @@ from datetime import datetime, timedelta, timezone
 APP_ID = "dznz974usudjz"
 DOMAIN = "larson.co.il"
 
+# What Amplify allows in a single request. Asking for more returns a plain 400.
+MAX_WINDOW_DAYS = 14
+
 # A scanner announces itself in the agent string far more often than not, and the
 # ones that do not announce it ask for things that do not exist here. Both halves
 # are needed: the agent catches the polite crawlers, the paths catch the rest.
@@ -91,28 +94,56 @@ def unquote(value):
     return urllib.parse.unquote(value.replace("\\", ""))
 
 
-def fetch(days):
-    end = datetime.now(timezone.utc)
-    start = end - timedelta(days = days)
-
+def one_window(start, end):
+    """Ask Amplify for the log covering a single window."""
     out = subprocess.run(
         ["aws", "amplify", "generate-access-logs",
          "--app-id", APP_ID, "--domain-name", DOMAIN,
          "--start-time", start.strftime("%Y-%m-%dT%H:%M:%SZ"),
          "--end-time", end.strftime("%Y-%m-%dT%H:%M:%SZ"),
          "--query", "logUrl", "--output", "text"],
-        capture_output = True, text = True, check = True, shell = False)
+        capture_output = True, text = True, shell = False)
+
+    if out.returncode != 0:
+        # The CLI prints the real reason on stderr; --query swallows it otherwise,
+        # and a bare "exit status 254" is not something anybody can act on.
+        raise SystemExit("  נכשלה שליפת הלוג מ-AWS: " + (out.stderr or out.stdout).strip())
 
     url = out.stdout.strip()
     if not url.startswith("https://"):
-        raise SystemExit("no log url came back: " + out.stdout + out.stderr)
+        raise SystemExit("  לא חזרה כתובת לוג: " + out.stdout + out.stderr)
 
-    with urllib.request.urlopen(url, timeout = 120) as response:
+    with urllib.request.urlopen(url, timeout = 180) as response:
         return response.read().decode("utf-8", "replace")
 
 
-def read(text):
-    rows = list(csv.DictReader(io.StringIO(text)))
+def fetch(days):
+    """**Amplify refuses a range longer than two weeks**, so a longer one is asked
+    for in windows and stitched together. This is not a nicety: the whole point of
+    the tool is the report after a month of beta, which is exactly the call that
+    fails as a single request - with a bare exit code, long after the tool was
+    written and trusted.
+    """
+    end = datetime.now(timezone.utc)
+    start = end - timedelta(days = days)
+
+    windows = []
+    edge = start
+    while edge < end:
+        stop = min(edge + timedelta(days = MAX_WINDOW_DAYS), end)
+        windows.append((edge, stop))
+        edge = stop
+
+    if len(windows) > 1:
+        print("  נשלף ב-" + str(len(windows)) + " חלונות (AWS מגבילה כל שליפה לשבועיים)...")
+
+    return [one_window(a, b) for a, b in windows]
+
+
+def read(texts):
+    rows = []
+    for text in texts:
+        rows.extend(csv.DictReader(io.StringIO(text)))
     for row in rows:
         row["agent"] = unquote(row.get("cs(User-Agent)"))
         row["referer"] = unquote(row.get("cs(Referer)"))
@@ -206,10 +237,13 @@ if __name__ == "__main__":
                         help = "save the log to traffic.csv as well")
     args = parser.parse_args()
 
-    text = fetch(args.days)
+    texts = fetch(args.days)
     if args.raw:
         with open("traffic.csv", "w", encoding = "utf-8", newline = "") as handle:
-            handle.write(text)
+            handle.write(texts[0])
+            for extra in texts[1:]:
+                # Drop the repeated header so the file stays one readable table.
+                handle.writelines(extra.splitlines(keepends = True)[1:])
         print("  נשמר: traffic.csv")
 
-    report(read(text), args.days)
+    report(read(texts), args.days)
