@@ -10,12 +10,21 @@ import './legal.css'
  * somebody's trading record to a third party in order to answer a question about it, and a
  * privacy policy that does not say so plainly is not a privacy policy - it is a formality
  * that happens to be published. Everything else here is ordinary.
+ *
+ * **"מה נשמר בדפדפן שלך" is a disclosure, not a consent gate, and that is deliberate.** It was
+ * written from a measurement of the live site rather than from assumption: the landing page
+ * stores nothing and loads no third-party script, and the only cookie that exists anywhere is
+ * Google's `g_state` on the three sign-in screens. Consent is owed for storage a visitor could
+ * decline and still be served - analytics, advertising, cross-site tracking - and this product
+ * has none of it, so a banner here would have no honest button on it. **The day a usage-measuring
+ * tool is installed, that stops being true and a real accept/refuse banner is owed** - built
+ * against whatever is actually installed, which is why it is not built in advance.
  */
 const Privacy = () => (
   <div className="app-container legal-page">
 
     <h1 className="legal-title">מדיניות פרטיות</h1>
-    <p className="legal-updated">עודכן לאחרונה: ספטמבר 2026</p>
+    <p className="legal-updated">עודכן לאחרונה: אוקטובר 2026</p>
 
     <section className="legal-section">
       <h2>מה אנחנו שומרים</h2>
@@ -41,6 +50,12 @@ const Privacy = () => (
         זה קורה רק כשאתה מבקש ניתוח, תחקיר או תשובה בצ'אט. שאר העמודים — כל המספרים, הציון,
         והפילוחים — <b>מחושבים אצלנו ולא עוזבים את השרת</b>.
       </p>
+      <p>
+        בנוסף, כשמשהו באתר נשבר נשלח <b>דיווח שגיאה טכני</b> לשירות <b>Sentry</b>, שדרכו אנחנו
+        רואים מה נשבר ואיפה. הדיווח נושא את סוג התקלה ואת המקום בקוד — <b>ולא את תוכן הבקשה
+        שלך, לא את העוגיות שלה ולא את הכותרות שלה</b>. זו הגדרה שנקבעה כאן בכוונה, והיא אינה
+        ברירת המחדל של השירות.
+      </p>
       <p className="legal-note">
         אנחנו מתקשרים עם Anthropic דרך ה-API העסקי שלה, שבו נתוני לקוחות אינם משמשים לאימון
         מודלים. מדיניות הפרטיות שלה זמינה באתר שלה.
@@ -60,6 +75,30 @@ const Privacy = () => (
       </p>
       <p className="legal-note">
         השימוש בכפתור הזה כפוף גם למדיניות הפרטיות של גוגל, שזמינה באתר שלה.
+      </p>
+    </section>
+
+    <section className="legal-section">
+      <h2>מה נשמר בדפדפן שלך</h2>
+      <p>
+        <b>אין באתר הזה אנליטיקס, פיקסלים של פרסום, ושום מעקב חוצה־אתרים.</b> עמוד הבית אינו
+        שומר כלום ואינו טוען אף סקריפט חיצוני. שני הדברים היחידים שכן נשמרים הם אלה:
+      </p>
+      <ul>
+        <li>
+          <b>הכניסה שלך</b> — אסימון הגישה ושם המשתמש. אם סימנת "להישאר מחובר" הוא נשמר עד
+          שתתנתק, ואחרת הוא נמחק ברגע שסגרת את הלשונית. <b>"התנתקות" מוחקת אותו מיד.</b>
+        </li>
+        <li>
+          <b>עוגייה אחת של גוגל</b> בשם <b>g_state</b>, שנוצרת רק במסכי ההתחברות וההרשמה
+          וזוכרת אם סגרת את חלונית הכניסה המהירה, כדי שלא תוצג לך שוב. <b>שום אתר אחר לא
+          יכול לקרוא אותה.</b>
+        </li>
+      </ul>
+      <p>
+        <b>אין כאן דבר שאפשר לוותר עליו והאתר ימשיך לעבוד</b>, ולכן גם אין מסך שמבקש הסכמה
+        לעוגיות. אם נוסיף אי פעם כלי שמודד שימוש — <b>תקבל אפשרות לאשר או לסרב לו לפני שהוא
+        יאסוף דבר</b>.
       </p>
     </section>
 
