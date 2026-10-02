@@ -2,7 +2,7 @@ import json
 
 from analytics.insights import build_insights
 from analytics.models import TraderProfile
-from analytics.statistics import compute_statistics
+from analytics.statistics import clean_label, compute_statistics
 from trades.models import Trade
 
 from .models import ASSISTANT, USER
@@ -281,9 +281,16 @@ def build_messages(conversation):
 
         content = message.content
 
+        # **The file name is a label and goes through the same cleaning every other label
+        # from a file goes through.** It was interpolated raw into a block that uses `---`
+        # as its own separator - and a name is chosen by whoever produced the file, not by
+        # us. Proved against this builder: a name carrying a blank line, a `---` and a
+        # heading closed the attachment block and opened what read as fresh guidance, with
+        # the real digest landing underneath it. The storage copy stays exactly as it
+        # arrived, because that is the name the trader is shown.
         if message.attachment_digest:
             content = (f"{content}\n\n---\n\n{ATTACHMENT_GUIDANCE}\n\n"
-                       f"הקובץ: {message.attachment_name}\n\n{message.attachment_digest}")
+                       f"הקובץ: {clean_label(message.attachment_name)}\n\n{message.attachment_digest}")
 
         messages.append({
             "role": USER if message.role == USER else ASSISTANT,

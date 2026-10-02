@@ -1,6 +1,7 @@
 import json
 
 from analytics.formatting import trades as trade_count
+from analytics.statistics import clean_label
 from chat.context import EFFORT, IRON, MAX_TOKENS, MODEL, build_messages, build_system
 
 
@@ -144,7 +145,7 @@ def update_prompt(deviation, plan, total_trades, new_trades, file_name, is_first
     to the prompt when he typed nothing, which is every debrief the current screen sends.
     """
     payload = {
-        "מה_קרה": f"הסוחר העלה קובץ ({file_name}) ואישר את קליטתו לרזומה.",
+        "מה_קרה": f"הסוחר העלה קובץ ({clean_label(file_name)}) ואישר את קליטתו לרזומה.",
         "עסקאות_בעדכון_הזה": new_trades,
         "עסקאות_ברזומה_אחרי_העדכון": total_trades,
         "השוואה_לבייסליין": deviation,
