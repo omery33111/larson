@@ -9,6 +9,8 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from analytics.models import TraderProfile
+
 from trades.models import Trade
 
 from mentor.context import PERSONA as MENTOR_PERSONA, mentor_system
@@ -280,6 +282,100 @@ class StarTests(APITestCase):
 
 
 # ------------------------- CONTEXT ASSEMBLY ------------------------- #
+
+# ------------------------- ONE TRADER'S CONTEXT, AND ONLY HIS ------------------------- #
+#
+# The worry worth testing is not "can the model be talked into misbehaving" but **can it be
+# talked into fetching somebody else's record.** The answer here is structural rather than a
+# matter of filtering: the model is handed no tools, no query interface and no SQL, so it
+# cannot fetch anything at all - it reads the text python assembled and nothing else. The
+# four analysis engines (statistics, insights, deviation, compliance) hold no queries either;
+# they are pure functions over a list of trades handed to them.
+#
+# That leaves exactly one thing to protect: that the text python assembles is built only from
+# the requesting user's rows. **It is also the property that would break silently.** Adding a
+# tool, or one query that forgets its user filter, would leak without raising anything - so
+# it is asserted here against planted data belonging to somebody else.
+
+class ContextIsolationTests(APITestCase):
+
+    def setUp(self):
+        self.mine = User.objects.create_user(username = "omer", password = "pass12345")
+        self.other = User.objects.create_user(username = "someone", password = "pass12345")
+
+        make_trades(self.mine)
+
+        # Everything about the other trader is given a value that could not occur by accident,
+        # so finding any of it in my prompt is unambiguous rather than a coincidence.
+        Trade.objects.create(
+            user = self.other,
+            executed_at = BASE, opened_at = BASE - timedelta(minutes = 5),
+            symbol = "ZZSECRET", instrument = "ZZSECRET", account_id = "OTHERACCOUNT",
+            source_timezone = "Asia/Jerusalem", direction = "long", quantity = 1,
+            pnl = 999999.0, outcome = "win", setups = "OTHERSETUP", tags = "OTHERTAG",
+            mistakes = "OTHERMISTAKE", notes = "OTHERNOTE", dedup_hash = "zz-other-1",
+        )
+        TraderProfile.objects.create(user = self.other, profile_text = "OTHERPROFILETEXT",
+                                     accounts = "OTHERACCOUNT")
+
+        theirs = Conversation.objects.create(user = self.other)
+        Message.objects.create(conversation = theirs, role = USER, content = "OTHERQUESTION")
+        Message.objects.create(conversation = theirs, role = ASSISTANT, content = "OTHERANSWER")
+
+    LEAKS = ["ZZSECRET", "OTHERACCOUNT", "OTHERSETUP", "OTHERTAG", "OTHERMISTAKE",
+             "OTHERNOTE", "OTHERPROFILETEXT", "OTHERQUESTION", "OTHERANSWER", "999999"]
+
+    def test_the_system_prompt_carries_nothing_of_another_trader(self):
+        text = "".join(block["text"] for block in build_system(self.mine))
+
+        for leak in self.LEAKS:
+            self.assertNotIn(leak, text, f"{leak} reached another trader's prompt")
+
+    def test_the_thread_carries_nothing_of_another_trader(self):
+        mine = Conversation.objects.create(user = self.mine)
+        Message.objects.create(conversation = mine, role = USER, content = "מה הדליפה שלי")
+
+        text = "".join(part["text"]
+                       for message in build_messages(mine)
+                       for part in message["content"])
+
+        for leak in self.LEAKS:
+            self.assertNotIn(leak, text, f"{leak} reached another trader's thread")
+
+    def test_another_trader_s_conversation_cannot_be_streamed(self):
+        """
+        The id travels from the client, so it is filtered by user in the same query it is
+        looked up with. A foreign id has to answer 404 and not content - and 404 rather
+        than 403, because 403 confirms the row exists.
+        """
+        theirs = Conversation.objects.filter(user = self.other).first()
+        self.client.force_authenticate(user = self.mine)
+
+        response = self.client.post(f"/chat/conversations/{theirs.id}/stream/",
+                                    {"message": "שלום"}, format = "multipart")
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_the_model_is_given_no_tools(self):
+        """
+        **This is the property the whole class rests on.** With no tool, no prompt can make
+        the model reach the database - it can only read what it was handed. The day a tool
+        is added, every assertion above becomes necessary rather than sufficient, and this
+        test is the one that will say so.
+        """
+        import inspect
+
+        from chat import views as chat_views
+        from mentor import views as mentor_views
+        from analytics import profile as profile_module
+        from trades import llm_mapping
+
+        for module in (chat_views, mentor_views, profile_module, llm_mapping):
+            source = inspect.getsource(module)
+            self.assertNotIn("tools =", source, f"{module.__name__} passes tools to the model")
+            self.assertNotIn("tool_choice", source, f"{module.__name__} passes a tool choice")
+
+
 
 class ContextTests(APITestCase):
 
