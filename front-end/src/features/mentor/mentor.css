@@ -537,11 +537,20 @@
 }
 
 .rules-example {
-  padding: 0.35rem 0.7rem;
+  /* **44px, like every other target in the product.** Measured at 27 on the live page: these
+     three chips are the invitation to use the whole feature, and a target a thumb misses on
+     the first try is an invitation nobody accepts. The pill stays visually light because the
+     height comes from the box and not from the text. */
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0.35rem 0.85rem;
   border: 1px dashed #3a3f4b;
   border-radius: 999px;
   background: transparent;
   font-size: 0.78rem;
+  line-height: 1.4;
+  text-align: start;
   color: #8b909c;
   cursor: pointer;
 }
