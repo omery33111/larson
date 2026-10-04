@@ -344,10 +344,24 @@
 
 /* ------------------------- UNSUBSCRIBE ------------------------- */
 
-.unsubscribe-card { text-align: center; }
+/* **`.auth-form` is a width and nothing else** - the login screen draws its look from the
+   field and title rules, so a page that is one block of prose rather than a form got no
+   surface at all from it. This is the same card every other surface in the product uses. */
+.unsubscribe-card {
+  padding: 1.75rem 1.5rem;
+  background-color: #15181f;
+  border: 1px solid #23262f;
+  border-radius: 12px;
+  text-align: center;
+}
 
+/* **Both dimensions, because `.larson-figure` is 100% of each.** `larson.css` says it out
+   loud - "size is set by whoever places him" - and a wrapper with only a width left the svg
+   resolving its height to zero, so he rendered and measured 0px wide. Caught by looking at
+   the deployed page, not by the class audit: the class existed, it was the box that was flat. */
 .unsubscribe-mark {
   width: 96px;
+  height: 96px;
   margin: 0 auto 1.1rem;
 }
 
