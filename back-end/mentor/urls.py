@@ -9,5 +9,5 @@ urlpatterns = [
 
     path('rules/', views.rules),
     path('rules/save/', views.save_rule),
-    path('rules/<str:kind>/', views.delete_rule),
+    path('rules/<int:rule_id>/', views.delete_rule),
 ]

@@ -26,6 +26,7 @@ from analytics.formatting import trades as trade_count
 
 # A rule has to rest on something. Below this the "leak" is an anecdote, and telling a trader
 # to stop doing something on the strength of four trades is how a mentor loses credibility.
+from .interpret import trade_text
 from .rules import DAY_KINDS, day_verdict
 
 
@@ -207,11 +208,6 @@ def _breaks(rule, trade, tz, previous):
 
         return entry < edge if kind == "no_before" else entry > edge
 
-    if kind == "min_hold":
-        if trade.duration_seconds is None:
-            return None
-        return trade.duration_seconds < rule["value"] * 60
-
     if kind == "max_size":
         return None if not trade.quantity else trade.quantity > rule["value"]
 
@@ -223,6 +219,36 @@ def _breaks(rule, trade, tz, previous):
         gap = (opened - previous.executed_at).total_seconds() / 60
 
         return _is_loss(previous) and 0 <= gap <= rule["value"]
+
+    # ------------- THE ONE HE WROTE IN HIS OWN WORDS:
+    #
+    # **Pure string work, and that is the point.** His sentence was turned into terms once,
+    # when he saved it; nothing here asks a model anything, so two identical trades cannot be
+    # judged differently and the offender can be named by date and time like any other.
+    #
+    # A requirement is satisfied by **any** of its spellings, because a trader tags "IFVG"
+    # one day and "inverse fvg" the next and meant the same thing both times.
+    if kind == "custom":
+        haystack = trade_text(trade)
+
+        # **A trade that recorded nothing cannot answer, and saying "you kept it" would be
+        # the single most damaging thing this feature could do** - it would confirm a plan he
+        # may not have followed at all. Unjudged is the honest verdict, and the same one the
+        # inferred setup rule already gives.
+        if not haystack:
+            return None
+
+        terms = rule["value"]
+
+        for spellings in terms.get("require", []):
+            if not any(term in haystack for term in spellings):
+                return True
+
+        for term in terms.get("forbid", []):
+            if term in haystack:
+                return True
+
+        return False
 
     if kind == "only_setups":
         tags = _split_tags(trade.setups)

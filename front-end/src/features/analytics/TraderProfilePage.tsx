@@ -104,13 +104,17 @@ const TraderProfilePage = () => {
 
       <SecondaryMetrics />
 
-      <AngelDevil />
-
       {/* **Am I getting better** - the one question a mentor exists for, and the one this
-          page could not answer until the periods engine existed. It sits after the two
-          shoulders and before the breakdowns: the shoulders say what is true now, this says
-          which way it is moving, and the breakdowns are the detail underneath both. */}
+          page could not answer until the periods engine existed.
+
+          **Above the shoulders, which is the trader's own ordering and the right one.** The
+          shoulders say what is strong and what bleeds across the whole record; direction is
+          the frame you read both of those inside. A leak that is shrinking and a leak that
+          is growing are not the same finding, and seeing the trend first is what makes them
+          read differently. */}
       <Progress />
+
+      <AngelDevil />
 
       <Breakdowns />
 

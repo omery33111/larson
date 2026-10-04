@@ -854,6 +854,31 @@ class PeriodsTests(SimpleTestCase):
 
         self.assertIn("לא שיפור ולא הרעה", out["השוואה_אחרונה"]["פסיקה"])
 
+    def test_no_figure_is_printed_with_a_doubled_minus(self):
+        """
+        **Seen on the live page, not in a test** - "ל--$11.21", because a prefix dash was
+        written in front of a figure that carries its own minus. `deviation.py` fixed exactly
+        this once and carries a note about it; this file reintroduced it anyway, which is
+        what a note alone is worth without an assertion behind it.
+        """
+        rows = self.climbing()
+        # Make the recent window the losing one, so every sentence runs over a negative.
+        for row in rows[len(rows) // 2:]:
+            row.pnl = -260.0
+            row.outcome = "loss"
+
+        out = build_periods(rows)
+
+        said = [out["השוואה_אחרונה"].get("פסיקה", ""),
+                out["חצי_ראשון_מול_שני"].get("פסיקה", ""),
+                out["מגמה"].get("detail", "")]
+        said += [row.get("detail", "") for row in out["שיאים"] + out["נדידה"]]
+        said.append(out["הדראודאון_הגדול"].get("detail", ""))
+
+        for sentence in said:
+            self.assertNotIn("--", sentence, f"doubled minus in: {sentence}")
+            self.assertNotIn("- -", sentence)
+
     def test_the_drawdown_is_a_span_with_dates_and_not_a_number(self):
         out = build_periods(self.climbing())
 

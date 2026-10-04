@@ -840,6 +840,10 @@
 .progress-down { color: #d1494e; }
 .progress-flat { color: #8b909c; }
 
+/* Both children are elements, so `gap` is what separates them - a bare text node beside a
+   flex item is an anonymous item whose spacing is less certain, and this is one line of
+   markup against having to find out. (`textContent` reads them joined either way, so the
+   live page looking like "מדרדרעל פני" proved nothing on its own.) */
 .progress-trend {
   display: flex;
   align-items: baseline;

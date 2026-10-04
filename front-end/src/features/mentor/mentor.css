@@ -437,6 +437,144 @@
 }
 
 
+/* ------------------------- HIS PLAN, IN HIS WORDS ------------------------- */
+/* **Louder than the templates below it, deliberately.** A trader who scrolls past this to a
+   list of hour rules has been told the wrong thing about what the feature is. */
+
+.rules-mine {
+  padding: 1rem;
+  margin-bottom: 1.25rem;
+  border: 1px solid #3a3115;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #1a1710 0%, #15181f 100%);
+}
+
+.rules-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0 0 0.35rem;
+  font-size: 0.98rem;
+  color: #f0b90b;
+}
+
+.rules-templates .rules-section-title { color: #8b909c; }
+
+.rules-section-sub {
+  margin: 0 0 0.9rem;
+  font-size: 0.83rem;
+  line-height: 1.65;
+  color: #8b909c;
+}
+
+.rules-section-sub b { color: #c9ccd3; }
+
+.rules-mine-row {
+  padding: 0.7rem 0;
+  border-top: 1px solid #23262f;
+}
+
+.rules-mine-row:first-of-type { border-top: 0; }
+
+.rules-mine-text {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.92rem;
+  line-height: 1.6;
+  color: #e8e8e8;
+}
+
+.rules-write { display: block; }
+
+/* Two lines, because a rule is one sentence - a tall box invites a paragraph, and the
+   sentence is cut to one line before it is stored anyway. */
+.rules-textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 3.4rem;
+  line-height: 1.6;
+  /* 16px floor: below it Safari on iOS zooms the page on focus. */
+  font-size: 1rem;
+  font-family: inherit;
+}
+
+.rules-write-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+
+.rules-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 44px;
+}
+
+.rules-reword {
+  min-height: 44px;
+  padding-inline: 0.7rem;
+  border: 1px solid #2d313b;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 0.82rem;
+  color: #8b909c;
+  cursor: pointer;
+}
+
+.rules-reword:hover { color: #e8e8e8; border-color: #3a3f4b; }
+
+/* The examples are buttons and not placeholder prose: reading one tells him what shape a
+   rule takes, and pressing it puts him in the field with something to edit rather than an
+   empty box. */
+.rules-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.8rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rules-example {
+  padding: 0.35rem 0.7rem;
+  border: 1px dashed #3a3f4b;
+  border-radius: 999px;
+  background: transparent;
+  font-size: 0.78rem;
+  color: #8b909c;
+  cursor: pointer;
+}
+
+.rules-example:hover {
+  color: #f0b90b;
+  border-color: #6b5a1c;
+  border-style: solid;
+}
+
+/* **The line that stops the feature from lying.** Quiet, because it is information and not
+   an error - unless there is nothing to check at all, which he does need to notice. */
+.rules-coverage {
+  margin: 0.55rem 0 0;
+  font-size: 0.79rem;
+  line-height: 1.65;
+  color: #8b909c;
+}
+
+.rules-coverage b { color: #c9ccd3; }
+
+.rules-coverage-none { color: #c98f3f; }
+.rules-coverage-none b { color: #e0a94d; }
+
+.rules-note {
+  margin: 0.7rem 0 0;
+  font-size: 0.79rem;
+  color: #626875;
+}
+
+.rules-templates { margin-bottom: 0.5rem; }
+
+
 /* ------------------------- LAPTOP RESPONSIVE STYLING ------------------------- */
 @media (min-width: 1025px) and (max-width: 1919px) {
   .mentor-shell {

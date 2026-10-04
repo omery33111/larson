@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -11,11 +12,11 @@ from chat.serializers import MessageSerializer
 from chat.views import _answer, _error_stream, _sse
 from trades.models import Trade, TradeFile
 
-from analytics.statistics import compute_statistics
-
-from .compliance import check_plan
+from analytics.statistics import clean_label, compute_statistics
 from chat import retrieval
 
+from .compliance import check_plan
+from .interpret import MAX_RULE_LENGTH, coverage, interpret
 from .models import TraderRule
 from .rules import declared_rules
 from .serializers import TraderRuleSerializer
@@ -27,6 +28,9 @@ from .deviation import build_deviation
 
 
 MENTOR_TITLE = "המנטור"
+
+# Past a handful, a debrief that answers every one of them stops being readable.
+MAX_CUSTOM_RULES = 5
 
 
 
@@ -280,9 +284,14 @@ def _timezone(trades):
 
 # ------------------------- THE RULES HE SETS FOR HIMSELF ------------------------- #
 #
-# **Three endpoints and no more, because a rule has exactly one of each kind.** The uniqueness
-# is enforced in the database rather than in the screen: two ceilings on the same thing is not
-# a stricter plan, it is a plan with no answer, and the debrief would then report both.
+# **Three endpoints and no more.** One rule of each structured kind, enforced in the database
+# rather than in the screen: two ceilings on the same thing is not a stricter plan, it is a
+# plan with no answer, and the debrief would then report both.
+#
+# **The free-text rule is the exception, and several of them are the point.** "Only with an
+# IFVG" and "never during news" are both true at once. The cap is here rather than in the
+# model because it is a judgement about a screen - past a handful, a debrief that answers
+# every one of them stops being readable.
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
@@ -309,6 +318,53 @@ def save_rule(request):
 
     setups = str(request.data.get("setups", "")).strip()
     number = request.data.get("number")
+
+    # ------------- THE ONE IN HIS OWN WORDS:
+    #
+    # Interpreted **here, once**, rather than on every trade of every debrief. If it cannot
+    # be interpreted the rule is refused outright - a saved rule with no terms is a rule that
+    # every trade keeps forever, which is worse than no rule at all.
+    if kind == TraderRule.CUSTOM:
+        text = clean_label(str(request.data.get("text", "")), MAX_RULE_LENGTH)
+
+        if not text:
+            return Response({"error": "צריך לכתוב את התנאי."},
+                            status = status.HTTP_400_BAD_REQUEST)
+
+        rule_id = request.data.get("id")
+        existing = TraderRule.objects.filter(user = request.user, kind = TraderRule.CUSTOM)
+
+        if not rule_id and existing.count() >= MAX_CUSTOM_RULES:
+            return Response({"error": f"אפשר עד {MAX_CUSTOM_RULES} תנאים משלך."},
+                            status = status.HTTP_400_BAD_REQUEST)
+
+        terms = interpret(text, billed_to = request.user)
+
+        if not terms:
+            return Response({
+                "error": "לא הצלחנו לתרגם את התנאי הזה למשהו שאפשר לבדוק מול עסקה. "
+                         "נסה לנסח אותו במונחים שאתה רושם על העסקאות עצמן — תגית, שם סטאפ "
+                         "או מילה שאתה כותב בהערות.",
+            }, status = status.HTTP_400_BAD_REQUEST)
+
+        if rule_id:
+            row = TraderRule.objects.filter(user = request.user, id = rule_id,
+                                            kind = TraderRule.CUSTOM).first()
+            if not row:
+                return Response({"error": "אין כלל כזה."}, status = status.HTTP_404_NOT_FOUND)
+            row.text, row.terms, row.is_active = text, terms, True
+            row.save()
+        else:
+            row = TraderRule.objects.create(user = request.user, kind = TraderRule.CUSTOM,
+                                            text = text, terms = terms)
+
+        # **How many of his trades can answer it at all.** Without this he reads "kept" over a
+        # year of trades that recorded nothing, and believes he followed a plan he never did.
+        answerable, total = coverage(Trade.objects.filter(user = request.user))
+
+        return Response({**TraderRuleSerializer(row).data,
+                         "coverage": {"answerable": answerable, "total": total}},
+                        status = status.HTTP_201_CREATED)
 
     if kind == TraderRule.ONLY_SETUPS:
         if not setups:
@@ -341,14 +397,18 @@ def save_rule(request):
 
 @api_view(["DELETE"])
 @permission_classes([IsAuthenticated])
-def delete_rule(request, kind):
-    """Dropped entirely rather than switched off, because the screen offers one of each.
+def delete_rule(request, rule_id):
+    """Dropped entirely rather than switched off.
+
+    **Keyed on the row and not on the kind**, which it used to be: a kind identified a rule
+    only while there was one of each, and the free-text kind broke that. Deleting by kind
+    would now take every custom rule he has with it.
 
     `is_active` exists for the day a trader wants to pause a rule without losing that he had
     it; nothing in the interface reaches that yet, and a flag with no way to set it would be
     a column pretending to be a feature.
     """
-    deleted, _ = TraderRule.objects.filter(user = request.user, kind = kind).delete()
+    deleted, _ = TraderRule.objects.filter(user = request.user, id = rule_id).delete()
 
     if not deleted:
         return Response({"error": "אין כלל כזה."}, status = status.HTTP_404_NOT_FOUND)

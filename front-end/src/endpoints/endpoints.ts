@@ -118,7 +118,7 @@ export const mentorRulesURL = `${myServer}/mentor/rules/`;
 
 export const saveMentorRuleURL = `${myServer}/mentor/rules/save/`;
 
-export const deleteMentorRuleURL = (kind: string) => `${myServer}/mentor/rules/${kind}/`;
+export const deleteMentorRuleURL = (id: number) => `${myServer}/mentor/rules/${id}/`;
 
 
 

@@ -31,6 +31,7 @@ const initialState: MentorState =
     message: "",
 
     rules: [],
+    ruleCoverage: null,
     ruleKinds: [],
     isRulesOpen: false,
     isRulesLoading: false,
@@ -160,9 +161,9 @@ export const getRulesAsync = createAsyncThunk("mentor/getRules", async (_, thunk
 
 export const saveRuleAsync = createAsyncThunk(
     "mentor/saveRule",
-    async (payload: { kind: string; number: number | null; setups: string }, thunkAPI) => {
+    async (payload: Record<string, unknown>, thunkAPI) => {
         try {
-            return await mentorService.saveRule(payload.kind, payload.number, payload.setups);
+            return await mentorService.saveRule(payload);
         } catch (error: any) {
             if (error.response?.status === 401) {
                 thunkAPI.dispatch(sessionExpired());
@@ -175,9 +176,9 @@ export const saveRuleAsync = createAsyncThunk(
 
 export const deleteRuleAsync = createAsyncThunk(
     "mentor/deleteRule",
-    async (kind: string, thunkAPI) => {
+    async (id: number, thunkAPI) => {
         try {
-            return await mentorService.deleteRule(kind);
+            return await mentorService.deleteRule(id);
         } catch (error: any) {
             if (error.response?.status === 401) {
                 thunkAPI.dispatch(sessionExpired());
@@ -207,7 +208,8 @@ export const mentorSlice = createSlice({
 
         closeRules: (state) =>
         {
-            state.isRulesOpen = false
+            state.isRulesOpen = false;
+            state.ruleCoverage = null
         },
 
         setMentorDraft: (state, action) =>
@@ -361,12 +363,23 @@ export const mentorSlice = createSlice({
 
         .addCase(saveRuleAsync.fulfilled, (state, action) =>
         {
-            // Replaced rather than appended: the database holds one rule per kind, and a
-            // second copy on screen would be a ceiling the checker never sees.
+            // **Replaced by id for the free-text kind and by kind for the rest**, because
+            // that is exactly what the database enforces: one of each structured kind, and
+            // as many of his own as he writes. Filtering by kind alone would have each new
+            // sentence swallow the one before it.
+            const saved = action.payload;
+
             state.rules = [
-                ...state.rules.filter((rule) => rule.kind !== action.payload.kind),
-                action.payload,
+                ...state.rules.filter((rule) => saved.kind === "custom"
+                    ? rule.id !== saved.id
+                    : rule.kind !== saved.kind),
+                saved,
             ];
+
+            // How many of his trades can answer it, shown once beside the rule he just wrote.
+            state.ruleCoverage = saved.coverage
+                ? { id: saved.id, ...saved.coverage }
+                : null;
         })
         .addCase(saveRuleAsync.rejected, (state, action) =>
         {
@@ -375,7 +388,7 @@ export const mentorSlice = createSlice({
 
         .addCase(deleteRuleAsync.fulfilled, (state, action) =>
         {
-            state.rules = state.rules.filter((rule) => rule.kind !== action.payload);
+            state.rules = state.rules.filter((rule) => rule.id !== action.payload);
         })
         .addCase(deleteRuleAsync.rejected, (state, action) =>
         {
@@ -418,6 +431,8 @@ function settle(state: MentorState) {
 
 
 export const selectRules = (state: RootState) => state.mentor.rules;
+
+export const selectRuleCoverage = (state: RootState) => state.mentor.ruleCoverage;
 export const selectRuleKinds = (state: RootState) => state.mentor.ruleKinds;
 export const selectIsRulesOpen = (state: RootState) => state.mentor.isRulesOpen;
 export const selectIsRulesLoading = (state: RootState) => state.mentor.isRulesLoading;

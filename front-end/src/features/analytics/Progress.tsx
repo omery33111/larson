@@ -76,7 +76,7 @@ const Progress = () => {
           <span className={`progress-pill ${direction(trend['כיוון'])}`}>
             {trend['כיוון']}
           </span>
-          {trend.detail}
+          <span>{trend.detail}</span>
         </p>}
 
       {months.length > 1 &&

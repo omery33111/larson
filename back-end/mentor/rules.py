@@ -31,21 +31,38 @@ def _translate(row, currency):
     kind = row.kind
     number = row.number
 
+    mine = "כלל שקבעת לעצמך"
+
+    # ------------- HIS OWN WORDS:
+    #
+    # **The rule the checker judges is the terms; the rule the trader reads is his sentence.**
+    # Both travel, and they are not the same string on purpose - quoting the interpretation
+    # back at him would show him our paraphrase of his plan instead of his plan.
+    if kind == TraderRule.CUSTOM:
+        terms = row.terms
+
+        # A row that was saved before its sentence could be interpreted is not a rule. It
+        # must not become one that every trade keeps.
+        if not isinstance(terms, dict) or not (terms.get("require") or terms.get("forbid")):
+            return None
+
+        sentence = clean_label(row.text, 200)
+
+        if not sentence:
+            return None
+
+        return _rule(kind, sentence, mine, terms)
+
     # A rule without its threshold cannot be judged, and a half-saved row must not become a
     # rule that silently never fires.
     if kind != TraderRule.ONLY_SETUPS and number is None:
         return None
-
-    mine = "כלל שקבעת לעצמך"
 
     if kind == TraderRule.NO_BEFORE:
         return _rule(kind, f"לא להיכנס לפני {int(number):02d}:00", mine, number)
 
     if kind == TraderRule.NO_AFTER:
         return _rule(kind, f"לא להיכנס אחרי {int(number):02d}:00", mine, number)
-
-    if kind == TraderRule.MIN_HOLD:
-        return _rule(kind, f"לא להחזיק פחות מ-{minutes(number)}", mine, number)
 
     if kind == TraderRule.MAX_SIZE:
         return _rule(kind, f"לא לעלות מעל {ratio(number)} חוזים", mine, number)

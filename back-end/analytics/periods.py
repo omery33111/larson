@@ -198,12 +198,15 @@ def _verdict(before, after, change, currency):
         return (f"התוחלת לעסקה כמעט לא זזה ({gap} הפרש). **זה לא שיפור ולא הרעה** — "
                 f"זה אותו מסחר.")
 
-    if after > before:
-        return (f"**התוחלת לעסקה עלתה** מ-{money(round(before, 2), currency)} "
-                f"ל-{money(round(after, 2), currency)}, הפרש של {gap}.")
+    # **No "מ-" or "ל-" in front of a figure.** A negative expectancy renders with its own
+    # minus and the two collide into "ל--$11.21" - which is not a typo the reader forgives,
+    # it is a number he has to stop and decode. `deviation.py` learned this once already and
+    # carries the same note; this file reintroduced it, and it was visible on the live page
+    # before any test caught it.
+    direction = "עלתה" if after > before else "ירדה"
 
-    return (f"**התוחלת לעסקה ירדה** מ-{money(round(before, 2), currency)} "
-            f"ל-{money(round(after, 2), currency)}, הפרש של {gap}.")
+    return (f"**התוחלת לעסקה {direction}** — הייתה {money(round(before, 2), currency)}, "
+            f"עכשיו {money(round(after, 2), currency)}. הפרש של {gap}.")
 
 
 def _trend(months, currency):

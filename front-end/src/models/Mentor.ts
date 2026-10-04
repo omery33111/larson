@@ -27,7 +27,7 @@ export interface PendingFile {
 }
 
 
-import { RuleKind, TraderRule } from "./Rule";
+import { RuleCoverage, RuleKind, TraderRule } from "./Rule";
 
 
 export interface MentorState {
@@ -62,6 +62,11 @@ export interface MentorState {
     // this project - the panel opens on a dispatch and renders itself from the store, with
     // no props threaded down and no useState in the parent.
     rules: TraderRule[];
+
+    // Set once, by the save that produced it, and cleared when the panel closes: it answers
+    // "can my trades even answer this", which is a question about the rule he just wrote and
+    // not a standing property of the screen.
+    ruleCoverage: (RuleCoverage & { id: number }) | null;
     ruleKinds: RuleKind[];
     isRulesOpen: boolean;
     isRulesLoading: boolean;

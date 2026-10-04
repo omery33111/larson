@@ -85,8 +85,8 @@ const getRules = async () => {
 };
 
 
-const saveRule = async (kind: string, number: number | null, setups: string) => {
-    const response = await axios.post(saveMentorRuleURL, { kind, number, setups }, {
+const saveRule = async (body: Record<string, unknown>) => {
+    const response = await axios.post(saveMentorRuleURL, body, {
         headers: { 'Authorization': `Bearer ${accessToken()}` }
     });
 
@@ -94,12 +94,14 @@ const saveRule = async (kind: string, number: number | null, setups: string) => 
 };
 
 
-const deleteRule = async (kind: string) => {
-    await axios.delete(deleteMentorRuleURL(kind), {
+// **Keyed on the row and not on the kind**, which it used to be: a kind identified a rule
+// only while there was one of each, and several free-text rules broke that.
+const deleteRule = async (id: number) => {
+    await axios.delete(deleteMentorRuleURL(id), {
         headers: { 'Authorization': `Bearer ${accessToken()}` }
     });
 
-    return kind;
+    return id;
 };
 
 
