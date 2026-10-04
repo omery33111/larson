@@ -14,6 +14,12 @@ from trades.models import Trade, TradeFile
 from analytics.statistics import compute_statistics
 
 from .compliance import check_plan
+from chat import retrieval
+
+from .models import TraderRule
+from .rules import declared_rules
+from .serializers import TraderRuleSerializer
+
 from .context import (GREETING, baseline_set, mentor_messages, mentor_system, receipt,
                       update_prompt)
 from .deviation import build_deviation
@@ -204,7 +210,11 @@ def stream(request):
         # sample; this needs a single trade, because a rule is broken or kept by each trade on
         # its own. Without it, closing a day on one trade got "come back with more" - which is
         # the mentor refusing to do the only job he has.
-        plan = check_plan(compute_statistics(baseline), baseline, recent, currency, zone)
+        # **His own commitments first, then what his history argues for.** `rules.py` gives
+        # them the same shape, so the checker needs no special case and the offending trade
+        # is named the same way either way.
+        plan = check_plan(compute_statistics(baseline), baseline, recent, currency, zone,
+                          declared = declared_rules(request.user, currency))
 
         # The plan check already decided this; reading it is free. Broken rules outrank kept
         # ones - a debrief that found a repeat offence is not a green day whatever else went
@@ -240,6 +250,13 @@ def stream(request):
     # what the trader typed is on screen, and what the model needs to see is the report.
     if messages and briefing != text:
         messages[-1]["content"] = briefing
+    else:
+        # **No file this turn, so this is a question** - and the mentor is the screen where
+        # "what happened on the 18th" gets asked most. It is deliberately not attached to a
+        # debrief turn: when a file was sent, the briefing is the point, and rows pulled for
+        # a half-read question would compete with it.
+        retrieval.attach(messages, retrieval.block_for(request.user, text,
+                                                       billed_to = request.user))
 
     return _sse(_answer(row, question, system, messages, prelude, verdict,
                         budget_kind = "mentor"))
@@ -259,3 +276,81 @@ def _timezone(trades):
     return "Asia/Jerusalem"
 
 # ------------------------- THE DEBRIEF END ------------------------- #
+
+
+# ------------------------- THE RULES HE SETS FOR HIMSELF ------------------------- #
+#
+# **Three endpoints and no more, because a rule has exactly one of each kind.** The uniqueness
+# is enforced in the database rather than in the screen: two ceilings on the same thing is not
+# a stricter plan, it is a plan with no answer, and the debrief would then report both.
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def rules(request):
+    """What he has committed to, and the full menu of what he could."""
+    rows = TraderRule.objects.filter(user = request.user)
+
+    return Response({
+        "rules": TraderRuleSerializer(rows, many = True).data,
+        # The menu travels with the answer so the screen never holds its own copy of the
+        # kinds - a second list of them is one release away from disagreeing with this one.
+        "kinds": [{"kind": kind, "label": label} for kind, label in TraderRule.KINDS],
+    })
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def save_rule(request):
+    """Create or replace one commitment."""
+    kind = str(request.data.get("kind", "")).strip()
+
+    if kind not in dict(TraderRule.KINDS):
+        return Response({"error": "סוג כלל לא מוכר."}, status = status.HTTP_400_BAD_REQUEST)
+
+    setups = str(request.data.get("setups", "")).strip()
+    number = request.data.get("number")
+
+    if kind == TraderRule.ONLY_SETUPS:
+        if not setups:
+            return Response({"error": "צריך לפרט לפחות סטאפ אחד."},
+                            status = status.HTTP_400_BAD_REQUEST)
+        number = None
+    else:
+        try:
+            number = float(number)
+        except (TypeError, ValueError):
+            return Response({"error": "צריך מספר."}, status = status.HTTP_400_BAD_REQUEST)
+
+        if number <= 0:
+            return Response({"error": "המספר צריך להיות גדול מאפס."},
+                            status = status.HTTP_400_BAD_REQUEST)
+
+        # An hour outside the clock is a rule that can never be kept or broken.
+        if kind in (TraderRule.NO_BEFORE, TraderRule.NO_AFTER) and not 0 <= number <= 23:
+            return Response({"error": "שעה היא מספר בין 0 ל-23."},
+                            status = status.HTTP_400_BAD_REQUEST)
+
+        setups = ""
+
+    row, _ = TraderRule.objects.update_or_create(
+        user = request.user, kind = kind,
+        defaults = {"number": number, "setups": setups, "is_active": True})
+
+    return Response(TraderRuleSerializer(row).data, status = status.HTTP_201_CREATED)
+
+
+@api_view(["DELETE"])
+@permission_classes([IsAuthenticated])
+def delete_rule(request, kind):
+    """Dropped entirely rather than switched off, because the screen offers one of each.
+
+    `is_active` exists for the day a trader wants to pause a rule without losing that he had
+    it; nothing in the interface reaches that yet, and a flag with no way to set it would be
+    a column pretending to be a feature.
+    """
+    deleted, _ = TraderRule.objects.filter(user = request.user, kind = kind).delete()
+
+    if not deleted:
+        return Response({"error": "אין כלל כזה."}, status = status.HTTP_404_NOT_FOUND)
+
+    return Response(status = status.HTTP_204_NO_CONTENT)

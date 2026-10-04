@@ -29,6 +29,11 @@ export interface AuthenticationState
     // can fill. Filled by getIndex, which every logged-in screen already calls.
     hasPassword: boolean,
     googleEmail: string,
+
+    // **What he has agreed to receive.** The weekly summary is a service message about his
+    // own record and is opt-out; anything promotional is the other thing under Israeli law
+    // and starts off. Two flags, because the two are not the same consent.
+    emailPrefs: { weekly_digest: boolean, product_news: boolean },
 }
 
 
@@ -55,6 +60,7 @@ const initialState: AuthenticationState =
     unverifiedEmail: "",
     hasPassword: true,
     googleEmail: "",
+    emailPrefs: { weekly_digest: true, product_news: false },
 };
 
 
@@ -196,6 +202,33 @@ export const deleteAccountAsync = createAsyncThunk("authentication/deleteAccount
     })
 
 
+export const emailPrefsAsync = createAsyncThunk("authentication/emailPrefs",
+    async (_, thunkAPI) => {
+        try {
+            return await authenticationService.emailPreferences();
+        } catch (error: any) {
+            if (error.response?.status === 401) thunkAPI.dispatch(sessionExpired());
+            // No message on a failure here: the preference screen showing a toast because it
+            // could not read a default is noise about something the trader did not ask for.
+            return thunkAPI.rejectWithValue("");
+        }
+    });
+
+
+export const saveEmailPrefsAsync = createAsyncThunk("authentication/saveEmailPrefs",
+    async (changes: Record<string, boolean>, thunkAPI) => {
+        try {
+            return await authenticationService.saveEmailPreferences(changes);
+        } catch (error: any) {
+            if (error.response?.status === 401) {
+                thunkAPI.dispatch(sessionExpired());
+                return thunkAPI.rejectWithValue("");
+            }
+            return thunkAPI.rejectWithValue("לא הצלחנו לשמור את ההעדפה.");
+        }
+    });
+
+
 export const logoutAsync = createAsyncThunk('auth/logout',
  async () =>
  {
@@ -260,6 +293,18 @@ export const authenticationSlice = createSlice({
     },
     extraReducers: (builder) => {
         builder
+        .addCase(emailPrefsAsync.fulfilled, (state, action) =>
+        {
+            state.emailPrefs = action.payload
+        })
+        .addCase(saveEmailPrefsAsync.fulfilled, (state, action) =>
+        {
+            state.emailPrefs = action.payload
+        })
+        .addCase(saveEmailPrefsAsync.rejected, (state, action) =>
+        {
+            state.message = action.payload as string
+        })
         .addCase(registerAsync.rejected, (state, action) =>
         {
             state.isLoading = false
@@ -398,6 +443,8 @@ export const authenticationSlice = createSlice({
 
 })
 
+
+export const selectEmailPrefs = (state: RootState) => state.authentication.emailPrefs;
 
 export const selectAccess = (state: RootState) => state.authentication.access;
 export const selectUser = (state: RootState) => state.authentication.userName;

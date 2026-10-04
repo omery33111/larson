@@ -1,6 +1,9 @@
 import axios from "axios";
 import { accessToken, freshAccessToken } from "../../app/session";
-import { mentorPendingURL, mentorStreamURL, mentorURL } from "../../endpoints/endpoints";
+import {
+    deleteMentorRuleURL, mentorPendingURL, mentorRulesURL, mentorStreamURL, mentorURL,
+    saveMentorRuleURL
+} from "../../endpoints/endpoints";
 import { StreamEvent, readEventStream } from "../chat/chatAPI";
 
 
@@ -67,10 +70,47 @@ const dismissPending = async () => {
 
 
 
+// ------------------------- THE RULES HE SETS FOR HIMSELF -------------------------
+//
+// The menu of kinds travels down with the rules rather than living here as a second copy -
+// a list of them on this side is one release away from disagreeing with the one the checker
+// actually judges by.
+
+const getRules = async () => {
+    const response = await axios.get(mentorRulesURL, {
+        headers: { 'Authorization': `Bearer ${accessToken()}` }
+    });
+
+    return response.data;
+};
+
+
+const saveRule = async (kind: string, number: number | null, setups: string) => {
+    const response = await axios.post(saveMentorRuleURL, { kind, number, setups }, {
+        headers: { 'Authorization': `Bearer ${accessToken()}` }
+    });
+
+    return response.data;
+};
+
+
+const deleteRule = async (kind: string) => {
+    await axios.delete(deleteMentorRuleURL(kind), {
+        headers: { 'Authorization': `Bearer ${accessToken()}` }
+    });
+
+    return kind;
+};
+
+
+
 const mentorService = {
     getMentor,
     streamDebrief,
     dismissPending,
+    getRules,
+    saveRule,
+    deleteRule,
 };
 
 export default mentorService;

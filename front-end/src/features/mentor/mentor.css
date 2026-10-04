@@ -251,6 +251,192 @@
 }
 
 
+/* ------------------------- THE RULES HE SETS FOR HIMSELF ------------------------- */
+
+.rules-panel {
+  padding: 1.5rem;
+  background: linear-gradient(180deg, #13161c 0%, #0f1115 100%);
+  color: #e8e8e8;
+}
+
+.rules-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #23262f;
+  margin-bottom: 1rem;
+}
+
+.rules-title {
+  margin: 0 0 0.4rem;
+  font-size: 1.25rem;
+  color: #f0b90b;
+}
+
+.rules-sub {
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.6;
+  color: #8b909c;
+}
+
+.rules-sub b { color: #c9ccd3; }
+
+.rules-close {
+  flex-shrink: 0;
+  display: grid;
+  place-content: center;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #8b909c;
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+.rules-close:hover { background: #1b1f27; color: #e8e8e8; }
+
+.rules-loading {
+  margin: 0;
+  padding: 1.5rem 0;
+  text-align: center;
+  color: #8b909c;
+}
+
+.rules-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rules-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid #1b1f27;
+}
+
+.rules-row:last-child { border-bottom: none; }
+
+.rules-row-main {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.rules-label {
+  font-size: 0.95rem;
+  color: #8b909c;
+}
+
+/* A rule that is set reads as a commitment and not as a row in a form, which is the whole
+   difference between a settings screen and something he decided. */
+.rules-row-set .rules-label { color: #e8e8e8; }
+
+.rules-value {
+  padding: 0.12rem 0.5rem;
+  border: 1px solid #3b3320;
+  border-radius: 999px;
+  background: rgba(240, 185, 11, 0.08);
+  font-size: 0.84rem;
+  color: #f0b90b;
+  white-space: nowrap;
+}
+
+.rules-actions,
+.rules-edit {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.rules-input {
+  width: 9rem;
+  /* Under 16px iOS Safari zooms the page on focus, which is the one thing a dialog must not
+     do - the field would end up off screen. */
+  font-size: 16px;
+}
+
+.rules-set,
+.rules-save {
+  min-height: 44px;
+  padding-inline: 0.9rem;
+  font-size: 0.86rem;
+  white-space: nowrap;
+}
+
+.rules-save {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.rules-cancel {
+  min-height: 44px;
+  padding-inline: 0.5rem;
+  border: none;
+  background: transparent;
+  color: #8b909c;
+  font-size: 0.84rem;
+  cursor: pointer;
+}
+
+.rules-drop {
+  display: grid;
+  place-content: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid #23262f;
+  border-radius: 8px;
+  background: transparent;
+  color: #8b909c;
+  cursor: pointer;
+}
+
+.rules-drop:hover { border-color: #d1494e; color: #d1494e; }
+
+.rules-foot {
+  margin: 1.1rem 0 0;
+  padding-top: 1rem;
+  border-top: 1px solid #23262f;
+  font-size: 0.84rem;
+  line-height: 1.6;
+  color: #8b909c;
+}
+
+.rules-foot b { color: #c9ccd3; }
+
+/* The button that opens it, on the mentor's status row. */
+.mentor-rules-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 36px;
+  padding-inline: 0.7rem;
+  border: 1px solid #23262f;
+  border-radius: 999px;
+  background: transparent;
+  color: #8b909c;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.mentor-rules-open:hover { border-color: #3b3320; color: #f0b90b; }
+
+.mentor-rules-open-count {
+  color: #f0b90b;
+  font-weight: 700;
+}
+
+
 /* ------------------------- LAPTOP RESPONSIVE STYLING ------------------------- */
 @media (min-width: 1025px) and (max-width: 1919px) {
   .mentor-shell {
@@ -269,6 +455,21 @@
 
 /* ------------------------- MOBILE RESPONSIVE STYLING ------------------------- */
 @media (max-width: 768px) {
+  /* The row stacks rather than squeezing: a 9rem field and two buttons do not fit beside a
+     label at 320px, and a cramped row reads as broken rather than as narrow. */
+  .rules-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .rules-input { width: 100%; }
+
+  .rules-edit,
+  .rules-actions { width: 100%; }
+
+  .rules-save,
+  .rules-set { flex: 1; }
+
   /* The resume line and the title do not fit one row on a phone, and of the two the resume
      line is the one carrying the reason to be here. */
   .mentor-topbar .chat-topbar-title {

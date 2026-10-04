@@ -25,9 +25,12 @@ import {
  *    the breakdown by hour - all of that is already on screen for free. Spending a model
  *    call to read a number back off a page the trader just left is paying twice.
  *
- * 2. **Every one is answerable from what the model actually receives.** The prompt carries
- *    aggregates, not a trade-by-trade list and not a time series, so "how did I trend across
- *    the months" or "drop my five biggest trades" would only ever produce an apology.
+ * 2. **Every one is answerable from what the model actually receives** - and what that is
+ *    changed, so this list changed with it. It used to carry aggregates and nothing else, so
+ *    "how did I trend across the months" would only ever have produced an apology. It now
+ *    also carries **a time axis** and **named instances on every finding**, and a question
+ *    that looks specific pulls the rows themselves. The four questions at the end of this
+ *    list exist because of that, and they could not have been asked last week.
  *
  * 3. **Half of them are good news.** A list that only digs for what is broken gets pressed
  *    once. The hidden strength is as much of a secret as the leak, and it is the half that
@@ -60,6 +63,17 @@ const OPENERS = [
   // ------------- the hypotheticals
   'אם היו נותנים לי מחר חשבון של מיליון דולר, מה היה קורה?',
   'אם הייתי מפסיק לסחור מחר — במה הייתי מתגאה, ועל מה הייתי מתחרט?',
+
+  // ------------- what only the time axis can answer
+  //
+  // **These four are new, and they are the ones a mentor is actually for.** Until the
+  // periods engine existed there was no month-over-month comparison anywhere in the prompt,
+  // so the single most important question a trader has - am I getting better - had no answer
+  // in it at all. The last one asks for an instance by name, which the findings now carry.
+  'האם אני משתפר, או שאני פשוט סוחר אותו דבר יותר זמן?',
+  'מה השתנה אצלי בחודש האחרון מול החודש שלפניו — ולא לטובה?',
+  'מה הפסקתי לעשות בלי לשים לב, ושווה לי לחזור אליו?',
+  'תראה לי את שלוש העסקאות שהכי מדממות אצלי, בשמן.',
 ];
 
 const OPENERS_SHOWN = 4;

@@ -8,6 +8,7 @@ from project.throttling import AIBurstThrottle, AIDailyThrottle
 from trades.models import Trade
 
 from .insights import build_insights
+from .periods import build_periods
 from .models import TraderProfile
 from .profile import generate_profile
 from .statistics import compute_statistics
@@ -112,12 +113,18 @@ def overview(request):
             "profile": _profile_payload(request.user),
         })
 
-    strengths, leaks = build_insights(statistics)
+    strengths, leaks = build_insights(statistics, trades)
 
     return Response({
         **statistics,
         "strengths": strengths,
         "leaks": leaks,
+        # **The axis the page never had.** Everything above is computed over the whole record
+        # at once, so the question a mentor exists for - am I getting better - had no answer
+        # anywhere on this screen. It costs nothing extra: the statistics were already being
+        # recomputed per request, and this is the same rows cut into windows.
+        "periods": build_periods(trades, statistics.get("currency", "USD"),
+                                 statistics.get("timezone", "Asia/Jerusalem")),
         "available_accounts": directory,
         "selected_accounts": selected,
         "profile": _profile_payload(request.user),
@@ -181,7 +188,7 @@ def generate(request):
                       f"כדי לבנות פרופיל. בבחירה הנוכחית יש {statistics.get('total_trades', 0)}."},
             status = status.HTTP_400_BAD_REQUEST)
 
-    strengths, leaks = build_insights(statistics)
+    strengths, leaks = build_insights(statistics, trades)
 
     covered = requested if requested is not None else sorted(
         {t.account_id or UNASSIGNED for t in all_trades})

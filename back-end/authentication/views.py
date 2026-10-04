@@ -19,7 +19,8 @@ from project.throttling import EmailThrottle, LoginThrottle, RegisterThrottle
 
 from .google import GoogleError, claims_from_credential
 from .mail import send_password_changed, send_password_reset, send_verification
-from .models import TERMS_VERSION, GoogleIdentity, TermsAcceptance
+from . import digest
+from .models import EmailPreference, TERMS_VERSION, GoogleIdentity, TermsAcceptance
 from .personal_data import erase, export
 from .tokens import unpack_uid, verification_token
 
@@ -573,3 +574,56 @@ def delete_account(request):
     return Response({"deleted": removed}, status=status.HTTP_200_OK)
 
 # ------------------------- THE ACCOUNT ITSELF END ------------------------- #
+
+
+# ------------------------- EMAIL PREFERENCES ------------------------- #
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def email_preferences(request):
+    """What he has agreed to receive.
+
+    **Two flags, and only one of them starts on.** The weekly summary is a service message
+    about his own record and is opt-out; anything promotional is the other thing under
+    Israeli law and is opt-in, which is why it starts off and only he can change it.
+    """
+    prefs, _ = EmailPreference.objects.get_or_create(user = request.user)
+
+    if request.method == "POST":
+        for field in ("weekly_digest", "product_news"):
+            if field in request.data:
+                setattr(prefs, field, bool(request.data[field]))
+        prefs.save(update_fields = ["weekly_digest", "product_news"])
+
+    return Response({
+        "weekly_digest": prefs.weekly_digest,
+        "product_news": prefs.product_news,
+    })
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def unsubscribe(request):
+    """
+    Turn the weekly summary off from a link in the mail itself.
+
+    **Open on purpose, and it has to be.** Asking somebody to sign in to stop receiving email
+    is how a sender earns a spam complaint, and a complaint lands on the same domain that
+    carries the verification and password-reset mail - **an email nobody can stop is a threat
+    to account recovery for people who never received it.**
+
+    The token is a signed statement of which account it belongs to, so there is nothing to
+    look up and nothing to guess: a forged one fails its signature and a real one names
+    exactly one user. It only ever turns the flag **off**, so the worst a replayed link can
+    do is what it did the first time.
+    """
+    user_id = digest.user_id_from_token(str(request.data.get("token", "")))
+
+    if not user_id:
+        return Response({"error": "הקישור אינו תקף."}, status = status.HTTP_400_BAD_REQUEST)
+
+    prefs, _ = EmailPreference.objects.get_or_create(user_id = user_id)
+    prefs.weekly_digest = False
+    prefs.save(update_fields = ["weekly_digest"])
+
+    return Response({"ok": True})

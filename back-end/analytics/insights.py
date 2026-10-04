@@ -1,3 +1,4 @@
+from .evidence import attach_examples
 from .formatting import days, minutes, money, percent, points, ratio, trades as trade_count
 from .statistics import MIN_TRADES_FOR_BREAKDOWN
 
@@ -19,12 +20,23 @@ MAX_FINDINGS_PER_SIDE = 4
 
 
 
-def build_insights(statistics):
-    """Returns (strengths, leaks), each ranked by how much money is attached."""
+def build_insights(statistics, trades = None):
+    """
+    Returns (strengths, leaks), each ranked by how much money is attached.
+
+    **`trades` is optional and what it buys is the pointing.** Given the rows, every finding
+    that survives the ranking also carries three of its own instances by name - which is the
+    difference between "revenge trading cost you $1,840" and "here, this one". Callers that
+    only need the sentences may leave it out and nothing else changes.
+
+    It is attached **after** the ranking on purpose: only the findings that reach the screen
+    are worth selecting examples for, and the selectors walk the whole history.
+    """
     if not statistics.get("total_trades"):
         return [], []
 
     currency = statistics.get("currency", "USD")
+    zone = statistics.get("timezone", "Asia/Jerusalem")
 
     strengths = _collect_strengths(statistics, currency)
     leaks = _collect_leaks(statistics, currency)
@@ -32,7 +44,14 @@ def build_insights(statistics):
     strengths.sort(key = lambda f: -abs(f["impact"]))
     leaks.sort(key = lambda f: -abs(f["impact"]))
 
-    return strengths[:MAX_FINDINGS_PER_SIDE], leaks[:MAX_FINDINGS_PER_SIDE]
+    strengths = strengths[:MAX_FINDINGS_PER_SIDE]
+    leaks = leaks[:MAX_FINDINGS_PER_SIDE]
+
+    if trades:
+        attach_examples(strengths, trades, currency, zone, worst_first = False)
+        attach_examples(leaks, trades, currency, zone, worst_first = True)
+
+    return strengths, leaks
 
 
 
@@ -49,6 +68,7 @@ def _collect_strengths(statistics, currency):
     if best_setup:
         findings.append({
             "key": "best_setup",
+            "subject": best_setup["key"],
             "title": f"הסטאפ החזק שלך: {best_setup['key']}",
             "detail": f"תוחלת {money(best_setup['expectancy'], currency)} לעסקה, "
                       f"עם {percent(best_setup['win_rate'])} הצלחה. זה הבסיס שלך — אל תתעסק בו.",
@@ -60,6 +80,7 @@ def _collect_strengths(statistics, currency):
     if best_hour:
         findings.append({
             "key": "best_hour",
+            "subject": best_hour["key"],
             "title": f"השעה החזקה שלך: {int(best_hour['key']):02d}:00",
             "detail": f"תוחלת {money(best_hour['expectancy'], currency)} לעסקה בשעה הזו. "
                       f"אם יש לך זמן מוגבל למסך — זה החלון.",
@@ -71,6 +92,7 @@ def _collect_strengths(statistics, currency):
     if best_symbol and len(breakdowns["by_symbol"]) > 1:
         findings.append({
             "key": "best_symbol",
+            "subject": best_symbol["key"],
             "title": f"הנכס החזק שלך: {best_symbol.get('label') or best_symbol['key']}",
             "detail": f"תוחלת {money(best_symbol['expectancy'], currency)} לעסקה, "
                       f"מול הנכסים האחרים שלך.",
@@ -83,6 +105,7 @@ def _collect_strengths(statistics, currency):
         label = "לונג" if best_direction["key"] == "long" else "שורט"
         findings.append({
             "key": "best_direction",
+            "subject": best_direction["key"],
             "title": f"אתה חד יותר ב{label}",
             "detail": f"תוחלת {money(best_direction['expectancy'], currency)} לעסקה ב{label}, "
                       f"עם {percent(best_direction['win_rate'])} הצלחה.",
@@ -188,6 +211,7 @@ def _collect_leaks(statistics, currency):
     if worst_mistake:
         findings.append({
             "key": "worst_mistake",
+            "subject": worst_mistake["key"],
             "title": f"הטעות היקרה ביותר: {worst_mistake['key']}",
             "detail": f"תוחלת {money(worst_mistake['expectancy'], currency)} לעסקה כשהיא מופיעה, "
                       f"סה\"כ {money(worst_mistake['net_pnl'], currency)}.",
@@ -239,6 +263,7 @@ def _collect_leaks(statistics, currency):
     if worst_hour:
         findings.append({
             "key": "worst_hour",
+            "subject": worst_hour["key"],
             "title": f"השעה שעולה לך הכי הרבה: {int(worst_hour['key']):02d}:00",
             "detail": f"תוחלת {money(worst_hour['expectancy'], currency)} לעסקה בשעה הזו, "
                       f"סה\"כ {money(worst_hour['net_pnl'], currency)}.",
@@ -250,6 +275,7 @@ def _collect_leaks(statistics, currency):
     if worst_setup:
         findings.append({
             "key": "worst_setup",
+            "subject": worst_setup["key"],
             "title": f"הסטאפ המפסיד שלך: {worst_setup['key']}",
             "detail": f"תוחלת {money(worst_setup['expectancy'], currency)} לעסקה, "
                       f"סה\"כ {money(worst_setup['net_pnl'], currency)}. "

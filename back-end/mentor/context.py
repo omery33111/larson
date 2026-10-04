@@ -129,6 +129,30 @@ NOTE_BRIEF = """**הסוחר כתב לך משהו יחד עם הקובץ**, וה
 וכללי הברזל שלמעלה לא זזים."""
 
 
+# ------------- WHEN HE HAS RULES OF HIS OWN:
+#
+# The distinction is worth a paragraph of prompt because it changes what a breach means. An
+# inferred rule is news - he may genuinely not have known the 14:00 hour was costing him. A
+# declared one is not news: **he said it, and then he did the other thing**, and the only
+# useful response to that is to say so plainly and ask what got in the way.
+DECLARED_BRIEF = """**בתוך `בדיקת_הכללים`, כל שורה שנושאת `declared: true` היא כלל שהסוחר קבע
+לעצמו** — לא דפוס שההיסטוריה שלו מרמזת עליו. ההבדל הזה חייב להישמע בתשובה:
+
+- **כלל שהוא קבע ושבר** — זו לא הפתעה בשבילו, והוא לא צריך שתסביר לו למה הכלל קיים. תגיד
+  בפשטות שהוא קבע את זה ולא עמד בו, עם העסקה בשמה, **ושאל מה קרה שם.** בלי הרצאה.
+- **כלל שהוא קבע ושמר עליו** — זה הדבר הכי שווה ציון בכל התחקיר, גם ביום מפסיד. **הוא עשה
+  בדיוק מה שהתחייב.** אמור זאת לפני כל השאר.
+- **כלל שנגזר מההיסטוריה** — שם כן מקומו של ההסבר, כי ייתכן שהוא לא ידע."""
+
+
+def _has_declared(plan):
+    if not isinstance(plan, dict):
+        return False
+    return any(entry.get("declared")
+               for side in ("broken", "kept")
+               for entry in plan.get(side, []) or [])
+
+
 def update_prompt(deviation, plan, total_trades, new_trades, file_name, is_first = False,
                   note = ""):
     """
@@ -158,6 +182,13 @@ def update_prompt(deviation, plan, total_trades, new_trades, file_name, is_first
     # saying the thing he does have: who this trader is.
     job = FIRST_FILE_BRIEF if is_first else (
         "**אל תחזור על שורת התיעוד** — היא כבר מוצגת מעל התשובה שלך. התחל ישר מהתחקיר.")
+
+    # **A rule he wrote down and a rule his losses imply are not the same conversation**, and
+    # the flag on the entry is the only thing that says which is which. Without this the model
+    # reports both in the same voice - "you traded in the 14:00 hour again" alongside "you
+    # entered before ten" - and the second one is the one he has standing to be held to.
+    if _has_declared(plan):
+        job += "\n\n" + DECLARED_BRIEF
 
     if note:
         payload["מה_שהסוחר_כתב_לך"] = note

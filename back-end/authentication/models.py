@@ -61,3 +61,40 @@ class TermsAcceptance(models.Model):
         return f"{self.user.username} · {self.version} · {self.via}"
 
 # ------------------------- CONSENT END ------------------------- #
+
+
+# ------------------------- WHAT MAY BE SENT TO HIM ------------------------- #
+#
+# **Two flags and not one, because Israeli law treats them differently and so should we.**
+#
+# Section 30A of the Communications Law requires prior explicit consent for advertising
+# material - and a summary of a trader's own record, to somebody who registered for exactly
+# that, is a service message rather than an advertisement, in the same family as a receipt or
+# a password reset. **That is why the digest starts on.** Anything promotional - a price, a
+# feature, an offer - is the other thing, and it starts off and stays off until he ticks it.
+#
+# **And the unsubscribe is not there because the law demands it.** It is there because
+# somebody who cannot turn an email off clicks "spam" instead, and a spam complaint damages
+# the sending domain - **the same domain that sends the verification and the password reset.**
+# An email nobody can stop is a threat to account recovery for people who never received it.
+
+class EmailPreference(models.Model):
+    user = models.OneToOneField(User, on_delete = models.CASCADE, related_name = "email_prefs")
+
+    # The weekly debrief summary. A service email: on by default, off in one click.
+    weekly_digest = models.BooleanField(default = True)
+
+    # Anything promotional. **Off by default and only he can turn it on.**
+    product_news = models.BooleanField(default = False)
+
+    # **The two stamps that make "only when there is something to say" enforceable.**
+    #
+    # Without them the command cannot tell a quiet week from a quiet month, and the reminder
+    # becomes weekly - which is the exact shape that gets a sender marked as spam. The first
+    # says when a real summary last went out; the second says when he was last nudged, so a
+    # trader who has not traded for two months is nudged once rather than eight times.
+    last_digest_at = models.DateTimeField(null = True, blank = True)
+    last_nudge_at = models.DateTimeField(null = True, blank = True)
+
+    def __str__(self):
+        return f"{self.user.username} - digest={self.weekly_digest}"

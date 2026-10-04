@@ -361,3 +361,155 @@ def send_password_changed(user):
               CHANGED_BODY.format(name = _escaped(user.username)),
               CHANGED_FOOTER),
         user.email)
+
+
+# ------------------------- THE WEEKLY SUMMARY ------------------------- #
+#
+# **The only mail here that is neither asking nor warning - it is the product, arriving.**
+#
+# Which is the whole reason it is allowed to exist. A weekly "you have not updated" is a nudge,
+# and a nudge gets unsubscribed and then reported; `digest.py` is the half of this feature that
+# decides not to send one. What reaches the inbox is the week itself, and the sharpest thing in
+# it **with the trade that proves it, by date and by time** - the same line the chat shows.
+#
+# **Every one of these carries an unsubscribe link, and it works without logging in.** Asking
+# somebody to sign in to stop receiving email is how a sender earns a spam complaint, and a
+# complaint lands on the domain that also carries the verification mail.
+
+DIGEST_SUBJECT = "השבוע שלך, בשורה אחת"
+
+DIGEST_TEXT = """{name}, זה מה שלארסון ראה השבוע:
+
+{count_text} · רווח נקי {net_pnl} · {win_rate} הצלחה
+{leak_text}
+הפירוט המלא בעמוד המנטור: {link}
+
+--
+לא רוצה את הסיכום הזה? {unsubscribe}
+"""
+
+DIGEST_HEADING = "השבוע שלך"
+
+DIGEST_BODY = """\
+<p style="margin:0 0 18px;">{name}, זה מה שלארסון ראה השבוע.</p>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+       style="margin:0 0 20px;">
+  <tr>
+    <td style="padding:14px 16px; background:#13161c; border:1px solid #23262f;
+               border-radius:10px;">
+      <div style="font-size:15px; color:#e8e8e8; font-weight:700;">{count_text}</div>
+      <div style="font-size:14px; color:#8b909c; margin-top:6px;">
+        רווח נקי {net_pnl} · {win_rate} הצלחה
+      </div>
+    </td>
+  </tr>
+</table>
+{leak_html}"""
+
+DIGEST_LEAK = """\
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+       style="margin:0 0 20px;">
+  <tr>
+    <td style="padding:14px 16px; background:#171a21; border:1px solid #3b3320;
+               border-right:3px solid #f0b90b; border-radius:10px;">
+      <div style="font-size:14px; color:#f0b90b; font-weight:700;">{title}</div>
+      <div style="font-size:14px; color:#c9ccd3; margin-top:8px;">{detail}</div>
+      {example}
+    </td>
+  </tr>
+</table>"""
+
+DIGEST_EXAMPLE = """\
+<div style="font-size:13px; color:#8b909c; margin-top:10px; direction:ltr; text-align:right;
+            font-family:ui-monospace, Menlo, monospace;">{line}</div>"""
+
+DIGEST_FOOTER = ('הסיכום הזה נשלח פעם בשבוע, <b>ורק כשיש מה לסכם</b>.<br>'
+                 '<a href="{unsubscribe}" style="color:#8b909c;">לא רוצה לקבל אותו</a>')
+
+
+NUDGE_SUBJECT = "לארסון לא ראה ממך עסקה {days} ימים"
+
+NUDGE_TEXT = """{name}, עברו {days} ימים מאז שלארסון ראה ממך עסקה.
+
+אם סחרת ולא עדכנת — הוא לא יכול להשוות מה שלא קיבל.
+לעדכן אותו: {link}
+
+--
+זו תזכורת אחת, לא שבועית. {unsubscribe}
+"""
+
+NUDGE_HEADING = "עברו {days} ימים"
+
+NUDGE_BODY = """\
+<p style="margin:0 0 18px;">{name}, עברו <b>{days} ימים</b> מאז שלארסון ראה ממך עסקה.</p>
+<p style="margin:0 0 18px; color:#8b909c;">אם סחרת ולא עדכנת — הוא לא יכול להשוות מה שלא
+קיבל, והתחקיר הבא יהיה על תקופה ולא על סשן.</p>"""
+
+# **One reminder per silence, and the mail says so.** A trader who knows it will not repeat
+# has no reason to reach for the spam button, which is the entire point.
+NUDGE_FOOTER = ('זו תזכורת אחת על הפער הזה — <b>לא אחת לשבוע</b>.<br>'
+                '<a href="{unsubscribe}" style="color:#8b909c;">לבטל את הסיכום השבועי</a>')
+
+
+
+def send_weekly_digest(user, payload, unsubscribe):
+    """The week, with the sharpest finding and the trade that proves it."""
+    link = f"{settings.FRONTEND_URL}/mentor"
+
+    leak_text = ""
+    leak_html = ""
+
+    if payload.get("leak_title"):
+        example_html = ""
+        example_text = ""
+
+        if payload.get("leak_example"):
+            example_html = DIGEST_EXAMPLE.format(line = _escaped(payload["leak_example"]))
+            example_text = f"\n   {payload['leak_example']}"
+
+        leak_html = DIGEST_LEAK.format(
+            title = _escaped(payload["leak_title"]),
+            detail = _escaped(payload["leak_detail"]),
+            example = example_html)
+
+        leak_text = (f"\n{payload['leak_title']}\n"
+                     f"   {payload['leak_detail']}{example_text}\n")
+
+    return _send(
+        DIGEST_SUBJECT,
+        DIGEST_TEXT.format(name = user.username, link = link, unsubscribe = unsubscribe,
+                           leak_text = leak_text, **_plain(payload)),
+        _html(DIGEST_HEADING,
+              DIGEST_BODY.format(name = _escaped(user.username), leak_html = leak_html,
+                                 **_escaped_payload(payload)),
+              DIGEST_FOOTER.format(unsubscribe = unsubscribe)),
+        user.email)
+
+
+def send_weekly_nudge(user, days, unsubscribe):
+    """One reminder, once per silence."""
+    link = f"{settings.FRONTEND_URL}/mentor"
+
+    return _send(
+        NUDGE_SUBJECT.format(days = days),
+        NUDGE_TEXT.format(name = user.username, days = days, link = link,
+                          unsubscribe = unsubscribe),
+        _html(NUDGE_HEADING.format(days = days),
+              NUDGE_BODY.format(name = _escaped(user.username), days = days),
+              NUDGE_FOOTER.format(unsubscribe = unsubscribe)),
+        user.email)
+
+
+def _plain(payload):
+    """The figures as they are, for the text part."""
+    return {key: payload.get(key, "") for key in ("count_text", "net_pnl", "win_rate")}
+
+
+def _escaped_payload(payload):
+    """**The template escapes its own inputs rather than trusting them.**
+
+    Every figure here was formatted by `analytics/formatting.py` and is safe - but a template
+    that trusts its input is one validator away from being wrong, which is the same reasoning
+    that put `_escaped` on the username.
+    """
+    return {key: _escaped(payload.get(key, "")) for key in ("count_text", "net_pnl", "win_rate")}

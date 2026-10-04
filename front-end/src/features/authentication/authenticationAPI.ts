@@ -2,7 +2,7 @@ import axios from "axios";
 import {
   accountURL, authenticationURL, changePasswordURL, endSessionsURL, exportDataURL,
   forgotPasswordURL, googleLoginURL, loginURL, logoutURL,
-  registerURL, resendVerificationURL, resetPasswordURL, verifyEmailURL
+  registerURL, resendVerificationURL, resetPasswordURL, verifyEmailURL, emailPreferencesURL
 } from "../../endpoints/endpoints";
 import {
   accessToken, clearSession, rememberSession, readTokens, writeItem, writeTokens
@@ -228,7 +228,33 @@ const deleteAccount = async (password: string, googleCredential = "") => {
 };
 
 
+// ------------------------- WHAT MAY BE SENT TO HIM -------------------------
+//
+// Two flags and not one: the weekly summary is a service message about his own record and is
+// opt-out, while anything promotional is the other thing under Israeli law and starts off.
+
+const emailPreferences = async () => {
+    const response = await axios.get(emailPreferencesURL, {
+        headers: { 'Authorization': `Bearer ${accessToken()}` }
+    });
+
+    return response.data;
+};
+
+
+const saveEmailPreferences = async (changes: Record<string, boolean>) => {
+    const response = await axios.post(emailPreferencesURL, changes, {
+        headers: { 'Authorization': `Bearer ${accessToken()}` }
+    });
+
+    return response.data;
+};
+
+
+
 const authenticationService = {
+    emailPreferences,
+    saveEmailPreferences,
     register,
     login,
     googleLogin,

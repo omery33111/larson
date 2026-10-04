@@ -15,6 +15,7 @@ from usage import budget
 from trades.models import Trade
 from trades.parsers import SUPPORTED_EXTENSIONS, parse_file
 
+from . import retrieval
 from .context import EFFORT, MAX_TOKENS, MODEL, build_messages, build_system, statistics_document
 from .models import ASSISTANT, DEFAULT_TITLE, USER, Conversation, Message
 from .serializers import ConversationSerializer, MessageSerializer, StarredMessageSerializer
@@ -250,6 +251,15 @@ def stream(request, conversation_id):
 
     system = build_system(request.user)
     messages = build_messages(row)
+
+    # **A question about a specific trade gets that trade, not an average.**
+    #
+    # Only when the question looks specific, which most are not - a general one pays neither
+    # the mapping call nor the second of silence before the first token, and that silence is
+    # the thing the whole product feels like. See `retrieval.py` for why the model returns
+    # parameters and never a query.
+    retrieval.attach(messages, retrieval.block_for(request.user, text,
+                                                   billed_to = request.user))
 
     return _sse(_answer(row, question, system, messages))
 

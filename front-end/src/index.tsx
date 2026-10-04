@@ -10,6 +10,7 @@ import { registerAuthInterceptor } from './app/interceptors';
 import { muiTheme } from './app/muiTheme';
 import AccountPage from './features/authentication/AccountPage';
 import ForgotPassword from './features/authentication/ForgotPassword';
+import Unsubscribe from './features/authentication/Unsubscribe';
 import Login from './features/authentication/Login';
 import Register from './features/authentication/Register';
 import ResetPassword from './features/authentication/ResetPassword';
@@ -57,6 +58,12 @@ root.render(
           not written into a referrer header on the way to any third-party asset. */}
       <Route path = "/authentication/verify/:uid/:token" element={<VerifyEmail />} />
       <Route path = "/authentication/forgot" element={<ForgotPassword />} />
+
+      {/* Where the unsubscribe link in the weekly mail lands. **Open, with no session** -
+          a link that asks him to sign in before it will stop emailing him is a link he
+          reports as spam instead, and the complaint lands on the domain that carries the
+          verification mail. */}
+      <Route path = "/email/unsubscribe/:token" element={<Unsubscribe />} />
       <Route path = "/authentication/reset/:uid/:token" element={<ResetPassword />} />
 
       <Route path = "/account" element={<AccountPage />} />

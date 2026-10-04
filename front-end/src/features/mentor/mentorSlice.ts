@@ -29,6 +29,11 @@ const initialState: MentorState =
     isLoading: false,
 
     message: "",
+
+    rules: [],
+    ruleKinds: [],
+    isRulesOpen: false,
+    isRulesLoading: false,
 };
 
 
@@ -133,6 +138,57 @@ export const stopMentor = () => {
 
 
 
+// ------------------------- THE RULES HE SETS FOR HIMSELF -------------------------
+//
+// **What separates a mentor from an auditor.** The debrief has always derived rules from the
+// record - the losing buckets, each with the evidence behind it - and that finds what is
+// broken. What it could not do was hold him to something **he decided**, because nothing
+// stored that he had decided it.
+
+export const getRulesAsync = createAsyncThunk("mentor/getRules", async (_, thunkAPI) => {
+    try {
+        return await mentorService.getRules();
+    } catch (error: any) {
+        if (error.response?.status === 401) {
+            thunkAPI.dispatch(sessionExpired());
+            return thunkAPI.rejectWithValue("");
+        }
+        return thunkAPI.rejectWithValue(error.response?.data?.error || "לא הצלחנו לטעון את הכללים.");
+    }
+});
+
+
+export const saveRuleAsync = createAsyncThunk(
+    "mentor/saveRule",
+    async (payload: { kind: string; number: number | null; setups: string }, thunkAPI) => {
+        try {
+            return await mentorService.saveRule(payload.kind, payload.number, payload.setups);
+        } catch (error: any) {
+            if (error.response?.status === 401) {
+                thunkAPI.dispatch(sessionExpired());
+                return thunkAPI.rejectWithValue("");
+            }
+            return thunkAPI.rejectWithValue(error.response?.data?.error || "לא הצלחנו לשמור את הכלל.");
+        }
+    });
+
+
+export const deleteRuleAsync = createAsyncThunk(
+    "mentor/deleteRule",
+    async (kind: string, thunkAPI) => {
+        try {
+            return await mentorService.deleteRule(kind);
+        } catch (error: any) {
+            if (error.response?.status === 401) {
+                thunkAPI.dispatch(sessionExpired());
+                return thunkAPI.rejectWithValue("");
+            }
+            return thunkAPI.rejectWithValue(error.response?.data?.error || "לא הצלחנו למחוק את הכלל.");
+        }
+    });
+
+
+
 export const mentorSlice = createSlice({
     name: "mentor",
     initialState,
@@ -140,6 +196,18 @@ export const mentorSlice = createSlice({
         resetMentorMessage: (state) =>
         {
             state.message = ""
+        },
+
+        // The panel opens on a dispatch and renders itself from the store, with no props and
+        // no useState in the parent - the same pattern every other modal in this project uses.
+        openRules: (state) =>
+        {
+            state.isRulesOpen = true
+        },
+
+        closeRules: (state) =>
+        {
+            state.isRulesOpen = false
         },
 
         setMentorDraft: (state, action) =>
@@ -275,6 +343,45 @@ export const mentorSlice = createSlice({
         })
 
 
+        .addCase(getRulesAsync.pending, (state) =>
+        {
+            state.isRulesLoading = true;
+        })
+        .addCase(getRulesAsync.fulfilled, (state, action) =>
+        {
+            state.isRulesLoading = false;
+            state.rules = action.payload.rules;
+            state.ruleKinds = action.payload.kinds;
+        })
+        .addCase(getRulesAsync.rejected, (state, action) =>
+        {
+            state.isRulesLoading = false;
+            state.message = action.payload as string;
+        })
+
+        .addCase(saveRuleAsync.fulfilled, (state, action) =>
+        {
+            // Replaced rather than appended: the database holds one rule per kind, and a
+            // second copy on screen would be a ceiling the checker never sees.
+            state.rules = [
+                ...state.rules.filter((rule) => rule.kind !== action.payload.kind),
+                action.payload,
+            ];
+        })
+        .addCase(saveRuleAsync.rejected, (state, action) =>
+        {
+            state.message = action.payload as string;
+        })
+
+        .addCase(deleteRuleAsync.fulfilled, (state, action) =>
+        {
+            state.rules = state.rules.filter((rule) => rule.kind !== action.payload);
+        })
+        .addCase(deleteRuleAsync.rejected, (state, action) =>
+        {
+            state.message = action.payload as string;
+        })
+
         .addCase(dismissPendingAsync.fulfilled, (state) =>
         {
             state.pendingFile = null
@@ -310,6 +417,11 @@ function settle(state: MentorState) {
 }
 
 
+export const selectRules = (state: RootState) => state.mentor.rules;
+export const selectRuleKinds = (state: RootState) => state.mentor.ruleKinds;
+export const selectIsRulesOpen = (state: RootState) => state.mentor.isRulesOpen;
+export const selectIsRulesLoading = (state: RootState) => state.mentor.isRulesLoading;
+
 export const selectMentorMessages = (state: RootState) => state.mentor.messages;
 export const selectResumeState = (state: RootState) => state.mentor.resume;
 export const selectMentorStreamingText = (state: RootState) => state.mentor.streamingText;
@@ -325,7 +437,7 @@ export const selectMentorMessage = (state: RootState) => state.mentor.message;
 export const {
     resetMentorMessage, setMentorDraft, setMentorDragging,
     expectIngestion,
-    debriefOpened, debriefDelta,
+    debriefOpened, debriefDelta, openRules, closeRules,
 } = mentorSlice.actions;
 
 export default mentorSlice.reducer;

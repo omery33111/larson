@@ -1,0 +1,123 @@
+from analytics.formatting import minutes, money, ratio, trades as trade_count
+from analytics.statistics import _split_tags, clean_label
+
+from .models import TraderRule
+
+
+
+# ------------------------- DECLARED RULES, AS THE CHECKER SEES THEM ------------------------- #
+#
+# **A declared rule is translated into exactly the shape an inferred one has**, so it flows
+# through `check_plan` unchanged: same keys, same judging loop, same named offender.
+#
+# The one key that is added is `declared`, and it carries the whole difference in tone.
+# Breaking a rule the record argues for is news - he may not have known. **Breaking one he
+# wrote down himself is not news, it is the conversation**, and the mentor has to be able to
+# tell the two apart without being told which is which.
+#
+# `why` is written here rather than at the point of judging because an inferred rule answers
+# "says who" with a number out of the history, and a declared one answers it with **"you
+# did"** - which is the stronger answer of the two and should read that way.
+
+
+def declared_rules(user, currency = "USD"):
+    """Every active commitment, in the checker's shape. Empty when he has set none."""
+    rows = TraderRule.objects.filter(user = user, is_active = True)
+
+    return [translated for translated in (_translate(row, currency) for row in rows) if translated]
+
+
+def _translate(row, currency):
+    kind = row.kind
+    number = row.number
+
+    # A rule without its threshold cannot be judged, and a half-saved row must not become a
+    # rule that silently never fires.
+    if kind != TraderRule.ONLY_SETUPS and number is None:
+        return None
+
+    mine = "כלל שקבעת לעצמך"
+
+    if kind == TraderRule.NO_BEFORE:
+        return _rule(kind, f"לא להיכנס לפני {int(number):02d}:00", mine, number)
+
+    if kind == TraderRule.NO_AFTER:
+        return _rule(kind, f"לא להיכנס אחרי {int(number):02d}:00", mine, number)
+
+    if kind == TraderRule.MIN_HOLD:
+        return _rule(kind, f"לא להחזיק פחות מ-{minutes(number)}", mine, number)
+
+    if kind == TraderRule.MAX_SIZE:
+        return _rule(kind, f"לא לעלות מעל {ratio(number)} חוזים", mine, number)
+
+    if kind == TraderRule.NO_REVENGE_WITHIN:
+        return _rule(kind, f"לא להיכנס תוך {minutes(number)} מסגירת הפסד", mine, number)
+
+    if kind == TraderRule.MAX_TRADES_PER_DAY:
+        return _rule(kind, f"לא יותר מ-{trade_count(int(number))} ביום", mine, number)
+
+    if kind == TraderRule.MAX_DAILY_LOSS:
+        return _rule(kind, f"לא לעבור הפסד יומי של {money(abs(number), currency)}",
+                     mine, abs(number))
+
+    if kind == TraderRule.ONLY_SETUPS:
+        allowed = _split_tags(row.setups)
+        if not allowed:
+            return None
+        return _rule(kind, f"לסחור רק בסטאפים: {', '.join(allowed)}", mine, allowed)
+
+    return None
+
+
+def _rule(kind, text, why, value):
+    return {
+        # Namespaced so a declared rule can never collide with an inferred one of the same
+        # family - both can be live at once, and they say different things.
+        "key": f"declared:{kind}",
+        "rule": text,
+        "why": why,
+        # Declared rules sort above inferred ones by construction: what he committed to is
+        # the first thing a debrief should answer, before anything his history merely implies.
+        "weight": float("inf"),
+        "kind": kind,
+        "value": value,
+        "declared": True,
+    }
+
+
+
+# ------------- THE TWO THAT ARE ABOUT A DAY AND NOT A TRADE:
+#
+# A trade cannot answer "did you take more than four today" on its own, so these are judged
+# over the day's rows instead of inside the per-trade loop. **They are also the two rules a
+# trader most often means by "I have rules"** - a trade cap and a daily stop - which is why
+# they are here rather than left out for being awkward to fit.
+DAY_KINDS = {TraderRule.MAX_TRADES_PER_DAY, TraderRule.MAX_DAILY_LOSS}
+
+
+def day_verdict(rule, day_rows):
+    """Whether one day broke one day-level rule, and which trade crossed the line."""
+    rows = sorted(day_rows, key = lambda t: t.executed_at)
+
+    if rule["kind"] == TraderRule.MAX_TRADES_PER_DAY:
+        limit = int(rule["value"])
+        if len(rows) <= limit:
+            return False, None
+        # The one that crossed it, not the worst one: this rule is about the count, and the
+        # trade worth naming is the one that should not have been taken.
+        return True, rows[limit]
+
+    if rule["kind"] == TraderRule.MAX_DAILY_LOSS:
+        limit = abs(rule["value"])
+        running = 0.0
+        for trade in rows:
+            if trade.pnl is None:
+                continue
+            running += trade.pnl
+            if running <= -limit:
+                return True, trade
+        return False, None
+
+    return None, None
+
+# ------------------------- END ------------------------- #

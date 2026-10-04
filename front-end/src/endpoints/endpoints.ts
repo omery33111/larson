@@ -111,3 +111,20 @@ export const mentorURL = `${myServer}/mentor/`;
 export const mentorStreamURL = `${myServer}/mentor/stream/`;
 
 export const mentorPendingURL = `${myServer}/mentor/pending/`;
+
+
+// ------------------------- MENTOR RULES ENDPOINTS:
+export const mentorRulesURL = `${myServer}/mentor/rules/`;
+
+export const saveMentorRuleURL = `${myServer}/mentor/rules/save/`;
+
+export const deleteMentorRuleURL = (kind: string) => `${myServer}/mentor/rules/${kind}/`;
+
+
+
+// ------------------------- EMAIL ENDPOINTS:
+export const emailPreferencesURL = `${myServer}/authentication/email/preferences/`;
+
+// Reached from a link in the mail, where there is no session - so it takes a token and not
+// an Authorization header.
+export const unsubscribeURL = `${myServer}/authentication/email/unsubscribe/`;

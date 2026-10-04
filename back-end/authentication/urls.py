@@ -23,4 +23,9 @@ urlpatterns = [
 
     path('export/', views.export_data),
     path('account/', views.delete_account),
+
+    # ------------- EMAIL:
+    path('email/preferences/', views.email_preferences),
+    # Open on purpose - reached from a link in the mail, where there is no session.
+    path('email/unsubscribe/', views.unsubscribe),
 ]

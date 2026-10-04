@@ -15,6 +15,7 @@ from trades.models import Trade
 
 from mentor.context import PERSONA as MENTOR_PERSONA, mentor_system
 
+from . import retrieval
 from .context import IRON, PERSONA, build_messages, build_system, statistics_document
 from .models import ASSISTANT, DEFAULT_TITLE, USER, Conversation, Message
 
@@ -119,6 +120,196 @@ def fake_client(chunks, stop_reason = "end_turn", captured = None, usage = None)
             self.messages = Messages()
 
     return Client
+
+
+
+def fake_mapper(answer, stop_reason = "end_turn", captured = None):
+    """Stands in for the retrieval mapping call, which uses `create` rather than `stream`."""
+    class Message:
+        stop_reason = None
+        usage = None
+        content = None
+
+    class Messages:
+        def create(self, **kwargs):
+            if captured is not None:
+                captured.update(kwargs)
+            message = Message()
+            message.stop_reason = stop_reason
+            message.usage = FakeUsage(input_tokens = 300, output_tokens = 40)
+            message.content = [type("Block", (), {"type": "text", "text": answer})()]
+            return message
+
+    class Client:
+        def __init__(self, *args, **kwargs):
+            self.messages = Messages()
+
+    return Client
+
+
+
+# ------------------------- RETRIEVAL ------------------------- #
+#
+# **The feature that lets Larson answer "what happened on the 18th" is also the only place in
+# the product where a model's output influences a database query**, so the three invariants
+# that make it safe are asserted here rather than argued in a comment.
+#
+# Each was watched to fail before it was kept. A test on an invariant nobody has seen break is
+# a test nobody knows is checking anything - the same lesson the isolation tests were written
+# under, and the reason the docstrings below say what was broken to prove it.
+
+class RetrievalTests(APITestCase):
+
+    def setUp(self):
+        self.mine = User.objects.create_user(username = "omer", password = "pass12345")
+        self.other = User.objects.create_user(username = "someone", password = "pass12345")
+
+        make_trades(self.mine)
+
+        # Another trader, inside the same date range, so a missing user filter is caught by
+        # overlap rather than by luck.
+        for i in range(8):
+            Trade.objects.create(
+                user = self.other,
+                executed_at = BASE + timedelta(days = i),
+                opened_at = BASE + timedelta(days = i) - timedelta(minutes = 5),
+                symbol = "ZZSECRET", instrument = "ZZSECRET", account_id = "OTHERACCOUNT",
+                source_timezone = "Asia/Jerusalem", direction = "long", quantity = 1,
+                pnl = -999999.0, outcome = "loss", currency = "USD",
+                notes = "OTHERNOTE", dedup_hash = f"zz-{i}")
+
+    # ------------- INVARIANT 1: whose rows
+    def test_the_model_cannot_name_a_user(self):
+        """
+        **There is no value the model can emit that changes whose rows are read.**
+
+        The schema has no key for a user, an id or an account, and anything outside it is
+        dropped rather than carried - so a mapping answer that tries is left holding nothing.
+        Watched to fail by taking the `user` filter out of `_fetch`: the other trader's rows
+        appeared on the next run.
+        """
+        hostile = json.dumps({
+            "user": self.other.id, "user_id": self.other.id, "owner": "someone",
+            "account_id": "OTHERACCOUNT", "symbol": "ZZSECRET",
+        })
+
+        intent = retrieval._validate(hostile, retrieval._own_instruments(self.mine))
+
+        self.assertEqual(intent, {})
+
+    def test_another_traders_rows_are_unreachable_through_the_route(self):
+        """Even with an intent asking for exactly the other trader's dates."""
+        intent = {"from": BASE.date(), "to": (BASE + timedelta(days = 40)).date(),
+                  "order": "worst", "limit": 15}
+
+        rows = retrieval._fetch(self.mine, intent)
+
+        self.assertTrue(rows)
+        for row in rows:
+            self.assertEqual(row.user_id, self.mine.id)
+            self.assertNotEqual(row.symbol, "ZZSECRET")
+
+    # ------------- INVARIANT 2: which fields
+    def test_an_invented_field_never_reaches_the_query(self):
+        """A field we do not have, an outcome outside the enum, a symbol he never traded."""
+        hostile = json.dumps({
+            "notes__icontains": "secret", "outcome": "everything",
+            "order": "DROP TABLE", "symbol": "ZZSECRET", "limit": 10 ** 9,
+        })
+
+        intent = retrieval._validate(hostile, retrieval._own_instruments(self.mine))
+
+        self.assertNotIn("notes__icontains", intent)
+        self.assertNotIn("outcome", intent)
+        self.assertNotIn("order", intent)
+        self.assertNotIn("symbol", intent)
+        # The one key that survived is the one the schema has - clamped, not as sent.
+        self.assertEqual(intent["limit"], retrieval.MAX_ROWS)
+
+    def test_the_symbol_offered_is_only_what_he_has_traded(self):
+        symbols = retrieval._own_instruments(self.mine)
+
+        self.assertIn("MNQU6", symbols)
+        self.assertNotIn("ZZSECRET", symbols)
+
+    # ------------- INVARIANT 3: which columns
+    def test_a_column_nobody_chose_to_show_stays_out_of_the_prompt(self):
+        """
+        **A sensitive column added to `Trade` later must not start flowing into a prompt
+        because it exists.** `screenshot_url` is stored and rendered nowhere, which makes it
+        the honest canary: it is on the row and must not be in the block.
+        """
+        Trade.objects.filter(user = self.mine).update(
+            screenshot_url = "https://example.invalid/CANARY")
+
+        rows = retrieval._fetch(self.mine, {"limit": 5})
+        block = retrieval._render(rows, {"limit": 5})
+
+        self.assertNotIn("CANARY", block)
+        self.assertNotIn("screenshot", block.lower())
+
+    # ------------- THE GATE IN FRONT OF THE CALL
+    def test_a_general_question_costs_no_model_call(self):
+        """The common question must pay neither the call nor the pause before the first token."""
+        self.assertFalse(retrieval.looks_specific("מה הדליפה שהכי עולה לי כסף"))
+        self.assertFalse(retrieval.looks_specific("איך אני נראה בסך הכל"))
+
+        self.assertTrue(retrieval.looks_specific("תראה לי את העסקה של 18/8"))
+        self.assertTrue(retrieval.looks_specific("מה קרה באוגוסט"))
+        self.assertTrue(retrieval.looks_specific("איזו עסקה הייתה הגרועה שלי"))
+
+    def test_nothing_found_is_said_rather_than_averaged_over(self):
+        """An empty result is an answer; answering from the aggregates instead is the failure."""
+        empty = retrieval._nothing_found({"from": BASE.date(), "to": BASE.date()})
+
+        self.assertIn("לא מצא", empty)
+        self.assertIn("אל תענה מהממוצעים", empty)
+
+    # ------------- WHERE THE ROWS GO
+    def test_the_rows_go_in_the_message_and_never_in_the_system_block(self):
+        """
+        **Anything per-question above the cache marker turns every read into a write**, with
+        nothing raising to say so. The block belongs to the trader's turn, which is new
+        content either way.
+        """
+        rows = retrieval._fetch(self.mine, {"limit": 3})
+        block = retrieval._render(rows, {"limit": 3})
+
+        messages = [{"role": "user", "content": [{"type": "text", "text": "מה קרה ב-18/8"}]}]
+        retrieval.attach(messages, block)
+
+        self.assertIn("עסקאות ספציפיות", messages[-1]["content"][-1]["text"])
+
+        system = "".join(part["text"] for part in build_system(self.mine))
+        self.assertNotIn("עסקאות ספציפיות", system)
+
+    def test_an_assistant_turn_is_never_appended_to(self):
+        """The block is the trader's context for his own question, not a note on the answer."""
+        messages = [{"role": "assistant", "content": [{"type": "text", "text": "שלום"}]}]
+        retrieval.attach(messages, "BLOCK")
+
+        self.assertNotIn("BLOCK", messages[-1]["content"][-1]["text"])
+
+    # ------------- AND THE CALL ITSELF IS ON THE METER
+    def test_the_mapping_call_is_billed(self):
+        """Every call to the model is on the ledger, including the cheap one."""
+        from usage.models import TokenSpend
+
+        with self.settings(ANTHROPIC_API_KEY = "test-key"):
+            with patch("anthropic.Anthropic", fake_mapper('{"order": "worst", "limit": 3}')):
+                intent = retrieval._extract("תראה לי את הגרועות", ["MNQU6"],
+                                            billed_to = self.mine)
+
+        self.assertEqual(intent, {"order": "worst", "limit": 3})
+        self.assertTrue(TokenSpend.objects.filter(user = self.mine, kind = "retrieval").exists())
+
+    def test_a_refusal_or_a_failure_is_the_same_as_a_general_question(self):
+        with self.settings(ANTHROPIC_API_KEY = "test-key"):
+            with patch("anthropic.Anthropic", fake_mapper("{}", stop_reason = "refusal")):
+                self.assertEqual(retrieval._extract("x", ["MNQU6"], None), {})
+
+            with patch("anthropic.Anthropic", fake_mapper("not json at all")):
+                self.assertEqual(retrieval._extract("x", ["MNQU6"], None), {})
 
 
 

@@ -15,8 +15,12 @@ from analytics.models import TraderProfile
 from chat.models import Conversation, Message
 from trades.models import Trade, TradeFile
 
+from django.utils import timezone
+
+from . import digest
+from . import mail as larson_mail
 from .google import GoogleError
-from .models import TERMS_VERSION, GoogleIdentity, TermsAcceptance
+from .models import TERMS_VERSION, EmailPreference, GoogleIdentity, TermsAcceptance
 
 
 PASSWORD = "Kestrel-Vault-72"
@@ -1244,6 +1248,9 @@ class PublicEndpointTests(SignUpBase):
             ("/authentication/password/forgot/", {"email": "nobody@larson.com"}),
             ("/authentication/password/reset/", {"uid": "x", "token": "y", "password": "x"}),
             ("/authentication/login/google/", {"credential": ""}),
+            # Unsubscribing cannot require a session: a link that asks somebody to sign in
+            # before it will stop emailing him is a link he reports as spam instead.
+            ("/authentication/email/unsubscribe/", {"token": "not-a-real-token"}),
         ):
             response = self.client.post(path, body)
 
@@ -1262,8 +1269,211 @@ class PublicEndpointTests(SignUpBase):
             ("get", "/chat/conversations/"),
             ("get", "/mentor/"),
             ("get", "/usage/"),
+            ("get", "/authentication/email/preferences/"),
+            ("get", "/mentor/rules/"),
         ):
             response = getattr(self.client, method)(path)
 
             self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED,
                              f"{path} answered without a token")
+
+
+# ------------------------- THE WEEKLY SUMMARY ------------------------- #
+#
+# **What is tested here is mostly the decision not to send.**
+#
+# A weekly mail that goes out whether or not there is anything in it is a nudge, and a nudge
+# earns a spam complaint - which lands on the sending domain, **the same domain that carries
+# the verification and the password reset.** So the rule the product promised is asserted
+# rather than trusted: a summary only when something arrived, silence on a quiet week, and
+# **one** reminder after a real gap rather than one a week.
+
+class WeeklyDigestTests(APITestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_user(username = "omer", password = "Trader!9quiet",
+                                             email = "omer@larson.co.il")
+        self.now = timezone.now()
+
+    def add_trades(self, count = 8, created_days_ago = 1):
+        rows = []
+        for i in range(count):
+            rows.append(Trade.objects.create(
+                user = self.user,
+                executed_at = self.now - timedelta(days = created_days_ago, hours = i),
+                opened_at = self.now - timedelta(days = created_days_ago, hours = i, minutes = 9),
+                symbol = "MNQU6", instrument = "NQ", source_timezone = "Asia/Jerusalem",
+                direction = "long", quantity = 1,
+                pnl = -180.0 if i % 3 == 0 else 140.0,
+                outcome = "loss" if i % 3 == 0 else "win", currency = "USD",
+                duration_seconds = 60 if i % 3 == 0 else 600,
+                dedup_hash = f"d-{i}-{created_days_ago}"))
+
+        # `created_at` is auto_now_add, so a row that is meant to look old has to be pushed
+        # back explicitly - the digest keys off when it entered the resume, not when it traded.
+        stamp = self.now - timedelta(days = created_days_ago)
+        Trade.objects.filter(pk__in = [r.pk for r in rows]).update(created_at = stamp)
+
+        return rows
+
+    # ------------- WHEN THERE IS SOMETHING TO SAY
+    def test_a_week_with_new_trades_gets_a_summary(self):
+        self.add_trades(created_days_ago = 2)
+
+        kind, payload = digest.decide(self.user, self.now)
+
+        self.assertEqual(kind, "digest")
+        self.assertEqual(payload["trades"], 8)
+        # Every figure carries its unit, like everything else the trader reads.
+        self.assertTrue(payload["net_pnl"].startswith("$") or "$" in payload["net_pnl"])
+        self.assertIn("%", payload["win_rate"])
+
+    def test_the_summary_names_a_trade_rather_than_only_counting_them(self):
+        """**The difference between a report and a mentor, in an email.**"""
+        self.add_trades(created_days_ago = 2)
+
+        _, payload = digest.decide(self.user, self.now)
+
+        if payload.get("leak_title"):
+            self.assertIn("leak_example", payload)
+            self.assertRegex(payload["leak_example"], r"\d{2}/\d{2}")
+
+    # ------------- WHEN THERE IS NOT
+    def test_a_quiet_week_is_silence_and_not_a_reminder(self):
+        """A trader who simply had a quiet week must hear nothing at all."""
+        self.add_trades(created_days_ago = 9)
+
+        kind, payload = digest.decide(self.user, self.now)
+
+        self.assertEqual(kind, "silence")
+        self.assertIn("שבוע שקט", payload["reason"])
+
+    def test_a_real_gap_gets_one_reminder(self):
+        self.add_trades(created_days_ago = 20)
+
+        kind, payload = digest.decide(self.user, self.now)
+
+        self.assertEqual(kind, "nudge")
+        self.assertEqual(payload["days"], 20)
+
+    def test_the_reminder_is_once_per_silence_and_not_once_a_week(self):
+        """
+        **This is the assertion that protects the sending domain.**
+
+        Four weekly "you have not updated" emails is how a sender gets reported, and the
+        report damages deliverability for the verification mail that everybody needs. The
+        stamp is what makes once mean once.
+        """
+        self.add_trades(created_days_ago = 20)
+
+        first, _ = digest.decide(self.user, self.now)
+        self.assertEqual(first, "nudge")
+
+        digest.mark_sent(self.user, "nudge", self.now)
+
+        # A week later, still nothing new.
+        second, payload = digest.decide(self.user, self.now + timedelta(days = 7))
+
+        self.assertEqual(second, "silence")
+        self.assertIn("כבר נשלחה תזכורת", payload["reason"])
+
+    def test_a_new_update_arms_the_reminder_again(self):
+        """Once per silence, not once ever - a new gap is a new thing to mention."""
+        self.add_trades(created_days_ago = 20)
+        digest.mark_sent(self.user, "nudge", self.now)
+
+        # He updates, then goes quiet again for three weeks.
+        later = self.now + timedelta(days = 1)
+        rows = self.add_trades(count = 6, created_days_ago = 0)
+        Trade.objects.filter(pk__in = [r.pk for r in rows]).update(created_at = later)
+
+        kind, payload = digest.decide(self.user, later + timedelta(days = 21))
+
+        self.assertEqual(kind, "nudge")
+
+    def test_an_empty_resume_is_never_emailed(self):
+        kind, payload = digest.decide(self.user, self.now)
+
+        self.assertEqual(kind, "silence")
+        self.assertIn("הרזומה ריקה", payload["reason"])
+
+    def test_two_summaries_in_one_week_do_not_happen(self):
+        self.add_trades(created_days_ago = 2)
+        digest.mark_sent(self.user, "digest", self.now)
+
+        kind, payload = digest.decide(self.user, self.now + timedelta(days = 2))
+
+        self.assertEqual(kind, "silence")
+        self.assertIn("נשלח כבר", payload["reason"])
+
+    # ------------- THE OPT-OUT
+    def test_unsubscribing_stops_it(self):
+        self.add_trades(created_days_ago = 2)
+
+        prefs, _ = EmailPreference.objects.get_or_create(user = self.user)
+        prefs.weekly_digest = False
+        prefs.save()
+
+        kind, _ = digest.decide(self.user, self.now)
+
+        self.assertEqual(kind, "silence")
+
+    def test_the_unsubscribe_link_needs_no_login(self):
+        """A link that asks him to sign in first is a link he reports as spam instead."""
+        token = digest.unsubscribe_token(self.user)
+
+        response = self.client.post("/authentication/email/unsubscribe/", {"token": token})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(EmailPreference.objects.get(user = self.user).weekly_digest)
+
+    def test_a_forged_unsubscribe_link_does_nothing(self):
+        response = self.client.post("/authentication/email/unsubscribe/",
+                                    {"token": "clearly-not-signed"})
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_the_link_can_only_ever_turn_it_off(self):
+        """The worst a replayed link can do is what it did the first time."""
+        token = digest.unsubscribe_token(self.user)
+
+        self.client.post("/authentication/email/unsubscribe/", {"token": token})
+        self.client.post("/authentication/email/unsubscribe/", {"token": token})
+
+        self.assertFalse(EmailPreference.objects.get(user = self.user).weekly_digest)
+
+    def test_promotional_mail_starts_off_and_only_he_turns_it_on(self):
+        """Israeli law treats a service message and an advertisement differently, so we do."""
+        self.client.force_authenticate(user = self.user)
+
+        response = self.client.get("/authentication/email/preferences/")
+
+        self.assertTrue(response.data["weekly_digest"])
+        self.assertFalse(response.data["product_news"])
+
+        self.client.post("/authentication/email/preferences/", {"product_news": True})
+
+        self.assertTrue(EmailPreference.objects.get(user = self.user).product_news)
+
+    # ------------- AND IT ACTUALLY SENDS
+    def test_the_mail_renders_and_carries_the_unsubscribe_link(self):
+        self.add_trades(created_days_ago = 2)
+        _, payload = digest.decide(self.user, self.now)
+
+        sent = larson_mail.send_weekly_digest(self.user, payload,
+                                       "https://larson.co.il/email/unsubscribe/abc")
+
+        self.assertTrue(sent)
+        self.assertEqual(len(mail.outbox), 1)
+
+        message = mail.outbox[0]
+        body = message.body
+        html = message.alternatives[0][0]
+
+        # **Both parts carry it**, because a client that shows only the text part must still
+        # be able to stop the mail.
+        self.assertIn("unsubscribe/abc", body)
+        self.assertIn("unsubscribe/abc", html)
+
+
+

@@ -5,6 +5,7 @@ import { selectIsLogged } from '../authentication/authenticationSlice'
 import AccountSelector from './AccountSelector'
 import AngelDevil from './AngelDevil'
 import Breakdowns from './Breakdowns'
+import Progress from './Progress'
 import HeadlineStats from './HeadlineStats'
 import ScoreHero from './ScoreHero'
 import SecondaryMetrics from './SecondaryMetrics'
@@ -104,6 +105,12 @@ const TraderProfilePage = () => {
       <SecondaryMetrics />
 
       <AngelDevil />
+
+      {/* **Am I getting better** - the one question a mentor exists for, and the one this
+          page could not answer until the periods engine existed. It sits after the two
+          shoulders and before the breakdowns: the shoulders say what is true now, this says
+          which way it is moving, and the breakdowns are the detail underneath both. */}
+      <Progress />
 
       <Breakdowns />
 

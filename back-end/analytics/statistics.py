@@ -278,8 +278,20 @@ def _behavioural_metrics(trades, tz):
     }
 
 
-def _revenge_trading(trades):
-    """A trade opened soon after closing a loser, compared with everything else."""
+# ------------- WHICH TRADES, AS OPPOSED TO HOW MANY:
+#
+# **Each behavioural metric is a comparison between two slices, and the slices are now named
+# functions rather than locals.** The reason is `evidence.py`: a finding that says "revenge
+# trading cost you $1,840 across 12 trades" is now shown with three of those twelve, by name.
+#
+# **If the examples were selected by a second copy of the rule, the two could disagree** -
+# and a mentor whose example contradicts its own number has lost the argument before the
+# trader finishes reading. One definition, both callers, no drift possible. This is the same
+# rule the IRON block is defined once for.
+
+
+def revenge_slices(trades):
+    """(revenge, normal) - a trade opened soon after closing a loser, and everything else."""
     revenge, normal = [], []
 
     for previous, current in zip(trades, trades[1:]):
@@ -291,12 +303,19 @@ def _revenge_trading(trades):
         else:
             normal.append(current)
 
+    return revenge, normal
+
+
+def _revenge_trading(trades):
+    """A trade opened soon after closing a loser, compared with everything else."""
+    revenge, normal = revenge_slices(trades)
+
     return _comparison("עסקאות נקמה", revenge, normal,
                        f"עסקה שנפתחה תוך {REVENGE_WINDOW_MINUTES} דקות מסגירת הפסד")
 
 
-def _after_red_day(trades, tz):
-    """Whether a losing day changes how the next day is traded."""
+def after_red_day_slices(trades, tz):
+    """(after a losing day, after a winning day)."""
     days = defaultdict(list)
     for t in trades:
         days[t.executed_at.astimezone(tz).date()].append(t)
@@ -304,11 +323,18 @@ def _after_red_day(trades, tz):
     ordered = sorted(days.items())
     after_red, after_green = [], []
 
-    for (previous_day, previous_trades), (_, next_trades) in zip(ordered, ordered[1:]):
+    for (_, previous_trades), (_, next_trades) in zip(ordered, ordered[1:]):
         if sum(t.pnl for t in previous_trades) < 0:
             after_red.extend(next_trades)
         else:
             after_green.extend(next_trades)
+
+    return after_red, after_green
+
+
+def _after_red_day(trades, tz):
+    """Whether a losing day changes how the next day is traded."""
+    after_red, after_green = after_red_day_slices(trades, tz)
 
     result = _comparison("מסחר אחרי יום אדום", after_red, after_green,
                          "העסקאות ביום שאחרי יום הפסד, מול יום שאחרי יום רווח")
@@ -320,15 +346,15 @@ def _after_red_day(trades, tz):
     return result
 
 
-def _overtrading(trades, tz):
-    """Compares days with an unusually high trade count against the rest."""
+def busy_day_slices(trades, tz):
+    """(busy-day trades, the rest, threshold, median) - or None when there is nothing."""
     days = defaultdict(list)
     for t in trades:
         days[t.executed_at.astimezone(tz).date()].append(t)
 
     counts = [len(v) for v in days.values()]
     if not counts:
-        return {"available": False}
+        return None
 
     median = stats_lib.median(counts)
     threshold = max(median + 1, 2)
@@ -336,6 +362,17 @@ def _overtrading(trades, tz):
     busy, calm = [], []
     for day_trades in days.values():
         (busy if len(day_trades) > threshold else calm).extend(day_trades)
+
+    return busy, calm, threshold, median
+
+
+def _overtrading(trades, tz):
+    """Compares days with an unusually high trade count against the rest."""
+    slices = busy_day_slices(trades, tz)
+    if not slices:
+        return {"available": False}
+
+    busy, calm, threshold, median = slices
 
     result = _comparison("ימים עמוסים", busy, calm,
                          f"ימים עם יותר מ-{int(threshold)} עסקאות, מול שאר הימים")
@@ -382,17 +419,21 @@ def _mistake_tax(trades):
     return result
 
 
+def rated_slices(rated):
+    """(above the median rating, at or below it, the median)."""
+    median = stats_lib.median([t.rating for t in rated])
+    return ([t for t in rated if t.rating > median],
+            [t for t in rated if t.rating <= median],
+            median)
+
+
 def _self_awareness(trades):
     """Does the trader's own rating actually predict the outcome?"""
     rated = [t for t in trades if t.rating is not None]
     if len(rated) < MIN_TRADES_FOR_BREAKDOWN:
         return {"available": False}
 
-    ratings = [t.rating for t in rated]
-    median = stats_lib.median(ratings)
-
-    high = [t for t in rated if t.rating > median]
-    low = [t for t in rated if t.rating <= median]
+    high, low, median = rated_slices(rated)
 
     if not high or not low:
         return {"available": False}
@@ -412,6 +453,12 @@ def _self_awareness(trades):
     }
 
 
+def biggest_size_slice(trades):
+    """(the largest quantity traded, every trade that carried it)."""
+    biggest = max(t.quantity for t in trades if t.quantity)
+    return biggest, [t for t in trades if t.quantity == biggest]
+
+
 def _size_discipline(trades):
     """How much position size varies - a proxy for whether risk is fixed or emotional."""
     sizes = [t.quantity for t in trades if t.quantity]
@@ -424,8 +471,7 @@ def _size_discipline(trades):
 
     variation = stats_lib.pstdev(sizes) / mean_size
 
-    biggest = max(sizes)
-    biggest_trades = [t for t in trades if t.quantity == biggest]
+    biggest, biggest_trades = biggest_size_slice(trades)
 
     return {
         "available": True,
@@ -536,15 +582,32 @@ def _group_stats(key, group, label = None):
 # so nothing is lost that a re-ingestion could not recover.
 MAX_LABEL_LENGTH = 80
 
+# **A note is the same contract with more room, and the room is the whole difference.**
+#
+# `notes` is the trader's own sentence about a trade - "I was tired, this was revenge after
+# the morning loss" - and it is the single most human field in the file. Cut to 80 characters
+# it stops being a sentence, which is why it needs its own ceiling rather than the label one.
+#
+# What it does **not** get is its own cleaning rule. One line and no runs of whitespace is
+# what stops a cell from forging a heading inside the prompt, and that is as necessary for a
+# paragraph as for a tag - more so, because a note is the field a downloaded journal template
+# would most plausibly hide something in. The ceiling changes; the collapsing does not.
+MAX_NOTE_LENGTH = 300
 
-def clean_label(value):
+
+def clean_label(value, limit = MAX_LABEL_LENGTH):
     """One line, collapsed, and bounded. Returns "" for anything that had no content."""
     text = " ".join(str(value).split())
 
-    if len(text) > MAX_LABEL_LENGTH:
-        text = text[:MAX_LABEL_LENGTH].rstrip() + "…"
+    if len(text) > limit:
+        text = text[:limit].rstrip() + "…"
 
     return text
+
+
+def clean_note(value):
+    """The trader's own sentence, made safe to put in a prompt without being made useless."""
+    return clean_label(value, limit = MAX_NOTE_LENGTH)
 
 
 def _split_tags(value):

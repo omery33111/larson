@@ -1,6 +1,7 @@
 import json
 
 from analytics.insights import build_insights
+from analytics.periods import build_periods
 from analytics.models import TraderProfile
 from analytics.statistics import clean_label, compute_statistics
 from trades.models import Trade
@@ -180,17 +181,26 @@ def _findings_for_prompt(findings):
 
 def statistics_document(trades):
     """The resume as the model sees it: computed here, never by the model."""
-    statistics = compute_statistics(list(trades))
+    # Materialised once and handed to both: the queryset would otherwise be walked twice,
+    # and the second walk is what selects the named examples.
+    rows = list(trades)
+    statistics = compute_statistics(rows)
 
     if not statistics.get("total_trades"):
         return None
 
-    strengths, leaks = build_insights(statistics)
+    strengths, leaks = build_insights(statistics, rows)
 
     return {
         **_significant_only(statistics),
         "מה_עובד": _findings_for_prompt(strengths),
         "מה_דולף": _findings_for_prompt(leaks),
+        # **The axis the document never had.** Everything above is computed over the whole
+        # record at once, which is why "am I getting better?" had no answer in it - an
+        # aggregate over everything cannot say whether it is rising. This block is the same
+        # trades cut into windows and compared.
+        "לאורך_הזמן": build_periods(rows, statistics.get("currency", "USD"),
+                                    statistics.get("timezone", "Asia/Jerusalem")),
     }
 
 

@@ -1,6 +1,7 @@
 from collections import defaultdict
 from zoneinfo import ZoneInfo
 
+from analytics.evidence import describe_trade
 from analytics.statistics import (MIN_TRADES_FOR_BREAKDOWN, REVENGE_WINDOW_MINUTES, clean_label,
                                   _duration_bucket, _is_loss, _split_tags)
 from analytics.formatting import money, percent
@@ -25,6 +26,9 @@ from analytics.formatting import trades as trade_count
 
 # A rule has to rest on something. Below this the "leak" is an anecdote, and telling a trader
 # to stop doing something on the strength of four trades is how a mentor loses credibility.
+from .rules import DAY_KINDS, day_verdict
+
+
 MIN_TRADES_FOR_RULE = MIN_TRADES_FOR_BREAKDOWN
 
 # And it has to have cost real money, not a rounding error.
@@ -190,44 +194,67 @@ def _breaks(rule, trade, tz, previous):
     if kind == "size":
         return None if not trade.quantity else trade.quantity > rule["value"]
 
+    # ------------- AND THE KINDS A TRADER DECLARES FOR HIMSELF:
+    #
+    # **These judge the entry and not the exit, which is the opposite of the inferred hour
+    # rule above - deliberately.** `by_hour` buckets a trade by when it closed, because that
+    # is where its result lands. But a trader who says "I do not enter before ten" is talking
+    # about the moment he clicked, and judging him on the close would mark a 09:50 entry that
+    # ran until 10:30 as obedient.
+    if kind in ("no_before", "no_after"):
+        entry = (trade.opened_at or trade.executed_at).astimezone(tz)
+        edge = entry.replace(hour = int(rule["value"]), minute = 0, second = 0, microsecond = 0)
+
+        return entry < edge if kind == "no_before" else entry > edge
+
+    if kind == "min_hold":
+        if trade.duration_seconds is None:
+            return None
+        return trade.duration_seconds < rule["value"] * 60
+
+    if kind == "max_size":
+        return None if not trade.quantity else trade.quantity > rule["value"]
+
+    if kind == "no_revenge_within":
+        if previous is None:
+            return None
+
+        opened = trade.opened_at or trade.executed_at
+        gap = (opened - previous.executed_at).total_seconds() / 60
+
+        return _is_loss(previous) and 0 <= gap <= rule["value"]
+
+    if kind == "only_setups":
+        tags = _split_tags(trade.setups)
+        # No tag means the trade cannot answer this rule, and silence is the honest verdict -
+        # "you kept it" on a rule that was never tested is a compliment nobody earned.
+        return None if not tags else not any(tag in rule["value"] for tag in tags)
+
     return None
 
 
-def _describe(trade, tz, currency):
-    """One offending trade, named the way a trader would recognise it."""
-    when = trade.executed_at.astimezone(tz)
-
-    # The ticker comes out of the file too, and this sentence is quoted to the model.
-    line = f"{when:%d/%m} {when:%H:%M} · {clean_label(trade.symbol)}"
-
-    if trade.duration_seconds is not None:
-        line += (f" · {int(trade.duration_seconds)} שניות"
-                 if trade.duration_seconds < 120
-                 else f" · {round(trade.duration_seconds / 60)} דקות")
-
-    if trade.pnl is not None:
-        line += f" · {money(trade.pnl, currency)}"
-
-    return line
-
-
 def check_plan(baseline_statistics, baseline, recent, currency = "USD",
-               timezone_name = "Asia/Jerusalem"):
+               timezone_name = "Asia/Jerusalem", declared = ()):
     """
-    Did the new trades obey the rules the resume already argues for?
+    Did the new trades obey the rules - the ones the resume argues for, and the ones he set?
 
     Works at any size, and that is the whole point: a trader who closed his session on one
     trade still gets told whether that trade was the thing he keeps being told to stop doing.
+
+    `declared` arrives already in this shape from `rules.py`, carrying `declared: True`.
+    **They are judged by the same loop and reported in the same lists**, because the trade
+    that broke one is named the same way either way - what changes is only that the answer to
+    "says who" is him.
     """
-    rules = build_rules(baseline_statistics, currency)
+    rules = list(declared) + build_rules(baseline_statistics, currency)
 
     if not recent:
         return {"available": False, "reason": "אין עסקאות חדשות לבדוק."}
 
     if not rules:
         return {"available": False,
-                "reason": "אין ברזומה דפוס מפסיד מובהק שאפשר לבדוק מולו — "
-                          "אין כרגע כלל שהוא מפר או עומד בו."}
+                "reason": "אין ברזומה דפוס מפסיד מובהק שאפשר לבדוק מולו, ולא קבעת כללים "
+                          "לעצמך — אין כרגע כלל שהוא מפר או עומד בו."}
 
     try:
         tz = ZoneInfo(timezone_name)
@@ -243,8 +270,44 @@ def check_plan(baseline_statistics, baseline, recent, currency = "USD",
 
     kept, broken = [], []
 
+    # Grouped once, for the rules that are about a day rather than a trade.
+    by_day = defaultdict(list)
+    for trade in recent:
+        by_day[trade.executed_at.astimezone(tz).date()].append(trade)
+
     for rule in rules:
         offenders, judged = [], 0
+
+        # ------------- A DAY CANNOT BE JUDGED ONE TRADE AT A TIME:
+        #
+        # "No more than four trades a day" and "stop at a $500 loss" are answered by the
+        # day's rows together, and no single trade in that day can answer either. They get
+        # their own pass, and the trade named is **the one that crossed the line** rather
+        # than the worst one - because that is the trade that should not have been taken.
+        if rule["kind"] in DAY_KINDS:
+            for day, day_rows in sorted(by_day.items()):
+                broke, offender = day_verdict(rule, day_rows)
+
+                if broke is None:
+                    continue
+
+                judged += 1
+                if broke and offender is not None:
+                    offenders.append(offender)
+
+            entry = {"rule": rule["rule"], "why": rule["why"], "checked": judged}
+            if rule.get("declared"):
+                entry["declared"] = True
+
+            if judged:
+                if offenders:
+                    entry["broke"] = len(offenders)
+                    entry["examples"] = [describe_trade(t, tz, currency) for t in offenders[:3]]
+                    broken.append(entry)
+                else:
+                    kept.append(entry)
+
+            continue
 
         for trade in sorted(recent, key = lambda t: t.executed_at):
             verdict = _breaks(rule, trade, tz, before.get(id(trade)))
@@ -268,9 +331,13 @@ def check_plan(baseline_statistics, baseline, recent, currency = "USD",
             "checked": judged,
         }
 
+        # The mentor has to be able to tell a commitment from an inference without being told.
+        if rule.get("declared"):
+            entry["declared"] = True
+
         if offenders:
             entry["broke"] = len(offenders)
-            entry["examples"] = [_describe(t, tz, currency) for t in offenders[:3]]
+            entry["examples"] = [describe_trade(t, tz, currency) for t in offenders[:3]]
             broken.append(entry)
         else:
             kept.append(entry)

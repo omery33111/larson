@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { FiPaperclip, FiSend, FiSquare, FiUploadCloud, FiX } from 'react-icons/fi'
+import { FiPaperclip, FiSend, FiSquare, FiTarget, FiUploadCloud, FiX } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import { useAppDispatch, useAppSelector } from '../../app/hooks'
@@ -9,17 +9,18 @@ import { clearJumpTarget, selectJumpTargetId } from '../chat/chatSlice'
 import { useTypewriter } from '../chat/useTypewriter'
 import LarsonMark from '../larson/LarsonMark'
 import LarsonPresence, { presenceState } from '../larson/LarsonPresence'
+import RulesPanel from './RulesPanel'
 import UsageNotice from '../usage/UsageNotice'
 import { getUsageAsync } from '../usage/usageSlice'
 import {
   resetIngestion, selectIsUploading, selectResumeVersion, uploadTradesAsync
 } from '../trades/tradesSlice'
 import {
-  dismissPendingAsync, expectIngestion, getMentorAsync, resetMentorMessage, selectPendingFile,
+  dismissPendingAsync, expectIngestion, getMentorAsync, getRulesAsync, resetMentorMessage, selectPendingFile,
   selectMentorDraft, selectMentorIsDragging, selectMentorIsLoading, selectMentorIsStreaming,
   selectMentorIsWaiting, selectMentorMessage, selectMentorMessages, selectMentorStreamingText,
-  selectResumeState, selectStreamingVerdict, sendToMentorAsync, setMentorDragging,
-  setMentorDraft, stopMentor
+  selectResumeState, selectRules, selectStreamingVerdict, sendToMentorAsync,
+  setMentorDragging, setMentorDraft, stopMentor, openRules
 } from './mentorSlice'
 
 // The conversation surface itself - the shell, the aura, the thread, the bubbles - is defined
@@ -44,6 +45,7 @@ const MentorPage = () => {
   const isLogged = useAppSelector(selectIsLogged);
   const messages = useAppSelector(selectMentorMessages);
   const resume = useAppSelector(selectResumeState);
+  const rules = useAppSelector(selectRules);
   const streamingText = useAppSelector(selectMentorStreamingText);
   const isStreaming = useAppSelector(selectMentorIsStreaming);
   const isWaiting = useAppSelector(selectMentorIsWaiting);
@@ -76,6 +78,11 @@ const MentorPage = () => {
       return;
     }
     dispatch(getMentorAsync());
+
+    // **With the page and not on first open**, because the count on the button is the thing
+    // that tells him rules exist at all - loading them lazily would show a bare button to a
+    // trader who has seven commitments.
+    dispatch(getRulesAsync());
 
     // Read once, here. After this the fresh figure rides the last event of every answer.
     dispatch(getUsageAsync());
@@ -206,6 +213,17 @@ const MentorPage = () => {
               ) : (
                 <span className="mentor-resume">עדיין לא ראה אף עסקה שלך</span>
               )}
+
+              {/* **The rules he set for himself**, reachable from the screen that checks
+                  them rather than from an account menu. A commitment belongs beside the
+                  debrief that judges it - putting it in settings would make it a preference. */}
+              <button type="button" className="mentor-rules-open"
+                      onClick={() => dispatch(openRules())}>
+                <FiTarget aria-hidden="true" />
+                הכללים שלי
+                {rules.length > 0 &&
+                  <span className="mentor-rules-open-count">{rules.length}</span>}
+              </button>
             </div>
 
             {/* This is the screen the presence was built for. The verdict is the whole point
@@ -394,6 +412,10 @@ const MentorPage = () => {
         </div>
 
       </div>
+
+      {/* Mounted once, driven entirely from the store, no props. Two instances of a modal on
+          one page is two stacked overlays - the lesson the ingestion gate already taught. */}
+      <RulesPanel />
 
     </div>
   )

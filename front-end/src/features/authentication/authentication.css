@@ -306,6 +306,71 @@
 }
 
 
+/* ------------------------- EMAIL PREFERENCES ------------------------- */
+
+.account-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  /* A 44px target, because a checkbox a thumb cannot hit is a setting nobody changes. */
+  min-height: 44px;
+  padding: 0.35rem 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: #c9ccd3;
+  cursor: pointer;
+}
+
+.account-toggle input {
+  flex-shrink: 0;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin-top: 0.3rem;
+  accent-color: #f0b90b;
+  cursor: pointer;
+}
+
+.account-card-note {
+  margin: 0.8rem 0 0;
+  padding-top: 0.8rem;
+  border-top: 1px solid #1b1f27;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  color: #8b909c;
+}
+
+.account-card-note b { color: #c9ccd3; }
+
+
+/* ------------------------- UNSUBSCRIBE ------------------------- */
+
+.unsubscribe-card { text-align: center; }
+
+.unsubscribe-mark {
+  width: 96px;
+  margin: 0 auto 1.1rem;
+}
+
+.unsubscribe-text {
+  margin: 0 0 0.9rem;
+  font-size: 0.92rem;
+  line-height: 1.7;
+  color: #8b909c;
+}
+
+.unsubscribe-text b { color: #c9ccd3; }
+
+.unsubscribe-quiet { font-size: 0.84rem; }
+
+.unsubscribe-home {
+  display: inline-block;
+  margin-top: 0.6rem;
+  min-height: 44px;
+  line-height: 44px;
+  padding-inline: 1.4rem;
+}
+
+
 /* ------------------------- LAPTOP RESPONSIVE STYLING ------------------------- */
 @media (min-width: 1025px) and (max-width: 1919px) {
 

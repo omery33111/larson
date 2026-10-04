@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { FiAlertTriangle, FiDownload, FiKey, FiLogOut, FiUser } from 'react-icons/fi'
+import { FiAlertTriangle, FiDownload, FiKey, FiLogOut, FiMail, FiUser } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import { useAppDispatch, useAppSelector } from '../../app/hooks'
 import {
-  changePasswordAsync, deleteAccountAsync, endSessionsAsync, exportDataAsync, getIndexAsync,
-  selectGoogleEmail, selectHasPassword, selectIsLogged, selectIsLoading, selectUser
+  changePasswordAsync, deleteAccountAsync, emailPrefsAsync, endSessionsAsync, exportDataAsync,
+  getIndexAsync, saveEmailPrefsAsync, selectEmailPrefs, selectGoogleEmail, selectHasPassword,
+  selectIsLogged, selectIsLoading, selectUser
 } from './authenticationSlice'
 import GoogleSignIn from './GoogleSignIn'
 import './authentication.css'
@@ -26,6 +27,7 @@ const CONFIRM_WORD = 'מחיקה';
 const AccountPage = () => {
 
   const dispatch = useAppDispatch();
+  const emailPrefs = useAppSelector(selectEmailPrefs);
   const navigate = useNavigate();
 
   const isLogged = useAppSelector(selectIsLogged);
@@ -56,7 +58,7 @@ const AccountPage = () => {
 
   // Asked for on arrival rather than assumed from the session: the answer decides which
   // version of two whole cards is drawn.
-  useEffect(() => { dispatch(getIndexAsync()); }, [dispatch]);
+  useEffect(() => { dispatch(getIndexAsync()); dispatch(emailPrefsAsync()); }, [dispatch]);
 
   const download = async () => {
     const result = await dispatch(exportDataAsync());
@@ -141,6 +143,44 @@ const AccountPage = () => {
           always involve a password** - a session left open on somebody else's laptop, a phone
           that was lost - and making him change a password he is happy with in order to close
           a door is a tax on doing the safe thing. */}
+      {/* ------------- WHAT MAY BE SENT TO HIM ------------- */}
+      {/* **Opt-out and not opt-in**, and a toggle that exists even though the law probably
+          does not require one: somebody who cannot turn an email off clicks "spam" instead,
+          and a complaint lands on the domain that carries the verification mail. */}
+      <section className="account-card">
+        <h2 className="account-card-title"><FiMail /> מה נשלח אליך במייל</h2>
+
+        <p className="account-card-body">
+          <b>הסיכום השבועי נשלח ביום ראשון, ורק כשיש מה לסכם.</b> שבוע שלא העלית בו עסקאות —
+          לארסון שותק. אחרי פער ארוך תגיע <b>תזכורת אחת</b>, לא אחת לשבוע.
+        </p>
+
+        <label className="account-toggle">
+          <input
+            type="checkbox"
+            checked={emailPrefs.weekly_digest}
+            onChange={(event) =>
+              dispatch(saveEmailPrefsAsync({ weekly_digest: event.target.checked }))}
+          />
+          <span>לקבל את הסיכום השבועי</span>
+        </label>
+
+        <label className="account-toggle">
+          <input
+            type="checkbox"
+            checked={emailPrefs.product_news}
+            onChange={(event) =>
+              dispatch(saveEmailPrefsAsync({ product_news: event.target.checked }))}
+          />
+          <span>לקבל עדכונים על המוצר ועל שינויי מחיר</span>
+        </label>
+
+        <p className="account-card-note">
+          מיילים על החשבון עצמו — אימות, איפוס סיסמה והודעות אבטחה — נשלחים בכל מקרה.
+          <b> בלעדיהם אין דרך לחזור לחשבון.</b>
+        </p>
+      </section>
+
       <section className="account-card">
         <h2 className="account-card-title"><FiLogOut /> ניתוק החיבורים האחרים</h2>
 

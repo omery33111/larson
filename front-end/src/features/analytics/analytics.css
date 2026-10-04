@@ -806,6 +806,128 @@
 
 
 
+/* ------------------------- ALONG THE TIME AXIS ------------------------- */
+
+.progress-card {
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.progress-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 1rem;
+  font-size: 1.05rem;
+  color: #f0b90b;
+}
+
+.progress-empty {
+  margin: 0;
+  font-size: 0.88rem;
+  color: #8b909c;
+}
+
+/* The verdict is the answer; everything below it is the working. */
+.progress-verdict {
+  margin: 0 0 0.9rem;
+  font-size: 1rem;
+  line-height: 1.6;
+  color: #e8e8e8;
+}
+
+.progress-up { color: #2fa66a; }
+.progress-down { color: #d1494e; }
+.progress-flat { color: #8b909c; }
+
+.progress-trend {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin: 0 0 1.1rem;
+  font-size: 0.86rem;
+  color: #8b909c;
+}
+
+.progress-pill {
+  padding: 0.1rem 0.55rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Intrinsic, so it sorts itself out at any width without a single media query - the pattern
+   the whole project takes from library-redux. */
+.progress-months {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.6rem;
+  margin-bottom: 1.2rem;
+}
+
+.progress-month {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid #23262f;
+  border-radius: 10px;
+  background: #12151b;
+  min-width: 0;
+}
+
+.progress-month-name {
+  font-size: 0.76rem;
+  color: #626875;
+}
+
+.progress-month-figure {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #e8e8e8;
+}
+
+.progress-month-meta {
+  font-size: 0.74rem;
+  color: #8b909c;
+}
+
+.progress-group {
+  padding-top: 0.9rem;
+  border-top: 1px solid #1b1f27;
+  margin-top: 0.9rem;
+}
+
+.progress-subtitle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.5rem;
+  font-size: 0.86rem;
+  color: #c9ccd3;
+}
+
+.progress-list {
+  margin: 0;
+  padding-inline-start: 1.1rem;
+  font-size: 0.86rem;
+  line-height: 1.7;
+  color: #8b909c;
+}
+
+.progress-list b { color: #e8e8e8; }
+
+.progress-line {
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.7;
+  color: #8b909c;
+}
+
+
 /* ------------------------- LAPTOP RESPONSIVE STYLING ------------------------- */
 @media (min-width: 1025px) and (max-width: 1919px) {
 

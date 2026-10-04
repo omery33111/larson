@@ -27,6 +27,9 @@ export interface PendingFile {
 }
 
 
+import { RuleKind, TraderRule } from "./Rule";
+
+
 export interface MentorState {
     messages: ChatMessage[];
     resume: ResumeState;
@@ -54,4 +57,12 @@ export interface MentorState {
     isLoading: boolean;
 
     message: string;
+
+    // **The rules he set for himself.** UI state lives in the slice like everywhere else in
+    // this project - the panel opens on a dispatch and renders itself from the store, with
+    // no props threaded down and no useState in the parent.
+    rules: TraderRule[];
+    ruleKinds: RuleKind[];
+    isRulesOpen: boolean;
+    isRulesLoading: boolean;
 }
