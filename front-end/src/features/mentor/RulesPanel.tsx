@@ -104,7 +104,6 @@ const RulesPanel = () => {
       // is already set on every page, that measurement shifts the whole layout sideways the
       // moment the dialog opens.
       disableScrollLock
-      className="rules-dialog"
     >
       <div className="rules-panel">
 

@@ -113,6 +113,42 @@ export interface AccountSummary {
 }
 
 
+// ------------------------- ALONG THE TIME AXIS ------------------------- //
+//
+// The keys are Hebrew because the engine writes them for the model as well as for the screen,
+// and one set of names means the sentence the trader reads and the sentence Larson reads
+// cannot drift apart. Declared rather than cast around: `as any` on the one block the whole
+// card renders would mean a rename in python breaks the screen silently.
+
+export interface PeriodWindow {
+    'עסקאות': number;
+    'רווח_נקי': string;
+    'תוחלת': string;
+    'אחוז_הצלחה': string;
+}
+
+export interface PeriodMonth extends PeriodWindow {
+    'חודש': string;
+}
+
+export interface PeriodNote {
+    detail: string;
+}
+
+export interface Periods {
+    available: boolean;
+    reason?: string;
+    'חודשים'?: PeriodMonth[];
+    'השוואה_אחרונה'?: { available: boolean; 'פסיקה'?: string;[key: string]: unknown };
+    'חצי_ראשון_מול_שני'?: { available: boolean; 'פסיקה'?: string;[key: string]: unknown };
+    'מגמה'?: { available: boolean; 'כיוון'?: string; detail?: string };
+    'שיאים'?: ({ 'שיא': string } & PeriodNote)[];
+    'הדראודאון_הגדול'?: { available: boolean; detail?: string };
+    'נדידה'?: ({ 'מה': string } & PeriodNote)[];
+    'מה_הפסקת'?: ({ 'מה': string } & PeriodNote)[];
+}
+
+
 export interface AnalyticsOverview {
     total_trades: number;
     has_enough_data: boolean;
@@ -133,6 +169,8 @@ export interface AnalyticsOverview {
     profile?: WrittenProfile | null;
     available_accounts?: AccountSummary[];
     selected_accounts?: string[];
+
+    periods?: Periods;
 }
 
 

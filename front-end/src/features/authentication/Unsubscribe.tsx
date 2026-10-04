@@ -44,7 +44,7 @@ const Unsubscribe = () => {
 
   return (
     <div className="app-container auth-page">
-      <div className="auth-card unsubscribe-card">
+      <div className="auth-form unsubscribe-card">
 
         <div className="unsubscribe-mark">
           <LarsonMark state={state === 'failed' ? 'warning' : 'idle'} />

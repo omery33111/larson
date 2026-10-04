@@ -21,6 +21,9 @@ import './analytics.css'
  * direction**, and that is worse than silence.
  */
 
+const direction = (value?: string) => (value && DIRECTION_CLASS[value]) || '';
+
+
 const DIRECTION_CLASS: Record<string, string> = {
   'משתפר': 'progress-up',
   'מדרדר': 'progress-down',
@@ -36,7 +39,7 @@ const plain = (text: string) => text.replace(/\*\*/g, '');
 const Progress = () => {
 
   const overview = useAppSelector(selectOverview);
-  const periods = (overview as any)?.periods;
+  const periods = overview?.periods;
 
   if (!periods) return null;
 
@@ -63,14 +66,14 @@ const Progress = () => {
       <h2 className="progress-title"><FiActivity /> לאורך הזמן</h2>
 
       {/* The verdict first, because it is the answer and everything else is the working. */}
-      {recent?.available &&
-        <p className={`progress-verdict ${DIRECTION_CLASS[trend?.['כיוון']] ?? ''}`}>
+      {recent?.available && recent['פסיקה'] &&
+        <p className={`progress-verdict ${direction(trend?.['כיוון'])}`}>
           {plain(recent['פסיקה'])}
         </p>}
 
       {trend?.available &&
         <p className="progress-trend">
-          <span className={`progress-pill ${DIRECTION_CLASS[trend['כיוון']] ?? ''}`}>
+          <span className={`progress-pill ${direction(trend['כיוון'])}`}>
             {trend['כיוון']}
           </span>
           {trend.detail}
