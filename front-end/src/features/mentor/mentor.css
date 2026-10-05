@@ -757,8 +757,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  /* 44, not 40. I set it to 40 to keep the chip narrow and the project's floor is 44 -
+     four pixels of width is not worth an exception to a rule testers will feel on a phone. */
+  width: 44px;
+  height: 44px;
   border: 0;
   border-radius: 50%;
   background: transparent;

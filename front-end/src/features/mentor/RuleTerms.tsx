@@ -222,8 +222,7 @@ const RuleTerms = ({ rule }: { rule: TraderRule }) => {
     <div className="terms-editor">
 
       <p className="terms-help">
-        <b>לארסון מחפש את המילים האלה בתגיות ובשמות הסטאפים שלך.</b> אם המילה כאן לא בדיוק
-        מה שאתה מסמן — תחליף אותה. <b>מונח שמראה "לא נמצא" לא עושה כלום.</b>
+        אם מילה כאן לא בדיוק מה שאתה מסמן — <b>תחליף אותה.</b>
       </p>
 
       {draft.require.map((group, index) => (
