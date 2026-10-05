@@ -1924,6 +1924,31 @@ class SuggestionTests(APITestCase):
         # And it does not claim it just happened, because it did not.
         self.assertNotIn("עכשיו", asked["detail"])
 
+    def test_the_brief_survives_a_cached_block_list(self):
+        """
+        **This took production down.** Once prompt caching is on, the last turn's content is
+        a list of blocks rather than a string - and `list += str` appends the string one
+        character at a time, which the API rejects with
+        `messages.N.content.1: Input should be an object`.
+
+        `attach` has handled both shapes since the retrieval path was written, and the fix
+        was to use it rather than to reach into the structure again.
+        """
+        from chat import retrieval
+
+        blocks = [{"role": "user",
+                   "content": [{"type": "text", "text": "שאלה",
+                                "cache_control": {"type": "ephemeral"}}]}]
+
+        retrieval.attach(blocks, chr(10) * 2 + "תוספת")
+
+        self.assertEqual(len(blocks[0]["content"]), 1)
+        self.assertIn("תוספת", blocks[0]["content"][0]["text"])
+
+        plain = [{"role": "user", "content": "שאלה"}]
+        retrieval.attach(plain, chr(10) * 2 + "תוספת")
+        self.assertIn("תוספת", plain[0]["content"])
+
     def test_what_counts_as_asking(self):
         """Deterministic, like the retrieval prefilter - no model call to decide whether to
         make a model call."""

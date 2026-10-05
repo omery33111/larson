@@ -16,6 +16,7 @@ from trades.models import Trade
 from trades.parsers import SUPPORTED_EXTENSIONS, parse_file
 
 from . import retrieval
+from .failures import CALL_FAILED, configuration_fault
 from .context import EFFORT, MAX_TOKENS, MODEL, build_messages, build_system, statistics_document
 from .models import ASSISTANT, DEFAULT_TITLE, USER, Conversation, Message
 from .serializers import ConversationSerializer, MessageSerializer, StarredMessageSerializer
@@ -228,9 +229,7 @@ def stream(request, conversation_id):
             return _error_stream(error)
 
     if not settings.ANTHROPIC_API_KEY:
-        return _error_stream(
-            "לא הוגדר מפתח API של Claude. אם כבר הוספת ANTHROPIC_API_KEY לקובץ back-end/.env, "
-            "עצור את השרת לגמרי והפעל אותו מחדש.")
+        return _error_stream(configuration_fault("ANTHROPIC_API_KEY is empty"))
 
     question = Message.objects.create(
         conversation = row,
@@ -281,7 +280,8 @@ def _answer(row, question, system, messages, prelude = "", verdict = "",
     try:
         import anthropic
     except ImportError:
-        yield _event({"type": "error", "error": "חבילת anthropic אינה מותקנת."})
+        yield _event({"type": "error",
+                      "error": configuration_fault("the anthropic package is not installed")})
         return
 
     # **Checked before the call and not after it.** The rate limits above count requests; this
@@ -332,7 +332,7 @@ def _answer(row, question, system, messages, prelude = "", verdict = "",
             # act on - request ids, endpoints, whatever the SDK chose to say. He gets a
             # sentence he can do something with; the detail is on the line above.
             yield _event({"type": "error",
-                          "error": "הקריאה ל-Claude נכשלה. נסה שוב בעוד רגע."})
+                          "error": CALL_FAILED})
             return
 
         # A safety classifier declines with HTTP 200 and no usable content, so the stop

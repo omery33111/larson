@@ -2,6 +2,8 @@ import json
 import logging
 
 from django.conf import settings
+
+from chat.failures import CALL_FAILED, configuration_fault
 from django.utils import timezone as django_timezone
 
 from .formatting import money, percent, ratio
@@ -136,15 +138,14 @@ def generate_profile(user, statistics, strengths, leaks, accounts = None):
     api_key = settings.ANTHROPIC_API_KEY
 
     if not api_key:
-        raise RuntimeError(
-            "לא הוגדר מפתח API של Claude. אם כבר הוספת ANTHROPIC_API_KEY לקובץ back-end/.env, "
-            "השרת עדיין רץ עם הערך הישן — עצור אותו לגמרי והפעל מחדש. "
-            "ודא גם שאין עוד מופע של runserver שתפס את פורט 8000.")
+        raise RuntimeError(configuration_fault(
+            "ANTHROPIC_API_KEY is empty - set it in back-end/.env and restart the server "
+            "fully; a stale runserver on port 8000 will keep the old value."))
 
     try:
         import anthropic
     except ImportError:
-        raise RuntimeError("חבילת anthropic אינה מותקנת. הרץ: pip install anthropic")
+        raise RuntimeError(configuration_fault("the anthropic package is not installed"))
 
     client = anthropic.Anthropic(api_key = api_key)
 
@@ -171,7 +172,7 @@ def generate_profile(user, statistics, strengths, leaks, accounts = None):
         # client library and describes our infrastructure, not anything the trader can
         # act on - request ids, endpoints, whatever the SDK chose to say. He gets a
         # sentence he can do something with; the detail is on the line above.
-        raise RuntimeError("הקריאה ל-Claude נכשלה. נסה שוב בעוד רגע.")
+        raise RuntimeError(CALL_FAILED)
 
     if getattr(message, "usage", None):
         budget.record(user, "profile", message.usage)

@@ -11,6 +11,7 @@ from rest_framework.response import Response
 from project.throttling import AIBurstThrottle, AIDailyThrottle
 from chat.models import ASSISTANT, USER, Conversation, Message
 from chat.serializers import MessageSerializer
+from chat.failures import configuration_fault
 from chat.views import _answer, _error_stream, _sse
 from trades.models import Trade, TradeFile
 
@@ -190,9 +191,7 @@ def stream(request):
             "לארסון עוד לא ראה אף עסקה שלך, אז אין לו למה להשוות. שלח לו קובץ עסקאות קודם.")
 
     if not settings.ANTHROPIC_API_KEY:
-        return _error_stream(
-            "לא הוגדר מפתח API של Claude. אם כבר הוספת ANTHROPIC_API_KEY לקובץ back-end/.env, "
-            "עצור את השרת לגמרי והפעל אותו מחדש.")
+        return _error_stream(configuration_fault("ANTHROPIC_API_KEY is empty"))
 
     prelude = ""
     verdict = ""
@@ -296,8 +295,12 @@ def stream(request):
             # proposed something in prose the checker cannot judge, and no button appeared -
             # from the outside that reads as broken. The card is still composed in python
             # and the model still writes nothing; this only stops the two contradicting.
-            if messages:
-                messages[-1]["content"] += chr(10) * 2 + suggestion_brief(suggestion)
+            # **Through `attach` and never with `+=`.** The last turn's content is a list of
+            # blocks once prompt caching is on, and `list += str` appends the string one
+            # character at a time - which the API rejects with
+            # `messages.N.content.1: Input should be an object`. It cost a production
+            # outage; `attach` has handled both shapes since the retrieval path was written.
+            retrieval.attach(messages, chr(10) * 2 + suggestion_brief(suggestion))
 
     return _sse(_answer(row, question, system, messages, prelude, verdict,
                         budget_kind = "mentor", suggestion = suggestion))

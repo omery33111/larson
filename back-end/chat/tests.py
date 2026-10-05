@@ -1,8 +1,11 @@
+import re
+from pathlib import Path
 import json
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
+from django.test import SimpleTestCase
 from django.core.cache import cache
 from django.test import override_settings
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -487,6 +490,63 @@ class StarTests(APITestCase):
 # the requesting user's rows. **It is also the property that would break silently.** Adding a
 # tool, or one query that forgets its user filter, would leak without raising anything - so
 # it is asserted here against planted data belonging to somebody else.
+
+class VendorSilenceTests(SimpleTestCase):
+    """
+    **Larson is Larson, and the trader never learns which model answers for him.**
+
+    Three error messages named Claude outright, two told him to run `pip install anthropic`,
+    and two handed him a path inside the repository and told him to restart a server he does
+    not have. Every one of those is a fault only the operator can fix, so the detail reached
+    the single person who could do nothing with it.
+
+    It is not only a branding problem, which is how it was reported. **A product whose error
+    message names the model it resells invites exactly one thought** - and it arrives at the
+    worst possible moment, when something has just broken.
+    """
+
+    VENDOR = re.compile(r"claude|anthropic|opus|chatgpt|openai", re.I)
+    HEBREW = re.compile(r"[֐-׿]")
+
+    COMMENT = ("#", "*", chr(34) * 3, chr(39) * 3)
+
+    def test_no_message_the_trader_can_read_names_the_model(self):
+        root = Path(__file__).resolve().parent.parent
+
+        offenders = []
+
+        for path in root.rglob("*.py"):
+            if any(part in str(path) for part in (".venv", "__pycache__", "migrations")):
+                continue
+            if path.name == "tests.py":
+                continue
+
+            for number, line in enumerate(path.read_text(encoding = "utf-8").splitlines(), 1):
+                if line.strip().startswith(self.COMMENT):
+                    continue
+
+                # A line a trader could read is one with Hebrew in it; naming the vendor
+                # there is the defect.
+                if self.HEBREW.search(line) and self.VENDOR.search(line):
+                    offenders.append(f"{path.name}:{number}")
+
+        self.assertEqual(offenders, [], f"user-facing text naming the model: {offenders}")
+
+    def test_the_privacy_policy_is_the_one_place_it_belongs(self):
+        """
+        **Deliberately the exception.** The policy exists to disclose who processes his
+        trading record, and one that hides the processor is not a policy. The distinction
+        worth keeping straight: the service has a name he is entitled to know, and an error
+        message is not where he learns it.
+        """
+        policy = (Path(__file__).resolve().parent.parent.parent
+                  / "front-end" / "src" / "features" / "base" / "Privacy.tsx")
+
+        if not policy.exists():
+            self.skipTest("the policy lives in the frontend tree, which is not always here")
+
+        self.assertIn("Anthropic", policy.read_text(encoding = "utf-8"))
+
 
 class ContextIsolationTests(APITestCase):
 
