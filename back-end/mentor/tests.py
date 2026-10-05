@@ -2227,6 +2227,53 @@ class SuggestionTests(APITestCase):
         self.assertNotIn("משאלה", card["detail"])
         self.assertIn("עובד נגדך", card["detail"])
 
+    def test_a_rule_requiring_something_that_loses_him_money_is_offered_too(self):
+        """
+        **The same mistake from the other end**, and it was sitting in his panel unnoticed
+        while I fixed the first one. "Only enter without IFVG" blocks money he is making;
+        "only enter on 1m IFVG" - a tag worth -$114 to him - aims him at money he is losing.
+
+        Every trade he takes under that rule is in the losing bucket by definition, so the
+        rule is not failing to protect him. It is pointing him at it.
+        """
+        for n in range(40):
+            at = BASE + timedelta(hours = n)
+            Trade.objects.create(
+                user = self.user, executed_at = at, opened_at = at - timedelta(minutes = 9),
+                symbol = "MNQU6", instrument = "NQ", source_timezone = "Asia/Jerusalem",
+                currency = "USD", direction = "long", quantity = 1.0,
+                pnl = -40.0, outcome = "loss", duration_seconds = 540,
+                setups = "1m ifvg", dedup_hash = f"req-{n}")
+
+        TraderRule.objects.create(user = self.user, kind = TraderRule.CUSTOM,
+                                  text = "להיכנס לעסקה רק על IFVG 1m",
+                                  terms = {"require": [["1m ifvg"]], "forbid": []})
+
+        card = propose(self.user, [], compute_statistics(list(Trade.objects.all())))
+
+        self.assertIsNotNone(card, "a rule requiring his losing setup was not offered")
+        self.assertEqual(card["action"], "retire")
+        self.assertIn("מחייב אותך דווקא את", card["title"])
+
+    def test_a_rule_requiring_something_profitable_is_left_alone(self):
+        """That is a good rule, and the engine must not touch it."""
+        for n in range(40):
+            at = BASE + timedelta(hours = n)
+            Trade.objects.create(
+                user = self.user, executed_at = at, opened_at = at - timedelta(minutes = 9),
+                symbol = "MNQU6", instrument = "NQ", source_timezone = "Asia/Jerusalem",
+                currency = "USD", direction = "long", quantity = 1.0,
+                pnl = 150.0, outcome = "win", duration_seconds = 540,
+                setups = "breakout", dedup_hash = f"goodreq-{n}")
+
+        row = TraderRule.objects.create(user = self.user, kind = TraderRule.CUSTOM,
+                                        text = "רק breakout",
+                                        terms = {"require": [["breakout"]], "forbid": []})
+
+        statistics = compute_statistics(list(Trade.objects.all()))
+
+        self.assertIsNone(suggestions_module._works_against_him(row, statistics, "USD"))
+
     def test_a_rule_forbidding_something_unprofitable_is_left_alone(self):
         """That is the rule doing its job."""
         for n in range(40):
@@ -2297,7 +2344,11 @@ class SuggestionTests(APITestCase):
 
         card = propose(self.user, [], compute_statistics(list(Trade.objects.all())))
 
-        self.assertIsNone(card)
+        # **Not called a wish** - which is what this test is about. It may still be
+        # offered for the money reason, and that is a different question with a
+        # different answer: the ratio says he is working on it, the record says the
+        # rule points the wrong way.
+        self.assertNotIn("משאלה", (card or {}).get("detail", ""))
 
 
     def test_retiring_outranks_adding(self):

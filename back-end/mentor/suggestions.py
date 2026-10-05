@@ -136,30 +136,50 @@ COSTS_HIM_AT_LEAST = 300.0
 
 
 def _works_against_him(row, statistics, currency):
-    """The profitable bucket this rule forbids, if it forbids one."""
+    """
+    Whether this rule points him at the wrong half of his own record.
+
+    **Two shapes, and they are the same mistake from opposite ends.** A rule that forbids
+    something profitable blocks money he is making; a rule that requires something
+    unprofitable pushes him into money he is losing. The first was obvious from his
+    screenshot - "only without IFVG" while IFVG is +$939 - and the second was sitting in the
+    same panel unnoticed: "only on 1m IFVG", a tag worth -$114 to him.
+
+    Returns the bucket and which way round it is, or `None` when the rule is doing its job.
+    """
     terms = row.terms if isinstance(row.terms, dict) else {}
 
     forbidden = list(terms.get("forbid", []))
+    required = [term for group in terms.get("require", []) for term in group]
 
-    if not forbidden:
+    if not forbidden and not required:
         return None
 
     buckets = (statistics.get("breakdowns", {}).get("by_setup", [])
                + statistics.get("breakdowns", {}).get("by_tag", []))
 
-    best = None
+    found = None
 
     for group in buckets:
-        if not group.get("is_significant") or group.get("net_pnl", 0) < COSTS_HIM_AT_LEAST:
+        if not group.get("is_significant"):
             continue
 
         label = str(group.get("key", "")).lower()
+        pnl = group.get("net_pnl", 0)
 
-        if any(matches(term, label) for term in forbidden):
-            if best is None or group["net_pnl"] > best["net_pnl"]:
-                best = group
+        # **Forbidding something that makes him money.**
+        if pnl >= COSTS_HIM_AT_LEAST and any(matches(t, label) for t in forbidden):
+            if found is None or pnl > abs(found["group"].get("net_pnl", 0)):
+                found = {"group": group, "shape": "forbids"}
 
-    return best
+        # **Requiring something that loses him money.** Every trade he takes under this rule
+        # is in that bucket by definition, so the rule is not failing to protect him - it is
+        # aiming him at it.
+        if pnl <= -COSTS_HIM_AT_LEAST and any(matches(t, label) for t in required):
+            if found is None or abs(pnl) > abs(found["group"].get("net_pnl", 0)):
+                found = {"group": group, "shape": "requires"}
+
+    return found
 
 
 def _retire(user, currency, timezone_name, declined, statistics = None):
@@ -230,13 +250,16 @@ def _retire(user, currency, timezone_name, declined, statistics = None):
         costly = _works_against_him(row, statistics, currency)
 
         if costly and not asked_before("costly"):
+            group = costly["group"]
+            verb = "אוסר עליך את" if costly["shape"] == "forbids" else "מחייב אותך דווקא את"
+
             return {
                 "action": "retire",
                 "key": f"retire:{row.id}:costly",
                 "rule_id": row.id,
-                "title": f'"{name}" אוסר עליך את {costly["key"]}.',
-                "detail": f"{costly['key']} הוא {money(costly['net_pnl'], currency)} אצלך "
-                          f"על פני {trade_count(costly['trades'])}."
+                "title": f'"{name}" {verb} {group["key"]}.',
+                "detail": f"{group['key']} הוא {money(group['net_pnl'], currency)} אצלך "
+                          f"על פני {trade_count(group['trades'])}."
                           + chr(10) +
                           "הכלל הזה עובד נגדך — בין אם אתה שומר עליו ובין אם לא.",
                 "accept": "להוריד",
