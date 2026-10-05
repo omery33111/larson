@@ -821,7 +821,14 @@ class StreamTests(APITestCase):
 
         events = read_events(response)
         self.assertEqual(events[0]["type"], "error")
-        self.assertIn("ANTHROPIC_API_KEY", events[0]["error"])
+
+        # **It used to assert the opposite**, and the message named the environment variable
+        # outright. That was a fault only the operator can fix, so the one detail that could
+        # not help the trader was the one he was shown - and it named the model besides. The
+        # real reason goes to the log now, and this holds the line.
+        self.assertNotIn("ANTHROPIC_API_KEY", events[0]["error"])
+        self.assertNotIn("Claude", events[0]["error"])
+        self.assertIn("לארסון", events[0]["error"])
 
         # Nothing was stored, so a key that arrives later leaves no orphan question behind.
         self.assertEqual(Message.objects.count(), 0)
