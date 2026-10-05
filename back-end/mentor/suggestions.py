@@ -195,7 +195,11 @@ def _retire(user, currency, timezone_name, declined):
                 # **And that leaves two honest doors, which is exactly the two buttons:**
                 # still working on it, or it does not fit him. Keeping it is a real answer
                 # and the wording has to let it be one.
-                "detail": "כלל שהתשובה עליו קבועה כבר לא אומר לך כלום בתחקיר. "
+                # The break is deliberate: the first line is the fact, the second is the
+                # choice, and running them together makes the choice read as part of the
+                # explanation rather than as the thing he is being asked.
+                "detail": "כלל שהתשובה עליו קבועה כבר לא אומר לך כלום בתחקיר."
+                          + chr(10) +
                           "אם אתה עדיין עובד עליו — להשאיר; אם הוא לא מתאים לך — להוריד.",
                 "accept": "להוריד",
                 "decline": "להשאיר",

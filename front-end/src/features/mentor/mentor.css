@@ -931,6 +931,9 @@
   font-size: 0.82rem;
   line-height: 1.65;
   color: #8b909c;
+  /* The server writes a newline between the fact and the choice. `pre-line` honours it and
+     still collapses ordinary spacing, so a card with no break is unaffected. */
+  white-space: pre-line;
 }
 
 .suggestion-actions {
