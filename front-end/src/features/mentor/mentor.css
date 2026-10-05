@@ -888,9 +888,25 @@
 /* Gold, because it is the only thing on the page asking him to decide something. It sits
    under the answer rather than inside it: the answer is Larson talking, this is a choice. */
 
+/* **Breathing room under the answer, not flush against it.** Measured at three pixels on
+   the live page, which reads as one block that happens to have buttons rather than as a
+   question the answer is holding out. */
+.suggestion-turn {
+  margin-top: 0.75rem;
+  margin-bottom: 1.3rem;
+}
+
+/* The avatar's slot, kept and emptied. Borrowing `.chat-avatar` is what keeps its width in
+   one place - a hard-coded 46px here would drift the first time that changes. */
+.suggestion-spacer {
+  background: none;
+  border-color: transparent;
+}
+
 .suggestion {
-  margin: 0.2rem 0 1.2rem;
-  padding: 0.9rem 1rem;
+  flex: 1;
+  min-width: 0;
+  padding: 0.85rem 1rem;
   border: 1px solid #3a3115;
   border-radius: 12px;
   background: linear-gradient(180deg, #1a1710 0%, #15181f 100%);
@@ -903,17 +919,17 @@
 }
 
 .suggestion-title {
-  margin: 0 0 0.3rem;
-  font-size: 0.93rem;
+  margin: 0 0 0.25rem;
+  font-size: 0.9rem;
   line-height: 1.6;
   font-weight: 600;
   color: #e8e8e8;
 }
 
 .suggestion-detail {
-  margin: 0 0 0.85rem;
-  font-size: 0.83rem;
-  line-height: 1.7;
+  margin: 0 0 0.75rem;
+  font-size: 0.82rem;
+  line-height: 1.65;
   color: #8b909c;
 }
 

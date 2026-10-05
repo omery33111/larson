@@ -159,6 +159,13 @@ export const acceptSuggestionAsync = createAsyncThunk(
     async (messageId: number, thunkAPI) => {
         try {
             await mentorService.answerSuggestion(messageId, true);
+
+            // **A yes creates or deletes a rule, and the counter beside "my rules" reads
+            // off that list.** Without this it kept showing 1 after he had just pressed
+            // the button that removed it - which reads as the press not having worked,
+            // and the next thing he does is press it again.
+            thunkAPI.dispatch(getRulesAsync());
+
             return messageId;
         } catch (error: any) {
             if (error.response?.status === 401) {

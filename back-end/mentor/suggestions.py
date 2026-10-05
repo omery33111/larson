@@ -173,8 +173,11 @@ def _retire(user, currency, timezone_name, declined):
                 "key": key,
                 "rule_id": row.id,
                 "title": f'"{name}" נשבר ב-{broke} מתוך {trade_count(judged)} שנבדקו.',
-                "detail": "זו לא תוכנית, זו משאלה. עדיף לשנות את המספר למשהו שאתה באמת "
-                          "עומד בו, או להוריד אותו.",
+                # **"The number" is wrong for a free-text rule, which has no number** - it
+                # has a condition. And for a structured rule the number is the more useful
+                # word of the two, because it names exactly the thing he would edit.
+                "detail": f"זו לא תוכנית, זו משאלה. עדיף לשנות את {_what_to_change(row)} "
+                          f"למשהו שאתה באמת עומד בו, או להוריד אותו.",
                 "accept": "להוריד",
                 "decline": "להשאיר",
             }
@@ -184,6 +187,11 @@ def _retire(user, currency, timezone_name, declined):
 
 
 # ------------------------- "SHOULD I HOLD YOU TO THIS?" ------------------------- #
+
+def _what_to_change(row):
+    """What he would actually edit on this rule - the words differ because the rules do."""
+    return "התנאי" if row.kind == TraderRule.CUSTOM else "המספר"
+
 
 def _add(user, recent, statistics, currency, timezone_name, declined, asked = False):
     """

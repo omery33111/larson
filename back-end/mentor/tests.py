@@ -2080,6 +2080,8 @@ class SuggestionTests(APITestCase):
         card = propose(self.user, [], compute_statistics(list(Trade.objects.all())))
 
         self.assertEqual(card["action"], "retire")
+        # A size ceiling does have a number, and naming it is the useful word here.
+        self.assertIn("המספר", card["detail"])
         self.assertIn("משאלה", card["detail"])
 
     def test_a_rule_kept_a_couple_of_times_in_hundreds_is_still_a_wish(self):
@@ -2108,6 +2110,9 @@ class SuggestionTests(APITestCase):
 
         self.assertIsNotNone(card, "a rule kept twice in forty was not offered for retirement")
         self.assertEqual(card["action"], "retire")
+        # **A free-text rule has no number to change** - it has a condition.
+        self.assertIn("התנאי", card["detail"])
+        self.assertNotIn("המספר", card["detail"])
         self.assertIn("משאלה", card["detail"])
 
     def test_a_rule_kept_a_fifth_of_the_time_is_not_called_a_wish(self):

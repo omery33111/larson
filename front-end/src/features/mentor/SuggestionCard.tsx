@@ -32,29 +32,38 @@ const SuggestionCard = ({ messageId, card }: { messageId: number, card: RuleSugg
   const retiring = card.action === 'retire';
 
   return (
-    <div className={`suggestion ${retiring ? 'suggestion-retire' : ''}`}>
+    // **Inside a `chat-turn`, with an empty avatar slot.** Measured on the live page, the
+    // card was 328px wider than the answer above it and three pixels below it - a panel
+    // laid across the thread rather than something the answer is holding out. Borrowing the
+    // row the answer already uses keeps the avatar's width in one place: hard-coding 46px
+    // here would be a second copy of it, and the two would drift the first time it changes.
+    <div className="chat-turn suggestion-turn">
+      <span className="chat-avatar suggestion-spacer" aria-hidden="true" />
 
-      <p className="suggestion-title">{card.title}</p>
-      <p className="suggestion-detail">{card.detail}</p>
+      <div className={`suggestion ${retiring ? 'suggestion-retire' : ''}`}>
 
-      <div className="suggestion-actions">
-        <button type="button" className="app-btn app-btn-primary suggestion-yes"
-                disabled={isStreaming}
-                onClick={() => dispatch(acceptSuggestionAsync(messageId))}>
-          <FiCheck /> {card.accept}
-        </button>
+        <p className="suggestion-title">{card.title}</p>
+        <p className="suggestion-detail">{card.detail}</p>
 
-        {/* **A no is remembered for good.** The condition behind a suggestion is usually
-            still true next week, so without that the same card returns every debrief until
-            he gives in or stops reading them - which is the failure mode that kills
-            features like this one. */}
-        <button type="button" className="suggestion-no"
-                disabled={isStreaming}
-                onClick={() => dispatch(dismissSuggestionAsync(messageId))}>
-          <FiX /> {card.decline}
-        </button>
+        <div className="suggestion-actions">
+          <button type="button" className="app-btn app-btn-primary suggestion-yes"
+                  disabled={isStreaming}
+                  onClick={() => dispatch(acceptSuggestionAsync(messageId))}>
+            <FiCheck /> {card.accept}
+          </button>
+
+          {/* **A no is remembered for good.** The condition behind a suggestion is usually
+              still true next week, so without that the same card returns every debrief
+              until he gives in or stops reading them - which is the failure mode that
+              kills features like this one. */}
+          <button type="button" className="suggestion-no"
+                  disabled={isStreaming}
+                  onClick={() => dispatch(dismissSuggestionAsync(messageId))}>
+            <FiX /> {card.decline}
+          </button>
+        </div>
+
       </div>
-
     </div>
   );
 };
