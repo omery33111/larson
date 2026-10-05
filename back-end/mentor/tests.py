@@ -3075,3 +3075,272 @@ class BadAdviceTests(APITestCase):
         self.assertIsNone(found["group"]["trades"])
 
 
+# ------------------------- TWO RULES THAT CANNOT BOTH HOLD ------------------------- #
+
+class ConflictTests(APITestCase):
+    """
+    **Caught when he writes it, not reported afterwards.** A pair that cannot both be
+    satisfied makes one of them break on every single trade, and the debrief would report
+    that forever without once saying the two are arguing with each other.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username = "omer", password = "Tr4de-Pl4n!x")
+        self.client.force_authenticate(self.user)
+
+    def custom(self, text, terms):
+        return TraderRule.objects.create(user = self.user, kind = TraderRule.CUSTOM,
+                                         text = text, terms = terms)
+
+    def save_custom(self, text, terms, rule_id = None):
+        body = {"kind": "custom", "text": text, "terms": terms}
+        if rule_id:
+            body["id"] = rule_id
+        return self.client.post("/mentor/rules/save/", body, format = "json")
+
+    def test_requiring_what_another_rule_forbids_is_refused(self):
+        self.custom("בלי ifvg", {"require": [], "forbid": ["ifvg"]})
+
+        response = self.save_custom("רק עם ifvg", {"require": [["ifvg"]], "forbid": []})
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("סותר", response.data["error"])
+        self.assertEqual(TraderRule.objects.count(), 1)
+
+    def test_forbidding_what_another_rule_requires_is_refused(self):
+        self.custom("רק עם ifvg", {"require": [["ifvg"]], "forbid": []})
+
+        response = self.save_custom("בלי ifvg", {"require": [], "forbid": ["ifvg"]})
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_a_narrower_term_is_not_a_contradiction(self):
+        """
+        **The restraint that makes this correct.** "Take any IFVG except the one-minute
+        one" is a coherent plan, and a substring match would have called it impossible.
+        The cost of a false alarm here is that he stops believing the next one.
+        """
+        self.custom("רק עם ifvg", {"require": [["ifvg"]], "forbid": []})
+
+        response = self.save_custom("בלי 1m ifvg", {"require": [], "forbid": ["1m ifvg"]})
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(TraderRule.objects.count(), 2)
+
+    def test_two_unrelated_rules_are_fine(self):
+        self.custom("רק עם ifvg", {"require": [["ifvg"]], "forbid": []})
+
+        response = self.save_custom("בלי news", {"require": [], "forbid": ["news"]})
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_rewording_a_rule_does_not_conflict_with_itself(self):
+        """**It is the same row.** Comparing it against itself would lock him out of
+        editing the moment a term stayed the same."""
+        row = self.custom("רק עם ifvg", {"require": [["ifvg"]], "forbid": []})
+
+        response = self.save_custom("רק כשיש IFVG, ניסוח חדש",
+                                    {"require": [["ifvg"]], "forbid": []},
+                                    rule_id = row.id)
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_an_hour_window_with_nothing_in_it_is_refused(self):
+        """Not before 14:00 and not after 10:00 leaves no hour he may trade at all."""
+        TraderRule.objects.create(user = self.user, kind = TraderRule.NO_AFTER,
+                                  number = 10 * 60)
+
+        response = self.client.post("/mentor/rules/save/",
+                                    {"kind": "no_before", "number": 14 * 60}, format = "json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(TraderRule.objects.filter(kind = "no_before").exists())
+
+    def test_a_window_with_hours_in_it_is_fine(self):
+        TraderRule.objects.create(user = self.user, kind = TraderRule.NO_AFTER,
+                                  number = 18 * 60)
+
+        response = self.client.post("/mentor/rules/save/",
+                                    {"kind": "no_before", "number": 9 * 60 + 30},
+                                    format = "json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_another_trader_s_rules_cannot_block_his(self):
+        other = User.objects.create_user(username = "zoe", password = "Tr4de-Pl4n!x")
+        TraderRule.objects.create(user = other, kind = TraderRule.CUSTOM,
+                                  text = "בלי ifvg", terms = {"require": [], "forbid": ["ifvg"]})
+
+        response = self.save_custom("רק עם ifvg", {"require": [["ifvg"]], "forbid": []})
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+
+
+# ------------------------- A TAG THAT WENT AWAY ------------------------- #
+
+class VanishedTagTests(APITestCase):
+    """
+    **It worked, and then it silently stopped.** He renames a tag and a rule that had been
+    checking something real begins checking nothing - still reported, still confident,
+    matching no trade ever again. "Kept" and "could not be judged" look identical from
+    outside, so nothing would have said so.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username = "omer", password = "Tr4de-Pl4n!x")
+
+    def test_a_term_that_used_to_match_and_no_longer_does_is_caught(self):
+        make_trades(self.user, 20, setups = "new-name")
+
+        row = TraderRule.objects.create(
+            user = self.user, kind = TraderRule.CUSTOM, text = "רק עם old-name",
+            terms = {"require": [["old-name"]], "forbid": []},
+            # It was one of his labels when the rule was written.
+            known_labels = ["old-name", "london"])
+
+        card = propose(self.user, [], compute_statistics(list(Trade.objects.all())))
+
+        self.assertEqual(card["action"], "retire")
+        self.assertIn("כבר לא מתייג ככה", card["title"])
+        self.assertIn("עבד פעם", card["detail"])
+
+    def test_a_term_that_never_matched_is_a_different_problem_and_is_left_alone(self):
+        """
+        **He was warned about that one when he saved it**, and reporting it again as "your
+        tag went away" would be telling him something that did not happen.
+        """
+        make_trades(self.user, 20, setups = "breakout")
+
+        row = TraderRule.objects.create(
+            user = self.user, kind = TraderRule.CUSTOM, text = "רק עם vix",
+            terms = {"require": [["vix"]], "forbid": []},
+            known_labels = ["breakout"])
+
+        self.assertIsNone(suggestions_module._watching_nothing(
+            row, interpret_module.vocabulary(self.user)))
+
+    def test_a_term_that_still_matches_is_left_alone(self):
+        make_trades(self.user, 20, setups = "ifvg")
+
+        row = TraderRule.objects.create(
+            user = self.user, kind = TraderRule.CUSTOM, text = "רק עם ifvg",
+            terms = {"require": [["ifvg"]], "forbid": []},
+            known_labels = ["ifvg", "london"])
+
+        self.assertIsNone(suggestions_module._watching_nothing(
+            row, interpret_module.vocabulary(self.user)))
+
+    def test_a_rule_written_before_the_column_existed_is_left_alone(self):
+        """No `known_labels` means no comparison to make, and guessing would be inventing
+        a history the row does not have."""
+        make_trades(self.user, 20, setups = "breakout")
+
+        row = TraderRule.objects.create(
+            user = self.user, kind = TraderRule.CUSTOM, text = "רק עם ifvg",
+            terms = {"require": [["ifvg"]], "forbid": []}, known_labels = [])
+
+        self.assertIsNone(suggestions_module._watching_nothing(
+            row, interpret_module.vocabulary(self.user)))
+
+
+
+# ------------------------- THE SAME TRADE, TWICE ------------------------- #
+
+class NoDoubleReportingTests(APITestCase):
+    """
+    **Two ceilings on the same thing is not a stricter plan, it is a plan with no answer.**
+
+    The debrief reported both: the inferred rule as a discovery he might not know about,
+    and his own as a commitment he made. The same trade in front of him twice under two
+    tones reads as the mentor not having noticed what it said a paragraph earlier.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username = "omer", password = "Tr4de-Pl4n!x")
+
+    def losing_mornings(self):
+        rows = []
+        for n in range(60):
+            early = n % 2 == 0
+            at = BASE.replace(hour = 6 if early else 14) + timedelta(days = n)
+            rows.append(Trade.objects.create(
+                user = self.user, executed_at = at, opened_at = at - timedelta(minutes = 9),
+                symbol = "MNQU6", instrument = "NQ", source_timezone = "Asia/Jerusalem",
+                currency = "USD", direction = "long", quantity = 9.0 if early else 1.0,
+                pnl = -120.0 if early else 90.0,
+                outcome = "loss" if early else "win",
+                duration_seconds = 540, setups = "revenge-fade" if early else "breakout",
+                dedup_hash = f"dbl-{n}"))
+        return rows
+
+    def test_his_own_size_cap_silences_the_inferred_one(self):
+        rows = self.losing_mornings()
+        statistics = compute_statistics(rows)
+
+        TraderRule.objects.create(user = self.user, kind = TraderRule.MAX_SIZE, number = 2)
+
+        plan = check_plan(statistics, [], rows, declared = declared_rules(self.user))
+
+        named = [e["rule"] for e in plan["broken"] + plan["kept"]]
+        about_size = [n for n in named if "חוזים" in n]
+
+        self.assertEqual(len(about_size), 1, f"size reported more than once: {about_size}")
+        self.assertTrue(any(e.get("declared") for e in plan["broken"] + plan["kept"]))
+
+    def test_his_own_cut_off_silences_an_inferred_hour_inside_it(self):
+        rows = self.losing_mornings()
+        statistics = compute_statistics(rows)
+
+        # 09:00 Israel is his losing hour; his own rule already bans everything before 12.
+        TraderRule.objects.create(user = self.user, kind = TraderRule.NO_BEFORE,
+                                  number = 12 * 60)
+
+        plan = check_plan(statistics, [], rows, declared = declared_rules(self.user))
+
+        inferred_hours = [e["rule"] for e in plan["broken"] + plan["kept"]
+                          if "לסחור בשעה" in e["rule"]]
+
+        self.assertEqual(inferred_hours, [])
+
+    def test_an_inferred_hour_outside_his_window_still_speaks(self):
+        """**Suppression only where they agree.** A losing hour his own rule permits is
+        news, and swallowing it would make the feature quieter than it should be."""
+        rows = self.losing_mornings()
+        statistics = compute_statistics(rows)
+
+        # His rule bans before 07:00; the losing hour is 09:00, which it allows.
+        TraderRule.objects.create(user = self.user, kind = TraderRule.NO_BEFORE,
+                                  number = 7 * 60)
+
+        plan = check_plan(statistics, [], rows, declared = declared_rules(self.user))
+
+        inferred_hours = [e["rule"] for e in plan["broken"] + plan["kept"]
+                          if "לסחור בשעה" in e["rule"]]
+
+        self.assertTrue(inferred_hours, "a losing hour his own rule permits was swallowed")
+
+    def test_his_own_setup_ban_silences_the_inferred_one(self):
+        rows = self.losing_mornings()
+        statistics = compute_statistics(rows)
+
+        TraderRule.objects.create(user = self.user, kind = TraderRule.CUSTOM,
+                                  text = "בלי revenge-fade",
+                                  terms = {"require": [], "forbid": ["revenge-fade"]})
+
+        plan = check_plan(statistics, [], rows, declared = declared_rules(self.user))
+
+        inferred = [e["rule"] for e in plan["broken"] + plan["kept"]
+                    if "לקחת את הסטאפ" in e["rule"]]
+
+        self.assertEqual(inferred, [])
+
+    def test_with_no_rules_of_his_own_nothing_is_suppressed(self):
+        rows = self.losing_mornings()
+        statistics = compute_statistics(rows)
+
+        plan = check_plan(statistics, [], rows, declared = [])
+
+        self.assertTrue(plan["broken"] or plan["kept"])
+
+

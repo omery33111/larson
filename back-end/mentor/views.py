@@ -22,7 +22,7 @@ from .compliance import check_plan
 from .interpret import (MAX_RULE_LENGTH, coverage, interpret, per_term, read_back,
                         validate_his_own, vocabulary)
 from .models import DismissedSuggestion, TraderRule
-from .rules import declared_rules
+from .rules import conflicts_with, declared_rules
 from .suggestions import asked_for_one, propose, standings
 from .serializers import TraderRuleSerializer
 
@@ -445,6 +445,19 @@ def save_rule(request):
                          "או מילה שאתה כותב בהערות.",
             }, status = status.HTTP_400_BAD_REQUEST)
 
+        # **Refused rather than saved and reported later.** Two rules that cannot both hold
+        # make one of them break on every trade, and the debrief would report that forever
+        # without ever saying the two are arguing with each other.
+        clash = conflicts_with(request.user, TraderRule.CUSTOM, terms = terms,
+                               ignore_id = rule_id)
+
+        if clash:
+            other, word = clash
+            return Response({"error": f"התנאי הזה סותר כלל שכבר יש לך — "
+                                      f"\"{clean_label(other.text, MAX_RULE_LENGTH)}\". "
+                                      f"שניהם מדברים על \"{word}\" ולא ייתכן ששניהם יתקיימו."},
+                            status = status.HTTP_400_BAD_REQUEST)
+
         if rule_id:
             row = TraderRule.objects.filter(user = request.user, id = rule_id,
                                             kind = TraderRule.CUSTOM).first()
@@ -486,6 +499,14 @@ def save_rule(request):
                             status = status.HTTP_400_BAD_REQUEST)
     elif number <= 0:
         return Response({"error": "המספר צריך להיות גדול מאפס."},
+                        status = status.HTTP_400_BAD_REQUEST)
+
+    clash = conflicts_with(request.user, kind, number = number)
+
+    if clash:
+        _, word = clash
+        return Response({"error": f"זה סותר את הכלל שכבר יש לך — לא היית יכול לסחור "
+                                  f"בשום שעה. הכלל האחר אומר {word}."},
                         status = status.HTTP_400_BAD_REQUEST)
 
     row, _ = TraderRule.objects.update_or_create(

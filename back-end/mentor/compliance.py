@@ -27,6 +27,7 @@ from analytics.formatting import trades as trade_count
 # A rule has to rest on something. Below this the "leak" is an anecdote, and telling a trader
 # to stop doing something on the strength of four trades is how a mentor loses credibility.
 from .interpret import _tokens, matches, trade_text
+from .models import TraderRule
 from .rules import DAY_KINDS, day_verdict
 
 
@@ -260,6 +261,55 @@ def _breaks(rule, trade, tz, previous):
     return None
 
 
+def _already_his(rule, declared):
+    """
+    Whether a rule the record argues for is one he has already committed to himself.
+
+    **Two ceilings on the same thing is not a stricter plan, it is a plan with no answer** -
+    and the debrief reported both: the inferred one as a discovery he might not know about,
+    the declared one as a commitment he made. The same trade appearing twice under two
+    tones reads as the mentor not having noticed what it said a paragraph earlier.
+
+    His own always wins. A rule he chose is the stronger statement, and the inference that
+    agrees with it has nothing left to add.
+    """
+    kinds = {row["kind"]: row for row in declared}
+
+    if rule["kind"] == "size" and TraderRule.MAX_SIZE in kinds:
+        return True
+
+    if rule["kind"] == "revenge" and TraderRule.NO_REVENGE_WITHIN in kinds:
+        return True
+
+    # An inferred hour that his own cut-off already bans: saying "do not trade at 09:00" to
+    # somebody who has written "not before 10:00" is telling him his own rule.
+    if rule["kind"] == "hour":
+        hour = int(rule["value"]) * 60
+
+        before = kinds.get(TraderRule.NO_BEFORE)
+        after = kinds.get(TraderRule.NO_AFTER)
+
+        if before and hour < before["value"]:
+            return True
+        if after and hour > after["value"]:
+            return True
+
+    # A setup his own free-text rule already forbids, or requires something else instead of.
+    if rule["kind"] == "setup":
+        setup = str(rule["value"]).lower()
+
+        for row in declared:
+            if row["kind"] != TraderRule.CUSTOM:
+                continue
+
+            terms = row["value"] if isinstance(row["value"], dict) else {}
+
+            if any(matches(term, setup) for term in terms.get("forbid", [])):
+                return True
+
+    return False
+
+
 def check_plan(baseline_statistics, baseline, recent, currency = "USD",
                timezone_name = "Asia/Jerusalem", declared = ()):
     """
@@ -273,7 +323,12 @@ def check_plan(baseline_statistics, baseline, recent, currency = "USD",
     that broke one is named the same way either way - what changes is only that the answer to
     "says who" is him.
     """
-    rules = list(declared) + build_rules(baseline_statistics, currency)
+    # **His own first, and an inference that merely agrees with one is dropped.** Reporting
+    # both put the same trade in front of him twice under two different tones - a discovery
+    # he might not know about, and a commitment he made - which reads as the mentor not
+    # having noticed what it said a paragraph earlier.
+    rules = list(declared) + [rule for rule in build_rules(baseline_statistics, currency)
+                              if not _already_his(rule, declared)]
 
     if not recent:
         return {"available": False, "reason": "אין עסקאות חדשות לבדוק."}

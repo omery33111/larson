@@ -138,6 +138,64 @@ def day_verdict(rule, day_rows):
     return None, None
 
 
+
+# ------------------------- TWO RULES THAT CANNOT BOTH HOLD ------------------------- #
+
+def conflicts_with(user, kind, terms = None, number = None, ignore_id = None):
+    """
+    The rule he already has that this one would contradict, as a sentence, or `None`.
+
+    **Caught when he writes it rather than reported afterwards.** A pair that cannot both
+    be satisfied makes one of them break on every single trade, and the debrief would
+    dutifully report that forever without ever saying the two are arguing.
+
+    **Exact terms only, never substrings**, and that restraint is the whole correctness of
+    it: requiring `ifvg` while forbidding `1m ifvg` is perfectly coherent - take any IFVG
+    except the one-minute one - and a substring match would call it impossible. The cost of
+    a false alarm here is that he stops believing the next one.
+    """
+    rows = TraderRule.objects.filter(user = user, is_active = True)
+
+    if ignore_id:
+        rows = rows.exclude(id = ignore_id)
+
+    if kind == TraderRule.CUSTOM:
+        terms = terms or {}
+        mine_required = {t for group in terms.get("require", []) for t in group}
+        mine_forbidden = set(terms.get("forbid", []))
+
+        for row in rows.filter(kind = TraderRule.CUSTOM):
+            theirs = row.terms if isinstance(row.terms, dict) else {}
+            required = {t for group in theirs.get("require", []) for t in group}
+            forbidden = set(theirs.get("forbid", []))
+
+            clash = (mine_required & forbidden) | (mine_forbidden & required)
+
+            if clash:
+                return row, sorted(clash)[0]
+
+        return None
+
+    # ------------- AND THE ONE PAIR OF STRUCTURED RULES THAT CAN FIGHT:
+    #
+    # "Not before 14:00" with "not after 10:00" leaves no hour he may trade at all. Nothing
+    # else here can contradict anything: there is one rule of each kind, and a size cap and
+    # a daily stop are about different things.
+    if kind in (TraderRule.NO_BEFORE, TraderRule.NO_AFTER) and number is not None:
+        other = (TraderRule.NO_AFTER if kind == TraderRule.NO_BEFORE
+                 else TraderRule.NO_BEFORE)
+        row = rows.filter(kind = other).first()
+
+        if row and row.number is not None:
+            opens = number if kind == TraderRule.NO_BEFORE else row.number
+            closes = row.number if kind == TraderRule.NO_BEFORE else number
+
+            if opens >= closes:
+                return row, clock(closes)
+
+    return None
+
+
 # ------------------------- RELEARNING, WHEN HIS WORDS CHANGE ------------------------- #
 
 def refresh(user):

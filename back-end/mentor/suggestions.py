@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo
 from analytics.formatting import money, ratio, trades as trade_count
 
 from .compliance import build_rules, check_plan
-from .interpret import matches
+from .interpret import matches, vocabulary
 from .models import DismissedSuggestion, TraderRule
 from .rules import clock, declared_rules
 
@@ -225,6 +225,42 @@ def _zone(name):
         return ZoneInfo("Asia/Jerusalem")
 
 
+def _watching_nothing(row, vocabulary_now):
+    """
+    A rule whose tag has disappeared from his record since it was written.
+
+    **It worked, and then it silently stopped.** He renames a tag, or drops a setup from his
+    journal, and a rule that had been checking something real quietly begins checking
+    nothing - still reported, still confident, matching no trade ever again. Nothing on any
+    screen would say so, and "kept" would look exactly the same as "could not be judged".
+
+    The evidence is already stored: `known_labels` is the vocabulary the sentence was read
+    against. A term that was one of his labels then and matches none of them now is a tag
+    that went away - which is a different thing from a term that never matched anything,
+    and the two must not be confused. The second is a rule about something the engine
+    cannot see, and he was already warned about that when he saved it.
+    """
+    terms = row.terms if isinstance(row.terms, dict) else {}
+
+    wanted = [t for group in terms.get("require", []) for t in group]
+    wanted += list(terms.get("forbid", []))
+
+    if not wanted or not row.known_labels or not vocabulary_now:
+        return None
+
+    was = [label.lower() for label in row.known_labels]
+    now = [label.lower() for label in vocabulary_now]
+
+    for term in wanted:
+        existed = any(matches(term, label) for label in was)
+        exists = any(matches(term, label) for label in now)
+
+        if existed and not exists:
+            return term
+
+    return None
+
+
 def _never_tested(row, rows, tz):
     """
     A rule his record never comes near - **the graduation card's evil twin.**
@@ -360,6 +396,7 @@ def _retire(user, currency, timezone_name, declined, statistics = None):
     # Judged over everything he has, with no inferred rules in the way - this is a question
     # about his own commitments only.
     statistics = statistics or {}
+    current_vocabulary = vocabulary(user)
 
     plan = check_plan({}, [], rows, currency, timezone_name, declared = declared)
 
@@ -426,6 +463,25 @@ def _retire(user, currency, timezone_name, declined, statistics = None):
 
         # **Before the graduation card, which is the thing it exists to stop.** A rule
         # nothing approaches would otherwise collect the warmest sentence in the product.
+        # **It worked and then stopped, which is invisible without the comparison.** A term
+        # that was one of his labels when the rule was written and matches none of them now
+        # is a tag that went away - not a term that never matched, which he was warned
+        # about at save time and is a different problem.
+        gone = _watching_nothing(row, current_vocabulary)
+
+        if gone and not asked_before("gone"):
+            return {
+                "action": "retire",
+                "key": f"retire:{row.id}:gone",
+                "rule_id": row.id,
+                "title": f'"{name}" מחפש את "{gone}", ואתה כבר לא מתייג ככה.',
+                "detail": "הכלל הזה עבד פעם ועכשיו הוא לא בודק כלום."
+                          + chr(10) +
+                          "אפשר לדייק אותו לתגית שאתה משתמש בה היום, או להוריד.",
+                "accept": "להוריד",
+                "decline": "להשאיר",
+            }
+
         vacuous = _never_tested(row, rows, _zone(timezone_name))
 
         if vacuous and not asked_before("vacuous"):
