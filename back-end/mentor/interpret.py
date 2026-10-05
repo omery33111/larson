@@ -188,6 +188,19 @@ def _json_from(response):
         return {}
 
 
+def validate_his_own(body):
+    """
+    Terms he typed or picked himself.
+
+    **The short-term gate is lifted here on purpose.** It exists to stop the model inventing
+    a two-letter abbreviation it could not have known - it is not there to overrule the
+    trader about his own tags. He is the authority on what he writes, and a short term is
+    matched as a whole word anyway, so `tl` still cannot fire on `settled`. Everything else -
+    the shape, the ceilings, the cleaning - holds exactly as it does for the model's answer.
+    """
+    return _validate(body, known_labels = None)
+
+
 def _validate(body, known_labels = ()):
     """
     Nothing the model returned survives this that was not asked for.
@@ -204,7 +217,8 @@ def _validate(body, known_labels = ()):
     # vocabulary is his abbreviation and is exact; `TL` invented by the model is two letters
     # that appear inside ordinary words, and nobody could have guessed a personal shorthand
     # anyway. Dropping it is the difference between a rule that is quiet and one that is wrong.
-    labels = [label.lower() for label in known_labels]
+    trusted = known_labels is None
+    labels = [] if trusted else [label.lower() for label in known_labels]
 
     require = []
 
@@ -212,12 +226,12 @@ def _validate(body, known_labels = ()):
         # A bare string is a requirement with one spelling, and the model does write it that
         # way sometimes. Accepting it is not looseness: the meaning is unambiguous.
         spellings = _terms([group] if isinstance(group, str) else _as_list(group),
-                           labels)[:MAX_SPELLINGS]
+                           labels, trusted)[:MAX_SPELLINGS]
 
         if spellings:
             require.append(spellings)
 
-    forbid = _terms(_as_list(body.get("forbid")), labels)[:MAX_FORBIDDEN]
+    forbid = _terms(_as_list(body.get("forbid")), labels, trusted)[:MAX_FORBIDDEN]
 
     # **A rule with neither side is not a strict rule, it is a rule that cannot be broken.**
     if not require and not forbid:
@@ -230,7 +244,7 @@ def _as_list(value):
     return value if isinstance(value, list) else []
 
 
-def _terms(values, labels = ()):
+def _terms(values, labels = (), trusted = False):
     """One line, lowercase, bounded - the same shape every label in this product is held to."""
     out = []
 
@@ -244,9 +258,10 @@ def _terms(values, labels = ()):
         if len(term) < 2 or term in out:
             continue
 
-        # A short term he does not actually use is a guess that will fire on ordinary words.
-        if len(term) < SHORT_TERM and not any(term in label.split() or term == label
-                                              for label in labels):
+        # A short term he does not actually use is a guess that will fire on ordinary words -
+        # unless he typed it himself, in which case it is his own shorthand and he knows.
+        if not trusted and len(term) < SHORT_TERM and not any(
+                term in label.split() or term == label for label in labels):
             continue
 
         out.append(term)
@@ -276,6 +291,34 @@ def matches(term, haystack, tokens = None):
         return term in haystack
 
     return term in (tokens if tokens is not None else _tokens(haystack))
+
+
+def per_term(terms, trades):
+    """
+    How many of his trades each single term currently finds.
+
+    **This is what turns editing the terms from guessing into feedback.** He sees
+    `fair value gap - 0` next to `fvg - 23` and needs no explanation of why one of them is
+    doing the work: the term that matches nothing is visibly dead, and the fix is obvious
+    before he has saved anything.
+
+    No model, no cost - it is the same matcher the verdict uses, run over rows already in
+    hand. That it is the *same* matcher is the point: a preview computed by a second copy of
+    the rule would be a preview that can disagree with the debrief it is previewing.
+    """
+    texts = [trade_text(trade) for trade in trades]
+    texts = [text for text in texts if text]
+
+    out = {}
+
+    for group in (terms or {}).get("require", []):
+        for term in group:
+            out[term] = sum(1 for text in texts if matches(term, text))
+
+    for term in (terms or {}).get("forbid", []):
+        out[term] = sum(1 for text in texts if matches(term, text))
+
+    return out
 
 
 def unknown_terms(terms, known_labels):

@@ -17,6 +17,9 @@ export interface TraderRule {
     // His sentence, exactly as typed. Only the free-text kind carries one, and our reading
     // of it deliberately never comes back down - he would start editing the paraphrase.
     text: string;
+    /** Only the free-text kind carries these, and only so the editor can render them. */
+    terms?: RuleTerms | null;
+    looking_for?: string;
     is_active: boolean;
     created_at: string;
 }
@@ -33,6 +36,21 @@ export interface RuleCoverage {
      *  at all - a news calendar, the VIX, the spread. Every tagged trade would then fail
      *  the requirement, and telling him he broke a rule he kept is worse than silence. */
     matched: number;
+}
+
+/** `require` is an AND of groups; each group is an OR of spellings. Flat enough to edit as
+ *  rows of chips, which is the only reason it can be put in front of a trader at all. */
+export interface RuleTerms {
+    require: string[][];
+    forbid: string[];
+}
+
+/** What a set of terms would find right now, per term, over his own record. **The thing
+ *  that turns editing from guessing into feedback** - a term showing 0 is visibly dead. */
+export interface RulePreview {
+    per_term: Record<string, number>;
+    coverage: RuleCoverage;
+    labels: string[];
 }
 
 export interface RuleKind {

@@ -1,7 +1,7 @@
 import axios from "axios";
 import { accessToken, freshAccessToken } from "../../app/session";
 import {
-    deleteMentorRuleURL, mentorPendingURL, mentorRulesURL, mentorStreamURL, mentorURL,
+    deleteMentorRuleURL, previewMentorRuleURL, mentorPendingURL, mentorRulesURL, mentorStreamURL, mentorURL,
     saveMentorRuleURL
 } from "../../endpoints/endpoints";
 import { StreamEvent, readEventStream } from "../chat/chatAPI";
@@ -96,6 +96,18 @@ const saveRule = async (body: Record<string, unknown>) => {
 
 // **Keyed on the row and not on the kind**, which it used to be: a kind identified a rule
 // only while there was one of each, and several free-text rules broke that.
+// No model behind this one - it is the same matcher the debrief uses, run over rows the
+// server already has. That it is the *same* matcher is the point: a preview computed by a
+// second copy of the rule could disagree with the debrief it is previewing.
+const previewRule = async (terms: unknown) => {
+    const response = await axios.post(previewMentorRuleURL, { terms }, {
+        headers: { 'Authorization': `Bearer ${accessToken()}` }
+    });
+
+    return response.data;
+};
+
+
 const deleteRule = async (id: number) => {
     await axios.delete(deleteMentorRuleURL(id), {
         headers: { 'Authorization': `Bearer ${accessToken()}` }
@@ -112,6 +124,7 @@ const mentorService = {
     dismissPending,
     getRules,
     saveRule,
+    previewRule,
     deleteRule,
 };
 

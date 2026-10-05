@@ -602,6 +602,212 @@
 .rules-templates { margin-bottom: 0.5rem; }
 
 
+/* ------------------------- CORRECTING WHAT IT LOOKS FOR ------------------------- */
+
+.rules-needs-tags {
+  margin: 0 0 0.9rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid #4a3a16;
+  border-radius: 9px;
+  background: #1c1810;
+  font-size: 0.82rem;
+  line-height: 1.7;
+  color: #c98f3f;
+}
+
+.rules-needs-tags b { color: #e0a94d; }
+
+.rules-edit-terms {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-height: 44px;
+  padding-inline: 0.5rem;
+  border: 0;
+  background: transparent;
+  font-size: 0.78rem;
+  color: #f0b90b;
+  cursor: pointer;
+}
+
+.rules-edit-terms:hover { text-decoration: underline; }
+
+.terms-editor {
+  margin-top: 0.6rem;
+  padding: 0.85rem;
+  border: 1px solid #2d313b;
+  border-radius: 10px;
+  background: #12151b;
+}
+
+.terms-help {
+  margin: 0 0 0.8rem;
+  font-size: 0.79rem;
+  line-height: 1.7;
+  color: #8b909c;
+}
+
+.terms-help b { color: #c9ccd3; }
+
+.terms-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.55rem;
+}
+
+.terms-row-label {
+  flex-shrink: 0;
+  min-width: 5.2rem;
+  padding-top: 0.6rem;
+  font-size: 0.76rem;
+  color: #626875;
+}
+
+.terms-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  min-width: 0;
+}
+
+.terms-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 36px;
+  padding: 0.2rem 0.3rem 0.2rem 0.55rem;
+  border: 1px solid #2d313b;
+  border-radius: 999px;
+  background: #171b22;
+}
+
+.terms-chip code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+  color: #f0b90b;
+  direction: ltr;
+}
+
+/* **The number is the whole feature.** A term finding nothing is visibly doing nothing, and
+   he fixes it before saving rather than a month after. */
+.terms-count {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #2fa66a;
+}
+
+.terms-chip-dead { border-color: #4a2326; }
+.terms-chip-dead .terms-count { color: #d1494e; }
+.terms-chip-dead code { color: #8b909c; }
+
+.terms-chip button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #626875;
+  cursor: pointer;
+}
+
+.terms-chip button:hover { color: #d1494e; background: #1f242c; }
+
+.terms-add,
+.terms-vocab-chip {
+  min-height: 36px;
+  padding-inline: 0.7rem;
+  border: 1px dashed #3a3f4b;
+  border-radius: 999px;
+  background: transparent;
+  font-size: 0.76rem;
+  color: #8b909c;
+  cursor: pointer;
+}
+
+.terms-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  padding: 0;
+}
+
+.terms-add:hover,
+.terms-vocab-chip:hover { color: #f0b90b; border-color: #6b5a1c; border-style: solid; }
+
+.terms-input {
+  width: 11rem;
+  min-height: 36px;
+  /* 16px floor: below it Safari on iOS zooms the page on focus. */
+  font-size: 1rem;
+  direction: ltr;
+  text-align: start;
+}
+
+.terms-add-forbid {
+  margin-bottom: 0.6rem;
+  border: 0;
+  background: transparent;
+  font-size: 0.76rem;
+  color: #626875;
+  cursor: pointer;
+}
+
+.terms-add-forbid:hover { color: #8b909c; }
+
+.terms-vocab {
+  padding-top: 0.7rem;
+  margin-top: 0.3rem;
+  border-top: 1px solid #1f242c;
+}
+
+.terms-vocab-title {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-size: 0.74rem;
+  color: #626875;
+}
+
+.terms-vocab-chip { direction: ltr; }
+
+.terms-empty {
+  margin: 0.7rem 0 0;
+  padding-top: 0.7rem;
+  border-top: 1px solid #1f242c;
+  font-size: 0.79rem;
+  line-height: 1.7;
+  color: #c98f3f;
+}
+
+.terms-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-top: 0.9rem;
+}
+
+.terms-warn {
+  font-size: 0.76rem;
+  color: #c98f3f;
+}
+
+@media (max-width: 768px) {
+  .terms-row-label {
+    min-width: 100%;
+    padding-top: 0;
+  }
+
+  .terms-input { width: 100%; }
+}
+
+
 /* ------------------------- LAPTOP RESPONSIVE STYLING ------------------------- */
 @media (min-width: 1025px) and (max-width: 1919px) {
   .mentor-shell {

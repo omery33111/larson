@@ -68,6 +68,9 @@ export interface MentorState {
     // not a standing property of the screen.
     ruleCoverage: (RuleCoverage & { id: number; lookingFor: string }) | null;
     ruleKinds: RuleKind[];
+
+    /** Whether he has tagged anything at all - the free-text rule rests entirely on it. */
+    hasLabels: boolean;
     isRulesOpen: boolean;
     isRulesLoading: boolean;
 }

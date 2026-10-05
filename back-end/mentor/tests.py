@@ -1328,6 +1328,121 @@ class CustomRuleTests(APITestCase):
         self.assertEqual(matched, 0)
 
 
+    # ------------- CORRECTING THE TERMS HIMSELF:
+    #
+    # **This is what takes the model off the critical path.** It reads "only on an FVG" and
+    # produces `fair value gap`; his trades are tagged `5m fvg retracement`. Only he knows
+    # that - so the line that shows the mismatch is also the one that fixes it, and from
+    # then on the rule rests on a term he confirmed rather than one that was guessed.
+
+    def test_terms_he_supplies_are_used_and_no_model_is_called(self):
+        """He has said exactly what to look for, which beats any reading of his sentence -
+        and there is nothing left to pay for."""
+        with patch("mentor.views.interpret") as model:
+            response = self.client.post("/mentor/rules/save/", {
+                "kind": "custom",
+                "text": "כניסה רק על FVG",
+                "terms": {"require": [["5m fvg retracement"]], "forbid": []},
+            }, format = "json")
+
+        model.assert_not_called()
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(TraderRule.objects.get().terms,
+                         {"require": [["5m fvg retracement"]], "forbid": []})
+
+    def test_his_own_short_term_is_trusted_where_the_model_guessing_it_is_not(self):
+        """The gate exists to stop the model inventing a two-letter abbreviation it could
+        not have known. **It is not there to overrule him about his own tags** - and a short
+        term is matched as a whole word anyway, so it still cannot fire on `settled`."""
+        response = self.client.post("/mentor/rules/save/", {
+            "kind": "custom", "text": "רק על TL",
+            "terms": {"require": [["tl"]], "forbid": []},
+        }, format = "json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(TraderRule.objects.get().terms["require"], [["tl"]])
+
+    def test_an_empty_correction_is_refused(self):
+        """A rule with no terms is kept by every trade forever."""
+        response = self.client.post("/mentor/rules/save/", {
+            "kind": "custom", "text": "משהו", "terms": {"require": [], "forbid": []},
+        }, format = "json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(TraderRule.objects.exists())
+
+    def test_the_preview_counts_each_term_against_his_real_trades(self):
+        """
+        **The number that turns editing from guessing into feedback.** `fair value gap - 0`
+        beside `fvg - 23` needs no explanation.
+        """
+        make_trades(self.user, 3, setups = "5m fvg retracement")
+        make_trades(self.user, 2, start = 40, setups = "breakout")
+
+        response = self.client.post("/mentor/rules/preview/", {
+            "terms": {"require": [["fvg", "fair value gap"]], "forbid": []},
+        }, format = "json")
+
+        self.assertEqual(response.data["per_term"]["fvg"], 3)
+        self.assertEqual(response.data["per_term"]["fair value gap"], 0)
+        self.assertEqual(response.data["coverage"]["matched"], 3)
+
+    def test_the_preview_hands_back_his_own_labels(self):
+        """The fastest correct edit is picking the tag he actually writes. A label out of
+        his record cannot be wrong about what exists."""
+        make_trades(self.user, 1, setups = "5m fvg retracement", tags = "london")
+
+        response = self.client.post("/mentor/rules/preview/", {"terms": {}}, format = "json")
+
+        self.assertIn("5m fvg retracement", response.data["labels"])
+        self.assertIn("london", response.data["labels"])
+
+    def test_the_preview_costs_no_model_call(self):
+        make_trades(self.user, 1, setups = "ifvg")
+
+        with patch("mentor.views.interpret") as model:
+            self.client.post("/mentor/rules/preview/",
+                             {"terms": {"require": [["ifvg"]], "forbid": []}}, format = "json")
+
+        model.assert_not_called()
+
+    def test_the_preview_shows_only_his_own_record(self):
+        other = User.objects.create_user(username = "zoe", password = "Tr4de-Pl4n!x")
+        make_trades(other, 5, setups = "ifvg")
+
+        response = self.client.post("/mentor/rules/preview/",
+                                    {"terms": {"require": [["ifvg"]], "forbid": []}},
+                                    format = "json")
+
+        self.assertEqual(response.data["per_term"]["ifvg"], 0)
+        self.assertEqual(response.data["labels"], [])
+
+    def test_the_panel_knows_whether_he_has_tagged_anything(self):
+        """Said before he writes a rule, not after - the whole mechanism rests on it."""
+        empty = self.client.get("/mentor/rules/")
+        self.assertFalse(empty.data["has_labels"])
+
+        make_trades(self.user, 1, setups = "ifvg")
+
+        self.assertTrue(self.client.get("/mentor/rules/").data["has_labels"])
+
+    def test_a_hand_edited_rule_does_not_relearn_on_the_next_import(self):
+        """He corrected it on purpose; re-reading his sentence would discard the correction
+        at the first file he uploads."""
+        make_trades(self.user, 1, setups = "5m fvg retracement")
+
+        self.client.post("/mentor/rules/save/", {
+            "kind": "custom", "text": "כניסה רק על FVG",
+            "terms": {"require": [["5m fvg retracement"]], "forbid": []},
+        }, format = "json")
+
+        with patch("mentor.rules.interpret") as reread:
+            rules_module.refresh(self.user)
+
+        reread.assert_not_called()
+        self.assertEqual(TraderRule.objects.get().terms["require"], [["5m fvg retracement"]])
+
+
     # ------------- AND RELEARNING, WHEN HIS WORDS CHANGE:
 
     def test_a_rule_reads_itself_again_when_new_labels_appear(self):

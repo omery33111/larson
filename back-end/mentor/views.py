@@ -16,7 +16,8 @@ from analytics.statistics import clean_label, compute_statistics
 from chat import retrieval
 
 from .compliance import check_plan
-from .interpret import MAX_RULE_LENGTH, coverage, interpret, read_back, vocabulary
+from .interpret import (MAX_RULE_LENGTH, coverage, interpret, per_term, read_back,
+                        validate_his_own, vocabulary)
 from .models import TraderRule
 from .rules import declared_rules
 from .serializers import TraderRuleSerializer
@@ -300,10 +301,23 @@ def rules(request):
     rows = TraderRule.objects.filter(user = request.user)
 
     return Response({
-        "rules": TraderRuleSerializer(rows, many = True).data,
+        "rules": [{**TraderRuleSerializer(row).data,
+                   # **What it looks for, on every rule and not only the one just saved.**
+                   # Frozen terms degrade quietly, and a line he can read at any time is how
+                   # he notices. `terms` rides along too, because the editor needs the shape
+                   # to render - he edits his own words there, not a paraphrase of them.
+                   "looking_for": read_back(row.terms),
+                   "terms": row.terms} if row.kind == TraderRule.CUSTOM
+                  else TraderRuleSerializer(row).data
+                  for row in rows],
         # The menu travels with the answer so the screen never holds its own copy of the
         # kinds - a second list of them is one release away from disagreeing with this one.
         "kinds": [{"kind": kind, "label": label} for kind, label in TraderRule.KINDS],
+        # **Whether he has tagged anything at all**, because the free-text rule is built on
+        # exactly that and nothing else. Learning it only after writing a rule and reading
+        # the coverage line is learning it one step too late - the screen should say so
+        # before he writes, not after.
+        "has_labels": bool(vocabulary(request.user)),
     })
 
 
@@ -338,10 +352,25 @@ def save_rule(request):
             return Response({"error": f"אפשר עד {MAX_CUSTOM_RULES} תנאים משלך."},
                             status = status.HTTP_400_BAD_REQUEST)
 
-        # His own labels go in with the sentence, so a term comes back as a string that
-        # exists in his record rather than as a guess about what it might be called.
-        terms = interpret(text, billed_to = request.user,
-                          known_labels = vocabulary(request.user))
+        # ------------- HE CORRECTED THE TERMS HIMSELF:
+        #
+        # **Then there is nothing to interpret, and no call to pay for.** He has told us
+        # exactly what to look for, which is better information than any reading of his
+        # sentence - he is the only one who knows that his FVG entries are tagged
+        # `5m fvg retracement`.
+        supplied = request.data.get("terms")
+
+        if supplied:
+            terms = validate_his_own(supplied)
+
+            if not terms:
+                return Response({"error": "צריך לפחות מונח אחד לחפש."},
+                                status = status.HTTP_400_BAD_REQUEST)
+        else:
+            # His own labels go in with the sentence, so a term comes back as a string that
+            # exists in his record rather than as a guess about what it might be called.
+            terms = interpret(text, billed_to = request.user,
+                              known_labels = vocabulary(request.user))
 
         if not terms:
             return Response({
@@ -356,10 +385,12 @@ def save_rule(request):
             if not row:
                 return Response({"error": "אין כלל כזה."}, status = status.HTTP_404_NOT_FOUND)
             row.text, row.terms, row.is_active = text, terms, True
+            row.known_labels = vocabulary(request.user)
             row.save()
         else:
             row = TraderRule.objects.create(user = request.user, kind = TraderRule.CUSTOM,
-                                            text = text, terms = terms)
+                                            text = text, terms = terms,
+                                            known_labels = vocabulary(request.user))
 
         # **How many of his trades can answer it at all.** Without this he reads "kept" over a
         # year of trades that recorded nothing, and believes he followed a plan he never did.
@@ -416,3 +447,30 @@ def delete_rule(request, rule_id):
         return Response({"error": "אין כלל כזה."}, status = status.HTTP_404_NOT_FOUND)
 
     return Response(status = status.HTTP_204_NO_CONTENT)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def preview_rule(request):
+    """
+    What a set of terms would find, right now, over his own record.
+
+    **This is what turns editing the terms from guessing into feedback.** He sees
+    `fair value gap - 0` beside `fvg - 23` and needs nothing explained: the dead term is
+    visibly dead, and he fixes it before saving rather than a month after.
+
+    No model and no cost - the same matcher the verdict uses, run over rows already in hand.
+    It also hands back his own labels, because the fastest correct edit is picking the tag
+    he actually writes instead of typing a guess at it.
+    """
+    terms = validate_his_own(request.data.get("terms") or {})
+
+    rows = list(Trade.objects.filter(user = request.user))
+
+    return Response({
+        "per_term": per_term(terms, rows) if terms else {},
+        "coverage": coverage(rows, terms),
+        # Capped for the screen rather than for the prompt: a list he has to scroll past is
+        # a list he stops reading.
+        "labels": vocabulary(request.user)[:120],
+    })

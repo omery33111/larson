@@ -32,6 +32,7 @@ const initialState: MentorState =
 
     rules: [],
     ruleCoverage: null,
+    hasLabels: true,
     ruleKinds: [],
     isRulesOpen: false,
     isRulesLoading: false,
@@ -353,6 +354,7 @@ export const mentorSlice = createSlice({
         {
             state.isRulesLoading = false;
             state.rules = action.payload.rules;
+            state.hasLabels = action.payload.has_labels ?? true;
             state.ruleKinds = action.payload.kinds;
         })
         .addCase(getRulesAsync.rejected, (state, action) =>
@@ -433,6 +435,8 @@ function settle(state: MentorState) {
 export const selectRules = (state: RootState) => state.mentor.rules;
 
 export const selectRuleCoverage = (state: RootState) => state.mentor.ruleCoverage;
+
+export const selectHasLabels = (state: RootState) => state.mentor.hasLabels;
 export const selectRuleKinds = (state: RootState) => state.mentor.ruleKinds;
 export const selectIsRulesOpen = (state: RootState) => state.mentor.isRulesOpen;
 export const selectIsRulesLoading = (state: RootState) => state.mentor.isRulesLoading;

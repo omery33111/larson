@@ -4,8 +4,9 @@ import { FiCheck, FiEdit3, FiPlus, FiTrash2, FiX } from 'react-icons/fi'
 import { useAppDispatch, useAppSelector } from '../../app/hooks'
 import {
   closeRules, deleteRuleAsync, getRulesAsync, saveRuleAsync, selectIsRulesLoading,
-  selectIsRulesOpen, selectRuleCoverage, selectRuleKinds, selectRules
+  selectHasLabels, selectIsRulesOpen, selectRuleCoverage, selectRuleKinds, selectRules
 } from './mentorSlice'
+import RuleTerms from './RuleTerms'
 import './mentor.css'
 
 
@@ -90,6 +91,7 @@ const RulesPanel = () => {
   const rules = useAppSelector(selectRules);
   const kinds = useAppSelector(selectRuleKinds);
   const coverage = useAppSelector(selectRuleCoverage);
+  const hasLabels = useAppSelector(selectHasLabels);
 
   // The only local state in here, and it is the one case the convention allows: the half-typed
   // contents of the open field. It belongs to nothing but this render and is thrown away on
@@ -221,6 +223,16 @@ const RulesPanel = () => {
                   כמו כל כלל אחר. <b>מה שלא רשמת על העסקה, הוא לא רואה.</b>
                 </p>
 
+                {/* **Said before he writes, not after.** The whole mechanism rests on his
+                    tags; learning that from the coverage line of a rule he already wrote is
+                    learning it one step too late. */}
+                {!hasLabels &&
+                  <p className="rules-needs-tags">
+                    <b>אין עדיין אף תגית, שם סטאפ או הערה על העסקאות שלך</b>, ולכן אין מול מה
+                    לבדוק תנאי כזה. הוא יתחיל לעבוד ברגע שהייצוא שלך יישא אותם — ועד אז
+                    <b> התבניות שלמטה עובדות במלואן</b>, כי הן נבדקות מול שעה, כמות ורצף.
+                  </p>}
+
                 {mine.map((rule) => (
                   <div key={rule.id} className="rules-mine-row">
                     {editing === `custom:${rule.id}`
@@ -254,17 +266,11 @@ const RulesPanel = () => {
                         words appear in none of his trades is almost always a rule about
                         something the engine cannot see, and left alone it would report
                         every tagged trade as a breach. */}
-                    {/* **What it will actually look for, read-only.** The structure itself
-                        never reaches the screen - he would edit our paraphrase instead of
-                        his plan - but he does need to see whether "IFVG or CISD" was read
-                        as one condition or two. That inversion is the difference between a
-                        rule almost every trade keeps and one almost every trade breaks, and
-                        nothing else here would reveal it. If it reads wrong, the fix is to
-                        reword the sentence, which is the thing that should be edited. */}
-                    {coverage?.id === rule.id && coverage.lookingFor &&
-                      <p className="rules-looking">
-                        מחפש על העסקה: <code>{coverage.lookingFor}</code>
-                      </p>}
+                    {/* **What it looks for, on every rule and always - and editable.**
+                        The model reads "only on an FVG" and produces `fair value gap`; his
+                        trades are tagged `5m fvg retracement`. Only he knows that, so the
+                        line that shows the mismatch is also the one that fixes it. */}
+                    {editing !== `custom:${rule.id}` && <RuleTerms rule={rule} />}
 
                     {coverage?.id === rule.id &&
                       <p className={`rules-coverage ${coverage.matched ? '' : 'rules-coverage-none'}`}>
