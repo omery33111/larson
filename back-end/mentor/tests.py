@@ -2119,6 +2119,58 @@ class SuggestionTests(APITestCase):
         # And keeping it has to read as a real answer, not as failing to act.
         self.assertIn("להשאיר", card["detail"])
 
+    def test_saying_no_to_one_reason_does_not_silence_a_stronger_one(self):
+        """
+        **A no should close the question it was asked, not every future question about the
+        same rule.** He turned down "you keep breaking this", and that silenced the engine
+        entirely - so when the stronger reason appeared, that the rule blocks his most
+        profitable setup, there was nothing it could say.
+
+        Two different questions, and he is entitled to answer them differently.
+        """
+        for n in range(40):
+            at = BASE + timedelta(hours = n)
+            Trade.objects.create(
+                user = self.user, executed_at = at, opened_at = at - timedelta(minutes = 9),
+                symbol = "MNQU6", instrument = "NQ", source_timezone = "Asia/Jerusalem",
+                currency = "USD", direction = "long", quantity = 1.0, pnl = 120.0,
+                outcome = "win", duration_seconds = 540, setups = "ifvg",
+                dedup_hash = f"both-{n}")
+
+        rule = TraderRule.objects.create(user = self.user, kind = TraderRule.CUSTOM,
+                                         text = "בלי ifvg",
+                                         terms = {"require": [], "forbid": ["ifvg"]})
+
+        # He already said no to the compliance reason.
+        DismissedSuggestion.objects.create(user = self.user, key = f"retire:{rule.id}:wish")
+
+        card = propose(self.user, [], compute_statistics(list(Trade.objects.all())))
+
+        self.assertIsNotNone(card, "a dismissed reason silenced a different one")
+        self.assertEqual(card["key"], f"retire:{rule.id}:costly")
+
+    def test_saying_no_to_a_reason_does_silence_that_reason(self):
+        """The nagging it was built to prevent still cannot happen."""
+        for n in range(40):
+            at = BASE + timedelta(hours = n)
+            Trade.objects.create(
+                user = self.user, executed_at = at, opened_at = at - timedelta(minutes = 9),
+                symbol = "MNQU6", instrument = "NQ", source_timezone = "Asia/Jerusalem",
+                currency = "USD", direction = "long", quantity = 1.0, pnl = 120.0,
+                outcome = "win", duration_seconds = 540, setups = "ifvg",
+                dedup_hash = f"same-{n}")
+
+        rule = TraderRule.objects.create(user = self.user, kind = TraderRule.CUSTOM,
+                                         text = "בלי ifvg",
+                                         terms = {"require": [], "forbid": ["ifvg"]})
+
+        DismissedSuggestion.objects.create(user = self.user,
+                                           key = f"retire:{rule.id}:costly")
+
+        card = propose(self.user, [], compute_statistics(list(Trade.objects.all())))
+
+        self.assertNotEqual((card or {}).get("key"), f"retire:{rule.id}:costly")
+
     def test_a_rule_that_forbids_what_he_makes_money_on_is_offered_whatever_the_ratio(self):
         """
         **The case compliance ratios cannot see.** He wrote "only enter without IFVG" while

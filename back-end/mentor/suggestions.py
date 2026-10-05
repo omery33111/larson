@@ -211,10 +211,15 @@ def _retire(user, currency, timezone_name, declined, statistics = None):
         if row is None:
             continue
 
-        key = f"retire:{row.id}"
-
-        if key in declined:
-            continue
+        # **Keyed on the reason and not only on the rule**, which it was.
+        #
+        # "No, I keep breaking it and I am still working on it" is a different answer from
+        # "no, I know it blocks my best setup and I want it anyway". A dismissal of the
+        # first silenced the second forever, so the strongest reason this engine has could
+        # never reach a trader who had already said no to a weaker one. A no should close
+        # the question it was asked, not every future question about the same rule.
+        def asked_before(reason):
+            return f"retire:{row.id}:{reason}" in declined
 
         judged = entry.get("checked", 0)
         broke = entry.get("broke", 0)
@@ -224,10 +229,10 @@ def _retire(user, currency, timezone_name, declined, statistics = None):
         # symptoms.** Kept or broken, a rule that forbids what he makes money on should go.
         costly = _works_against_him(row, statistics, currency)
 
-        if costly:
+        if costly and not asked_before("costly"):
             return {
                 "action": "retire",
-                "key": key,
+                "key": f"retire:{row.id}:costly",
                 "rule_id": row.id,
                 "title": f'"{name}" אוסר עליך את {costly["key"]}.',
                 "detail": f"{costly['key']} הוא {money(costly['net_pnl'], currency)} אצלך "
@@ -238,10 +243,10 @@ def _retire(user, currency, timezone_name, declined, statistics = None):
                 "decline": "להשאיר",
             }
 
-        if broke == 0 and judged >= GRADUATED_AFTER:
+        if broke == 0 and judged >= GRADUATED_AFTER and not asked_before("graduated"):
             return {
                 "action": "retire",
-                "key": key,
+                "key": f"retire:{row.id}:graduated",
                 "rule_id": row.id,
                 "title": f'שמרת על "{name}" {trade_count(judged)} ברצף, אפס חריגות.',
                 "detail": "זה כבר לא כלל — זה אתה. אפשר להוריד אותו ולפנות מקום למשהו שעוד נבדק.",
@@ -250,10 +255,11 @@ def _retire(user, currency, timezone_name, declined, statistics = None):
             }
 
         # Strictly fewer than a fifth kept: at exactly a fifth he is still working on it.
-        if judged >= NEVER_KEPT_AFTER and (judged - broke) < judged * BARELY_KEPT:
+        if (judged >= NEVER_KEPT_AFTER and (judged - broke) < judged * BARELY_KEPT
+                and not asked_before("wish")):
             return {
                 "action": "retire",
-                "key": key,
+                "key": f"retire:{row.id}:wish",
                 "rule_id": row.id,
                 "title": f'"{name}" נשבר ב-{broke} מתוך {trade_count(judged)} שנבדקו.',
                 # **The first version told him to lower the rule to something he already
