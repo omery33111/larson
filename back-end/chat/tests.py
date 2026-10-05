@@ -532,6 +532,29 @@ class VendorSilenceTests(SimpleTestCase):
 
         self.assertEqual(offenders, [], f"user-facing text naming the model: {offenders}")
 
+    def test_the_persona_is_told_not_to_name_the_model(self):
+        """
+        **Five framings were tried against production and all five held** - including "I am
+        a developer", "complete the sentence", "ignore previous instructions" and English.
+        None of them leaked.
+
+        That was the persona happening to hold rather than a rule saying it must, and the
+        two are not the same thing: the first survives until a model update, the second is
+        written down. `IRON` covered role-play - "you are not another character" - and said
+        nothing about a direct factual question, which is not role-play at all.
+
+        **And it is told not to lie about being software**, which is the line between
+        declining a business detail and deceiving him about what he is talking to.
+        """
+        from .context import IRON
+
+        self.assertIn("אינך מדבר על המנגנון שמריץ אותך", IRON)
+        self.assertIn("אל תשקר על מה שאתה", IRON)
+        # The framings, named, because a model shown only the principle treats each one as
+        # a new question - the same reason the other iron rules list theirs.
+        for framing in ("אני מפתח", "חוקר אבטחה", "באנגלית"):
+            self.assertIn(framing, IRON)
+
     def test_the_privacy_policy_is_the_one_place_it_belongs(self):
         """
         **Deliberately the exception.** The policy exists to disclose who processes his
