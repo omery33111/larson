@@ -294,20 +294,39 @@ def _timezone(trades):
 # model because it is a judgement about a screen - past a handful, a debrief that answers
 # every one of them stops being readable.
 
+
+def _custom(row, trades = None):
+    """
+    One free-text rule, in the one shape both endpoints return.
+
+    **What it looks for travels on every rule, not only the one just saved.** Frozen terms
+    degrade quietly, and a line he can read at any time is how he notices. `terms` rides
+    along because the editor needs the structure to render it as separate chips - he edits
+    his own words there, never a paraphrase of them.
+
+    **And `matched` rides along instead of a paragraph.** Earlier versions explained in
+    prose what happens when a rule's words appear in none of his trades; a number that says
+    `0` beside the rule says it faster, in every language, and without being read.
+    """
+    return {**TraderRuleSerializer(row).data,
+            "looking_for": read_back(row.terms),
+            "terms": row.terms,
+            "matched": coverage(trades, row.terms)["matched"] if trades is not None else None}
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def rules(request):
     """What he has committed to, and the full menu of what he could."""
-    rows = TraderRule.objects.filter(user = request.user)
+    rows = list(TraderRule.objects.filter(user = request.user))
+
+    # Loaded once for all of them rather than per rule: it is the same list every time, and
+    # the matcher is a string comparison.
+    trades = (list(Trade.objects.filter(user = request.user))
+              if any(row.kind == TraderRule.CUSTOM for row in rows) else [])
 
     return Response({
-        "rules": [{**TraderRuleSerializer(row).data,
-                   # **What it looks for, on every rule and not only the one just saved.**
-                   # Frozen terms degrade quietly, and a line he can read at any time is how
-                   # he notices. `terms` rides along too, because the editor needs the shape
-                   # to render - he edits his own words there, not a paraphrase of them.
-                   "looking_for": read_back(row.terms),
-                   "terms": row.terms} if row.kind == TraderRule.CUSTOM
+        "rules": [_custom(row, trades) if row.kind == TraderRule.CUSTOM
                   else TraderRuleSerializer(row).data
                   for row in rows],
         # The menu travels with the answer so the screen never holds its own copy of the
@@ -394,9 +413,14 @@ def save_rule(request):
 
         # **How many of his trades can answer it at all.** Without this he reads "kept" over a
         # year of trades that recorded nothing, and believes he followed a plan he never did.
-        return Response({**TraderRuleSerializer(row).data,
-                         "coverage": coverage(Trade.objects.filter(user = request.user), terms),
-                         "looking_for": read_back(terms)},
+        # **The same shape the list returns, and that is the whole point of saying so here.**
+        # It did not, and the screen fell back to printing the whole read-back inside one box
+        # for a rule he had just saved while showing the same rule as separate chips after a
+        # reload. Two paths returning different shapes for one object is a defect that only
+        # ever shows up in the half of the session nobody tests.
+        mine = list(Trade.objects.filter(user = request.user))
+
+        return Response({**_custom(row, mine), "coverage": coverage(mine, terms)},
                         status = status.HTTP_201_CREATED)
 
     if kind == TraderRule.ONLY_SETUPS:

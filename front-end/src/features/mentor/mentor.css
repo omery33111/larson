@@ -650,6 +650,21 @@
 
 .rules-needs-tags b { color: #e0a94d; }
 
+.rules-hits {
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: #16281f;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #2fa66a;
+  white-space: nowrap;
+}
+
+.rules-hits-none {
+  background: #2a1619;
+  color: #d1494e;
+}
+
 .rules-edit-terms {
   display: inline-flex;
   align-items: center;
@@ -813,15 +828,6 @@
 }
 
 .terms-vocab-chip { direction: ltr; }
-
-.terms-empty {
-  margin: 0.7rem 0 0;
-  padding-top: 0.7rem;
-  border-top: 1px solid #1f242c;
-  font-size: 0.79rem;
-  line-height: 1.7;
-  color: #c98f3f;
-}
 
 .terms-actions {
   display: flex;

@@ -157,6 +157,15 @@ const RuleTerms = ({ rule }: { rule: TraderRule }) => {
             </span>
           )}
 
+        {/* **A number, not a sentence.** Every earlier version of this screen explained in
+            prose what happens when a rule's words appear in none of his trades. `0` in red
+            says it without being read, and the per-term breakdown is one click away in the
+            editor - which is where somebody who wants the detail is already going. */}
+        {typeof rule.matched === 'number' &&
+          <span className={`rules-hits ${rule.matched ? '' : 'rules-hits-none'}`}>
+            {rule.matched} עסקאות
+          </span>}
+
         <button type="button" className="rules-edit-terms" onClick={start}>
           <FiEdit2 /> לדייק
         </button>
@@ -258,12 +267,6 @@ const RuleTerms = ({ rule }: { rule: TraderRule }) => {
             ))}
           </div>
         </div>}
-
-      {preview && !preview.labels.length &&
-        <p className="terms-empty">
-          <b>עוד לא תייגת אף עסקה</b>, אז אין מול מה לבדוק. התנאי יתחיל לעבוד ברגע שתתחיל
-          לרשום תגיות, שם סטאפ או הערה.
-        </p>}
 
       <div className="terms-actions">
         <button type="button" className="app-btn app-btn-primary" onClick={save}

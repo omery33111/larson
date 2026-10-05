@@ -20,6 +20,10 @@ export interface TraderRule {
     /** Only the free-text kind carries these, and only so the editor can render them. */
     terms?: RuleTerms | null;
     looking_for?: string;
+    /** **How many of his trades this rule's words currently find.** A number instead of a
+     *  paragraph: `0` says "this finds nothing" faster than any sentence explaining that it
+     *  might. Null when the server did not compute it. */
+    matched?: number | null;
     is_active: boolean;
     created_at: string;
 }

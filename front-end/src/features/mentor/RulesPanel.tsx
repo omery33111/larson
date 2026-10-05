@@ -4,7 +4,7 @@ import { FiCheck, FiEdit3, FiPlus, FiTrash2, FiX } from 'react-icons/fi'
 import { useAppDispatch, useAppSelector } from '../../app/hooks'
 import {
   closeRules, deleteRuleAsync, getRulesAsync, saveRuleAsync, selectIsRulesLoading,
-  selectHasLabels, selectIsRulesOpen, selectRuleCoverage, selectRuleKinds, selectRules
+  selectHasLabels, selectIsRulesOpen, selectRuleKinds, selectRules
 } from './mentorSlice'
 import RuleTerms from './RuleTerms'
 import './mentor.css'
@@ -90,7 +90,6 @@ const RulesPanel = () => {
   const isLoading = useAppSelector(selectIsRulesLoading);
   const rules = useAppSelector(selectRules);
   const kinds = useAppSelector(selectRuleKinds);
-  const coverage = useAppSelector(selectRuleCoverage);
   const hasLabels = useAppSelector(selectHasLabels);
 
   // The only local state in here, and it is the one case the convention allows: the half-typed
@@ -217,20 +216,21 @@ const RulesPanel = () => {
                   <FiEdit3 /> התנאים שלך, בניסוח שלך
                 </h3>
 
+                {/* **One line, and the numbers carry the rest.** Every earlier version of
+                    this section explained the mechanism in prose - where it looks, what it
+                    cannot see, what happens when nothing matches - and a feature whose
+                    whole appeal is that it is simple cannot open with a page of caveats.
+                    None of those facts were dropped; they moved to where they are
+                    unmissable and need no reading. A count of `0` beside a term teaches
+                    faster than a paragraph saying a term might find nothing. */}
                 <p className="rules-section-sub">
-                  תכתוב תנאי כמו שאתה חושב עליו. לארסון מחפש אותו <b>בתגיות ובשמות הסטאפים
-                  שסימנת על העסקה</b>, ולא בהערות החופשיות — ומשם זו בדיקה רגילה על כל
-                  עסקה, בדיוק כמו כל כלל אחר. <b>מה שלא תייגת, הוא לא רואה.</b>
+                  תכתוב תנאי בשפה שלך — לארסון יבדוק אותו <b>מול התגיות שסימנת</b>, בכל עסקה.
                 </p>
 
-                {/* **Said before he writes, not after.** The whole mechanism rests on his
-                    tags; learning that from the coverage line of a rule he already wrote is
-                    learning it one step too late. */}
                 {!hasLabels &&
                   <p className="rules-needs-tags">
-                    <b>אין עדיין אף תגית או שם סטאפ על העסקאות שלך</b>, ולכן אין מול מה
-                    לבדוק תנאי כזה. הוא יתחיל לעבוד ברגע שהייצוא שלך יישא אותם — ועד אז
-                    <b> התבניות שלמטה עובדות במלואן</b>, כי הן נבדקות מול שעה, כמות ורצף.
+                    עוד לא תייגת עסקאות, אז תנאי כזה עדיין לא ייבדק.
+                    <b> התבניות המוכנות עובדות.</b>
                   </p>}
 
                 {mine.map((rule) => (
@@ -259,33 +259,11 @@ const RulesPanel = () => {
                         </>
                       )}
 
-                    {/* **The number that stops this from lying.** Shown next to the rule it
-                        belongs to, right after he saves it, and never again - it answers a
-                        question about that save and not a standing fact about the screen. */}
-                    {/* **Three states, because the middle one is a trap.** A rule whose
-                        words appear in none of his trades is almost always a rule about
-                        something the engine cannot see, and left alone it would report
-                        every tagged trade as a breach. */}
                     {/* **What it looks for, on every rule and always - and editable.**
                         The model reads "only on an FVG" and produces `fair value gap`; his
                         trades are tagged `5m fvg retracement`. Only he knows that, so the
                         line that shows the mismatch is also the one that fixes it. */}
                     {editing !== `custom:${rule.id}` && <RuleTerms rule={rule} />}
-
-                    {coverage?.id === rule.id &&
-                      <p className={`rules-coverage ${coverage.matched ? '' : 'rules-coverage-none'}`}>
-                        {!coverage.answerable
-                          ? <><b>אף אחת מהעסקאות שלך לא נושאת תגית או שם סטאפ</b>, ולכן אין
-                              מול מה לבדוק את התנאי הזה עדיין. הוא יתחיל לעבוד ברגע שתתייג.</>
-                          : !coverage.matched
-                            ? <><b>המילים של התנאי הזה לא מופיעות באף אחת מ-{coverage.answerable} העסקאות
-                                שתיעדת.</b> לארסון קורא רק את התגיות שסימנת — אם מדובר במשהו
-                                שהוא לא יכול לראות (חדשות, VIX, ספרד), <b>הוא יסמן כל עסקה כהפרה
-                                גם אם שמרת על הכלל.</b> כדאי לנסח מחדש במונחים שאתה מתייג בהם.</>
-                            : <>מתוך {coverage.total} עסקאות, <b>{coverage.matched} נושאות את
-                                המילים של התנאי הזה</b> ו-{coverage.answerable} תועדו בכלל.
-                                מה שלא תועד לא ייספר לכאן ולא לכאן.</>}
-                      </p>}
                   </div>
                 ))}
 

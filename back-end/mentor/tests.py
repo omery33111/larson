@@ -1647,6 +1647,25 @@ class CustomRuleTests(APITestCase):
 
         self.assertEqual(self.verdict(rows)["broken"], [])
 
+    def test_saving_returns_the_same_shape_the_list_does(self):
+        """
+        **It did not, and the screen showed one rule two different ways.** A rule just saved
+        came back without `terms`, so the read-back fell to printing the whole line inside
+        one box; after a reload the same rule arrived with terms and rendered as separate
+        chips. Two paths returning different shapes for one object is the kind of defect
+        that only shows up in the half of the session nobody tests.
+        """
+        with patch("mentor.views.interpret",
+                   return_value = {"require": [["a plus", "aplus"]], "forbid": []}):
+            saved = self.client.post("/mentor/rules/save/",
+                                     {"kind": "custom", "text": "רק סטאפים A+"},
+                                     format = "json")
+
+        listed = self.client.get("/mentor/rules/").data["rules"][0]
+
+        for key in ("terms", "looking_for", "text", "kind", "id"):
+            self.assertEqual(saved.data[key], listed[key], f"{key} differs between the two")
+
     def test_the_save_shows_him_what_it_will_look_for(self):
         """
         **The one thing he could not otherwise check.** "IFVG or CISD" read as two separate
@@ -1669,17 +1688,21 @@ class CustomRuleTests(APITestCase):
         self.assertEqual(either.data["looking_for"], "ifvg או cisd")
         self.assertEqual(both.data["looking_for"], "ifvg וגם delta")
 
-    def test_the_structure_itself_still_never_reaches_the_screen(self):
-        """He reads a sentence; editing our paraphrase instead of his plan is the failure
-        the read-back must not reintroduce."""
+    def test_the_terms_travel_so_the_screen_can_render_them_one_by_one(self):
+        """
+        **Each term in its own box, with the connectives outside them.** One box around the
+        whole read-back reads as an opaque string; boxing the terms alone makes them read as
+        what they are - the tags it will go looking for. The screen cannot do that from a
+        flattened sentence, so the structure has to travel.
+        """
         with patch("mentor.views.interpret",
-                   return_value = {"require": [["ifvg"]], "forbid": ["news"]}):
+                   return_value = {"require": [["ifvg", "inverse fvg"]], "forbid": ["news"]}):
             response = self.client.post("/mentor/rules/save/",
                                         {"kind": "custom", "text": "רק עם IFVG"},
                                         format = "json")
 
-        self.assertNotIn("terms", response.data)
-        self.assertIsInstance(response.data["looking_for"], str)
+        self.assertEqual(response.data["terms"]["require"], [["ifvg", "inverse fvg"]])
+        self.assertEqual(response.data["looking_for"], "ifvg או inverse fvg וגם בלי news")
 
     def test_a_sentence_that_cannot_be_interpreted_is_refused_and_nothing_is_saved(self):
         with patch("mentor.views.interpret", return_value = None):
@@ -1690,8 +1713,18 @@ class CustomRuleTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(TraderRule.objects.exists())
 
-    def test_his_sentence_is_stored_exactly_and_our_reading_of_it_is_not_returned(self):
-        """He edits what he wrote; showing him our paraphrase would have him edit that."""
+    def test_his_sentence_is_stored_exactly_as_he_typed_it(self):
+        """
+        It is what the screen shows back and what the debrief quotes, and it is never what
+        gets judged.
+
+        **This used to also assert that `terms` never left the server**, which was right
+        until the editor existed. The principle it was protecting has not changed - he must
+        never find himself editing our paraphrase *instead of* his plan - but the answer is
+        no longer to hide the terms. They are shown as "what it looks for", under their own
+        heading, beside live counts, while the sentence stays his and stays editable. The
+        test was tracking the mechanism rather than the principle.
+        """
         with patch("mentor.views.interpret", return_value = {"require": [["ifvg"]],
                                                              "forbid": []}):
             response = self.client.post("/mentor/rules/save/",
@@ -1699,7 +1732,7 @@ class CustomRuleTests(APITestCase):
                                         format = "json")
 
         self.assertEqual(response.data["text"], "רק כשיש IFVG ודלתא")
-        self.assertNotIn("terms", response.data)
+        self.assertEqual(TraderRule.objects.get().text, "רק כשיש IFVG ודלתא")
 
     def test_a_rule_cannot_forge_structure_in_the_prompt(self):
         """Free text he types, reaching the debrief - the same ceiling every label is held
