@@ -217,15 +217,6 @@ const RuleTerms = ({ rule }: { rule: TraderRule }) => {
         מה שאתה מסמן — תחליף אותה. <b>מונח שמראה "לא נמצא" לא עושה כלום.</b>
       </p>
 
-      {/* **Why prose is excluded, said where he would otherwise wonder.** A note can say
-          "this time I did not enter on a CISD" - the word is there and the meaning is the
-          opposite, and the same is true of "almost", "should have" and "next time". */}
-      <p className="terms-help terms-help-quiet">
-        הערות חופשיות לא נבדקות כאן בכוונה: משפט יכול לומר <i>"הפעם לא נכנסתי על CISD"</i>,
-        והמילה עדיין בתוכו. <b>הן כן מגיעות ללארסון</b> — הוא קורא אותן ליד העסקה עצמה
-        ומדבר עליהן.
-      </p>
-
       {draft.require.map((group, index) => (
         <div key={index} className="terms-row">
           <span className="terms-row-label">{index === 0 ? 'חייב להופיע' : 'וגם'}</span>

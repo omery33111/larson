@@ -219,22 +219,8 @@ const RulesPanel = () => {
 
                 <p className="rules-section-sub">
                   תכתוב תנאי כמו שאתה חושב עליו. לארסון מחפש אותו <b>בתגיות ובשמות הסטאפים
-                  שסימנת על העסקה</b> — ומשם זו בדיקה רגילה על כל עסקה, בדיוק כמו כל כלל
-                  אחר. <b>מה שלא תייגת, הוא לא רואה.</b>
-                </p>
-
-                {/* **Said outright rather than left to the omission.** He asked what happens
-                    when a note says "this time I did NOT enter on a CISD" - the word is
-                    there and the meaning is the opposite, and the same holds for "almost",
-                    "should have" and "next time". A tag is a classification he applied; a
-                    sentence is not, and a trader who assumes his notes are scanned is one
-                    bad verdict away from distrusting the whole feature. */}
-                <p className="rules-section-sub rules-why-not-notes">
-                  <b>הערות חופשיות לא נסרקות כאן, בכוונה.</b> אפשר לכתוב בהערה <i>"הפעם לא
-                  נכנסתי על CISD"</i> — המילה בפנים והכוונה הפוכה, וכך גם ב<i>"כמעט"</i>,
-                  ב<i>"הייתי צריך"</i> וב<i>"בפעם הבאה"</i>. תגית היא סיווג שקבעת; משפט הוא
-                  לא. <b>ההערות שלך כן מגיעות ללארסון</b> — הוא קורא אותן ליד העסקה עצמה
-                  ומדבר עליהן איתך.
+                  שסימנת על העסקה</b>, ולא בהערות החופשיות — ומשם זו בדיקה רגילה על כל
+                  עסקה, בדיוק כמו כל כלל אחר. <b>מה שלא תייגת, הוא לא רואה.</b>
                 </p>
 
                 {/* **Said before he writes, not after.** The whole mechanism rests on his

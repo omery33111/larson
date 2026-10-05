@@ -469,20 +469,6 @@
 
 .rules-section-sub b { color: #c9ccd3; }
 
-/* Quieter than the line above it: it is the caveat, not the instruction. */
-.rules-why-not-notes {
-  padding: 0.6rem 0.7rem;
-  border-inline-start: 2px solid #2d313b;
-  border-radius: 0 7px 7px 0;
-  background: #12151b;
-  font-size: 0.78rem;
-}
-
-.rules-why-not-notes i {
-  color: #c9ccd3;
-  font-style: normal;
-}
-
 .rules-mine-row {
   padding: 0.7rem 0;
   border-top: 1px solid #23262f;
@@ -695,14 +681,6 @@
 }
 
 .terms-help b { color: #c9ccd3; }
-
-.terms-help-quiet {
-  margin-top: -0.4rem;
-  font-size: 0.76rem;
-  color: #626875;
-}
-
-.terms-help-quiet i { color: #8b909c; }
 
 .terms-row {
   display: flex;
