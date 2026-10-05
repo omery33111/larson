@@ -204,7 +204,9 @@ def _breaks(rule, trade, tz, previous):
     # ran until 10:30 as obedient.
     if kind in ("no_before", "no_after"):
         entry = (trade.opened_at or trade.executed_at).astimezone(tz)
-        edge = entry.replace(hour = int(rule["value"]), minute = 0, second = 0, microsecond = 0)
+        # Minutes from midnight, so 09:30 is a threshold a trader can actually set.
+        edge = entry.replace(hour = int(rule["value"]) // 60, minute = int(rule["value"]) % 60,
+                             second = 0, microsecond = 0)
 
         return entry < edge if kind == "no_before" else entry > edge
 
@@ -254,12 +256,6 @@ def _breaks(rule, trade, tz, previous):
                 return True
 
         return False
-
-    if kind == "only_setups":
-        tags = _split_tags(trade.setups)
-        # No tag means the trade cannot answer this rule, and silence is the honest verdict -
-        # "you kept it" on a rule that was never tested is a compliment nobody earned.
-        return None if not tags else not any(tag in rule["value"] for tag in tags)
 
     return None
 

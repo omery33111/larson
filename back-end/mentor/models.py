@@ -33,6 +33,14 @@ from django.db import models
 # The structured kinds are deliberately the ones the checker already understands, plus the two
 # that are about a day rather than a trade.
 #
+# **`only_setups` was removed because the free-text rule already is it, and better.**
+# "Trade only these setups" is exactly `require: [[a, b, c]]` - one condition satisfied by
+# any of several tags - and the free-text version shows how many trades each setup actually
+# matches, lets him pick from the tags he really uses, and names the rule in his own words.
+# Two ways to say one thing is the "two conflicting ceilings" problem wearing a different
+# hat: the debrief would report both. The migration converts existing rows rather than
+# dropping them.
+#
 # **`min_hold` was removed, and the reason is worth keeping.** "Do not hold for less than X
 # minutes" reads like discipline and is not: a good entry that hits its stop in ninety seconds
 # is a short hold the trader did not choose. A rule he cannot obey by deciding to is a rule
@@ -55,7 +63,6 @@ class TraderRule(models.Model):
     NO_REVENGE_WITHIN = "no_revenge_within"
     MAX_TRADES_PER_DAY = "max_trades_per_day"
     MAX_DAILY_LOSS = "max_daily_loss"
-    ONLY_SETUPS = "only_setups"
 
     KINDS = [
         # First in the list because it is first on the screen, and the ordering on this model
@@ -67,20 +74,16 @@ class TraderRule(models.Model):
         (NO_REVENGE_WITHIN, "לא להיכנס תוך X דקות מהפסד"),
         (MAX_TRADES_PER_DAY, "לא יותר מ-X עסקאות ביום"),
         (MAX_DAILY_LOSS, "לא לעבור הפסד יומי של X"),
-        (ONLY_SETUPS, "לסחור רק בסטאפים מהרשימה"),
     ]
 
     user = models.ForeignKey(User, on_delete = models.CASCADE, related_name = "trading_rules")
 
     kind = models.CharField(max_length = 32, choices = KINDS)
 
-    # The threshold. Hours for the two time rules, minutes for hold and revenge, contracts for
-    # size, a count for the daily cap, money for the daily loss.
+    # The threshold. **Minutes from midnight for the two time rules** - they were whole
+    # hours, and "I do not enter before 09:30" is a rule a trader actually has. Minutes for
+    # revenge, contracts for size, a count for the daily cap, money for the daily loss.
     number = models.FloatField(null = True, blank = True)
-
-    # Only `only_setups` uses this: a comma-separated allow-list, matched after the same
-    # cleaning every label from a file goes through.
-    setups = models.TextField(blank = True)
 
     # ------------- THE FREE-TEXT RULE:
     #

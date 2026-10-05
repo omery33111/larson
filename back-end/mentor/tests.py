@@ -956,7 +956,7 @@ class DeclaredRuleTests(APITestCase):
         rows[0].executed_at = BASE.replace(hour = 8)
         rows[0].save()
 
-        plan = self.judged(rows, kind = TraderRule.NO_BEFORE, number = 10)
+        plan = self.judged(rows, kind = TraderRule.NO_BEFORE, number = 10 * 60)
 
         self.assertEqual(len(plan["broken"]), 1)
         self.assertIn("10:00", plan["broken"][0]["rule"])
@@ -969,7 +969,7 @@ class DeclaredRuleTests(APITestCase):
         rows[0].executed_at = BASE.replace(hour = 19)
         rows[0].save()
 
-        plan = self.judged(rows, kind = TraderRule.NO_AFTER, number = 18)
+        plan = self.judged(rows, kind = TraderRule.NO_AFTER, number = 18 * 60)
 
         self.assertEqual(len(plan["broken"]), 1)
 
@@ -986,7 +986,7 @@ class DeclaredRuleTests(APITestCase):
         rows[0].executed_at = BASE.replace(hour = 7, minute = 30)  # 10:30 Jerusalem
         rows[0].save()
 
-        plan = self.judged(rows, kind = TraderRule.NO_BEFORE, number = 10)
+        plan = self.judged(rows, kind = TraderRule.NO_BEFORE, number = 10 * 60)
 
         self.assertEqual(len(plan["broken"]), 1, "an early entry that ran late was let through")
 
@@ -1039,22 +1039,55 @@ class DeclaredRuleTests(APITestCase):
 
         self.assertEqual(len(plan["broken"]), 1)
 
-    def test_a_setup_outside_the_allow_list_is_caught(self):
-        rows = make_trades(self.user, 1, setups = "revenge-fade")
+    def test_a_half_minute_threshold_is_expressible(self):
+        """
+        **It was whole hours, and "I do not enter before 09:30" is a rule traders have.**
+        Minutes from midnight is the storage; the screen shows a clock.
+        """
+        rows = make_trades(self.user, 1)
+        rows[0].opened_at = BASE.replace(hour = 6, minute = 20)   # 09:20 Jerusalem, June
+        rows[0].executed_at = BASE.replace(hour = 8)
+        rows[0].save()
 
-        plan = self.judged(rows, kind = TraderRule.ONLY_SETUPS, setups = "breakout, pullback")
+        broke = self.judged(rows, kind = TraderRule.NO_BEFORE, number = 9 * 60 + 30)
+        self.assertEqual(len(broke["broken"]), 1)
+        self.assertIn("09:30", broke["broken"][0]["rule"])
 
-        self.assertEqual(len(plan["broken"]), 1)
+    def test_the_same_entry_ten_minutes_later_keeps_it(self):
+        rows = make_trades(self.user, 1)
+        rows[0].opened_at = BASE.replace(hour = 6, minute = 40)   # 09:40 Jerusalem
+        rows[0].executed_at = BASE.replace(hour = 8)
+        rows[0].save()
 
-    def test_a_rule_that_could_not_be_judged_is_not_counted_as_kept(self):
-        """**A compliment nobody earned is worse than silence** - the same rule the inferred
-        setup check already follows."""
-        rows = make_trades(self.user, 1, setups = "")
+        plan = self.judged(rows, kind = TraderRule.NO_BEFORE, number = 9 * 60 + 30)
+        self.assertEqual(plan["broken"], [])
 
-        plan = self.judged(rows, kind = TraderRule.ONLY_SETUPS, setups = "breakout")
+    def test_the_setup_allow_list_is_no_longer_its_own_kind(self):
+        """**The free-text rule already is it, and better** - it shows how many trades each
+        setup matches, lets him pick from the tags he really uses, and reads in his own
+        words. Two ways to say one thing is the "two conflicting ceilings" problem again."""
+        self.assertNotIn("only_setups", dict(TraderRule.KINDS))
 
-        names = [entry["rule"] for entry in plan["broken"] + plan["kept"]]
-        self.assertFalse(any("breakout" in name for name in names))
+        response = self.client.post("/mentor/rules/save/",
+                                    {"kind": "only_setups", "setups": "breakout"},
+                                    format = "json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+    def test_midnight_is_a_real_time_and_not_an_empty_threshold(self):
+        """The other kinds treat zero as "no rule"; 00:00 is a wall clock time, and the
+        check that guards the others would have rejected it."""
+        response = self.client.post("/mentor/rules/save/",
+                                    {"kind": "no_after", "number": 0}, format = "json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_a_time_outside_the_clock_is_refused(self):
+        response = self.client.post("/mentor/rules/save/",
+                                    {"kind": "no_before", "number": 1500}, format = "json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 
     # ------------- AND WHAT SEPARATES A DECLARED RULE FROM AN INFERRED ONE:

@@ -39,16 +39,27 @@ import './mentor.css'
 /** What the number means, per kind. A rule whose unit is ambiguous gets set wrong once and
  *  then quietly never fires - so the unit is on screen, beside the field. */
 const UNITS: Record<string, string> = {
-  no_before: 'שעה (0–23)',
-  no_after: 'שעה (0–23)',
   max_size: 'חוזים',
   no_revenge_within: 'דקות',
   max_trades_per_day: 'עסקאות',
   max_daily_loss: 'סכום',
 };
 
-const SETUPS_KIND = 'only_setups';
 const CUSTOM_KIND = 'custom';
+
+/** **A time of day, not a number of hours.** These two are stored as minutes from midnight
+ *  because "I do not enter before 09:30" is a rule traders actually have, and whole hours
+ *  could not express it. `<input type="time">` is the right control for the same reason:
+ *  it is the native one, it validates itself, and on a phone it opens a clock. */
+const CLOCK_KINDS = ['no_before', 'no_after'];
+
+const toClock = (minutes: number) =>
+  `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+
+const fromClock = (value: string) => {
+  const [hours, minutes] = value.split(':').map(Number);
+  return Number.isFinite(hours) && Number.isFinite(minutes) ? hours * 60 + minutes : NaN;
+};
 
 /**
  * Concrete, and every one of them about something he writes on the trade himself.
@@ -67,12 +78,11 @@ const EXAMPLES = [
 
 
 /** How a saved rule reads back, so the panel shows the commitment and not the raw number. */
-const describe = (kind: string, value: number | null, setups: string) => {
-  if (kind === SETUPS_KIND) return setups || '—';
+const describe = (kind: string, value: number | null) => {
   if (value === null) return '—';
 
-  if (kind === 'no_before') return `לפני ${String(Math.trunc(value)).padStart(2, '0')}:00`;
-  if (kind === 'no_after') return `אחרי ${String(Math.trunc(value)).padStart(2, '0')}:00`;
+  if (kind === 'no_before') return `לפני ${toClock(value)}`;
+  if (kind === 'no_after') return `אחרי ${toClock(value)}`;
 
   return `${value} ${UNITS[kind] ?? ''}`.trim();
 };
@@ -111,18 +121,19 @@ const RulesPanel = () => {
   const start = (kind: string) => {
     const existing = byKind[kind];
     setEditing(kind);
-    setValue(kind === SETUPS_KIND
-      ? (existing?.setups ?? '')
-      : (existing?.number != null ? String(existing.number) : ''));
+    setValue(existing?.number == null
+      ? ''
+      : CLOCK_KINDS.includes(kind) ? toClock(existing.number) : String(existing.number));
   };
 
   const save = (kind: string) => {
     const trimmed = value.trim();
     if (!trimmed) return;
 
-    dispatch(saveRuleAsync(kind === SETUPS_KIND
-      ? { kind, number: null, setups: trimmed }
-      : { kind, number: Number(trimmed), setups: '' }));
+    const number = CLOCK_KINDS.includes(kind) ? fromClock(trimmed) : Number(trimmed);
+    if (!Number.isFinite(number)) return;
+
+    dispatch(saveRuleAsync({ kind, number }));
 
     setEditing('');
     setValue('');
@@ -319,7 +330,7 @@ const RulesPanel = () => {
 
                           {existing && !isEditing &&
                             <span className="rules-value">
-                              {describe(kind, existing.number, existing.setups)}
+                              {describe(kind, existing.number)}
                             </span>}
                         </div>
 
@@ -328,10 +339,10 @@ const RulesPanel = () => {
                             <div className="rules-edit">
                               <input
                                 className="app-input rules-input"
-                                type={kind === SETUPS_KIND ? 'text' : 'number'}
+                                type={CLOCK_KINDS.includes(kind) ? 'time' : 'number'}
                                 value={value}
                                 onChange={(event) => setValue(event.target.value)}
-                                placeholder={kind === SETUPS_KIND ? 'breakout, pullback' : UNITS[kind]}
+                                placeholder={UNITS[kind]}
                                 autoFocus
                                 onKeyDown={(event) => { if (event.key === 'Enter') save(kind); }}
                               />

@@ -21,6 +21,13 @@ from .models import TraderRule
 # did"** - which is the stronger answer of the two and should read that way.
 
 
+def clock(minutes):
+    """**Minutes from midnight to a wall clock.** They were whole hours until a trader
+    pointed out that "I do not enter before 09:30" is a rule people actually have."""
+    total = int(minutes)
+    return f"{total // 60:02d}:{total % 60:02d}"
+
+
 def declared_rules(user, currency = "USD"):
     """Every active commitment, in the checker's shape. Empty when he has set none."""
     rows = TraderRule.objects.filter(user = user, is_active = True)
@@ -56,14 +63,12 @@ def _translate(row, currency):
 
     # A rule without its threshold cannot be judged, and a half-saved row must not become a
     # rule that silently never fires.
-    if kind != TraderRule.ONLY_SETUPS and number is None:
+    if number is None:
         return None
 
-    if kind == TraderRule.NO_BEFORE:
-        return _rule(kind, f"לא להיכנס לפני {int(number):02d}:00", mine, number)
-
-    if kind == TraderRule.NO_AFTER:
-        return _rule(kind, f"לא להיכנס אחרי {int(number):02d}:00", mine, number)
+    if kind in (TraderRule.NO_BEFORE, TraderRule.NO_AFTER):
+        word = "לפני" if kind == TraderRule.NO_BEFORE else "אחרי"
+        return _rule(kind, f"לא להיכנס {word} {clock(number)}", mine, number)
 
     if kind == TraderRule.MAX_SIZE:
         return _rule(kind, f"לא לעלות מעל {ratio(number)} חוזים", mine, number)
@@ -77,12 +82,6 @@ def _translate(row, currency):
     if kind == TraderRule.MAX_DAILY_LOSS:
         return _rule(kind, f"לא לעבור הפסד יומי של {money(abs(number), currency)}",
                      mine, abs(number))
-
-    if kind == TraderRule.ONLY_SETUPS:
-        allowed = _split_tags(row.setups)
-        if not allowed:
-            return None
-        return _rule(kind, f"לסחור רק בסטאפים: {', '.join(allowed)}", mine, allowed)
 
     return None
 

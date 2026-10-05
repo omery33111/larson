@@ -349,7 +349,6 @@ def save_rule(request):
     if kind not in dict(TraderRule.KINDS):
         return Response({"error": "סוג כלל לא מוכר."}, status = status.HTTP_400_BAD_REQUEST)
 
-    setups = str(request.data.get("setups", "")).strip()
     number = request.data.get("number")
 
     # ------------- THE ONE IN HIS OWN WORDS:
@@ -423,31 +422,27 @@ def save_rule(request):
         return Response({**_custom(row, mine), "coverage": coverage(mine, terms)},
                         status = status.HTTP_201_CREATED)
 
-    if kind == TraderRule.ONLY_SETUPS:
-        if not setups:
-            return Response({"error": "צריך לפרט לפחות סטאפ אחד."},
-                            status = status.HTTP_400_BAD_REQUEST)
-        number = None
-    else:
-        try:
-            number = float(number)
-        except (TypeError, ValueError):
-            return Response({"error": "צריך מספר."}, status = status.HTTP_400_BAD_REQUEST)
+    try:
+        number = float(number)
+    except (TypeError, ValueError):
+        return Response({"error": "צריך מספר."}, status = status.HTTP_400_BAD_REQUEST)
 
-        if number <= 0:
-            return Response({"error": "המספר צריך להיות גדול מאפס."},
+    # ------------- THE TWO THAT ARE A TIME OF DAY:
+    #
+    # **Minutes from midnight, and midnight itself is a legitimate value.** The others are
+    # thresholds where zero means "no rule", but 00:00 is a real wall clock time, so the
+    # "greater than zero" check cannot apply to these two.
+    if kind in (TraderRule.NO_BEFORE, TraderRule.NO_AFTER):
+        if not 0 <= number <= 1439:
+            return Response({"error": "שעה היא בין 00:00 ל-23:59."},
                             status = status.HTTP_400_BAD_REQUEST)
-
-        # An hour outside the clock is a rule that can never be kept or broken.
-        if kind in (TraderRule.NO_BEFORE, TraderRule.NO_AFTER) and not 0 <= number <= 23:
-            return Response({"error": "שעה היא מספר בין 0 ל-23."},
-                            status = status.HTTP_400_BAD_REQUEST)
-
-        setups = ""
+    elif number <= 0:
+        return Response({"error": "המספר צריך להיות גדול מאפס."},
+                        status = status.HTTP_400_BAD_REQUEST)
 
     row, _ = TraderRule.objects.update_or_create(
         user = request.user, kind = kind,
-        defaults = {"number": number, "setups": setups, "is_active": True})
+        defaults = {"number": number, "is_active": True})
 
     return Response(TraderRuleSerializer(row).data, status = status.HTTP_201_CREATED)
 

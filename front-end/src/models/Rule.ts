@@ -12,8 +12,8 @@
 export interface TraderRule {
     id: number;
     kind: string;
+    /** Minutes from midnight for the two time rules; the unit of the kind for the rest. */
     number: number | null;
-    setups: string;
     // His sentence, exactly as typed. Only the free-text kind carries one, and our reading
     // of it deliberately never comes back down - he would start editing the paraphrase.
     text: string;
