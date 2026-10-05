@@ -38,6 +38,13 @@ from .rules import clock, declared_rules
 GRADUATED_AFTER = 25
 NEVER_KEPT_AFTER = 10
 
+# **A ratio and not "zero kept", which is what it was.** The trader wrote "only enter on a
+# gamble" - a rule he obviously wants gone - and it was kept on the two trades he had
+# actually tagged `gamble` out of hundreds. Two out of two hundred is a wish by any reading,
+# and demanding a perfect zero meant the one rule most worth retiring was the one the engine
+# could not see.
+BARELY_KEPT = 0.1
+
 # A pattern has to have cost real money and have happened again just now.
 MIN_WORTH_A_RULE = 150.0
 
@@ -160,12 +167,12 @@ def _retire(user, currency, timezone_name, declined):
                 "decline": "להשאיר",
             }
 
-        if judged >= NEVER_KEPT_AFTER and broke == judged:
+        if judged >= NEVER_KEPT_AFTER and broke >= judged * (1 - BARELY_KEPT):
             return {
                 "action": "retire",
                 "key": key,
                 "rule_id": row.id,
-                "title": f'"{name}" נשבר בכל {trade_count(judged)} שנבדקו.',
+                "title": f'"{name}" נשבר ב-{broke} מתוך {trade_count(judged)} שנבדקו.',
                 "detail": "זו לא תוכנית, זו משאלה. עדיף לשנות את המספר למשהו שאתה באמת "
                           "עומד בו, או להוריד אותו.",
                 "accept": "להוריד",

@@ -2,7 +2,9 @@ import json
 
 from analytics.formatting import trades as trade_count
 from analytics.statistics import clean_label
-from chat.context import EFFORT, IRON, MAX_TOKENS, MODEL, build_messages, build_system
+from chat.context import CACHE, EFFORT, IRON, MAX_TOKENS, MODEL, build_messages, build_system
+
+from .rules import declared_rules
 
 
 
@@ -87,7 +89,42 @@ def baseline_set(total_trades):
 
 
 def mentor_system(user):
-    return build_system(user, persona = PERSONA)
+    """
+    The mentor's system block - **and the rules he set for himself, always.**
+
+    They used to travel only inside a debrief briefing, so on any other turn the model had
+    never been told which rules exist. Asked "which of my rules would you drop", it invented
+    one: a 16:00-18:00 window the trader had never set. **A model asked about a list it has
+    not been shown will produce a plausible list**, and the trader has no way to tell that
+    from a real answer.
+
+    It belongs in the system block rather than the turn, and that is not an accident of
+    convenience: his rules change about as often as his resume does, so they cache together
+    with it. Attaching them per question would rewrite the cached prefix on every message.
+    """
+    blocks = build_system(user, persona = PERSONA)
+
+    declared = declared_rules(user)
+
+    if declared:
+        listed = "\n".join("- " + rule["rule"] for rule in declared)
+
+        block = ("**הכללים שהסוחר קבע לעצמו, כפי שהם רשומים אצלו:**\n"
+                 f"{listed}\n\n"
+                 "**אלה כל הכללים שלו. אם אין כאן כלל כלשהו — הוא לא קיים, "
+                 "ואסור להתייחס אליו כאילו כן.**")
+    else:
+        block = ("**הסוחר לא קבע לעצמו אף כלל.** אם הוא שואל על הכללים שלו, זו התשובה — "
+                 "**אל תמציא כללים שהוא לא קבע.**")
+
+    # The marker moves to the last block, which is this one: anything cached has to be the
+    # whole prefix, and leaving it on the resume would exclude the rules from the cache.
+    for existing in blocks:
+        existing.pop("cache_control", None)
+
+    blocks.append({"type": "text", "text": block, "cache_control": CACHE})
+
+    return blocks
 
 
 def mentor_messages(conversation):

@@ -20,7 +20,7 @@ from .models import DismissedSuggestion, TraderRule
 from . import rules as rules_module
 from .suggestions import _as_declarable, _clean_edge, asked_for_one, propose
 from .rules import declared_rules
-from .context import baseline_set, receipt, suggestion_brief
+from .context import baseline_set, mentor_system, receipt, suggestion_brief
 from .deviation import MIN_BASELINE_TRADES, MIN_RECENT_TRADES, build_deviation
 
 
@@ -1824,6 +1824,66 @@ class RemovedRuleTests(APITestCase):
 # instruction in a trade file cannot reach anybody's data, and nothing in the feature itself
 # would look different on the day that changed.
 
+class RulesInThePromptTests(APITestCase):
+    """
+    **The model was never told which rules exist outside a debrief, so it invented one.**
+
+    Asked "which of my rules would you drop", Larson named a 16:00-18:00 window the trader
+    had never set. `declared_rules` reached the prompt only inside a file briefing; on every
+    other turn the list was simply absent - **and a model asked about a list it has not been
+    shown will produce a plausible list**, which the trader has no way to tell from a real
+    answer.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username = "omer", password = "Tr4de-Pl4n!x")
+        make_trades(self.user, 5)
+
+    def test_his_rules_are_in_the_prompt_on_every_turn(self):
+        TraderRule.objects.create(user = self.user, kind = TraderRule.MAX_SIZE, number = 3)
+        TraderRule.objects.create(user = self.user, kind = TraderRule.CUSTOM,
+                                  text = "להיכנס רק עם IFVG",
+                                  terms = {"require": [["ifvg"]], "forbid": []})
+
+        system = "".join(block["text"] for block in mentor_system(self.user))
+
+        self.assertIn("להיכנס רק עם IFVG", system)
+        self.assertIn("3", system)
+        # And told that the list is complete, because the failure was invention and not
+        # omission.
+        self.assertIn("אם אין כאן כלל כלשהו — הוא לא קיים", system)
+
+    def test_having_none_is_also_stated(self):
+        """Silence reads as "I was not told", and a model that was not told guesses."""
+        system = "".join(block["text"] for block in mentor_system(self.user))
+
+        self.assertIn("לא קבע לעצמו אף כלל", system)
+        self.assertIn("אל תמציא כללים", system)
+
+    def test_the_rules_are_inside_the_cached_prefix(self):
+        """
+        They change about as often as his resume, so they cache with it. **Attaching them
+        per question would rewrite the cached prefix on every message** and turn every read
+        into a write, with nothing anywhere saying so.
+        """
+        TraderRule.objects.create(user = self.user, kind = TraderRule.MAX_SIZE, number = 3)
+
+        blocks = mentor_system(self.user)
+
+        marked = [i for i, block in enumerate(blocks) if "cache_control" in block]
+
+        self.assertEqual(marked, [len(blocks) - 1], "the marker is not on the last block")
+        self.assertIn("3", blocks[-1]["text"])
+
+    def test_the_prefix_is_identical_between_two_builds(self):
+        """The property `CacheTests` already holds for the chat, re-checked here because
+        this commit added a block to the prefix."""
+        TraderRule.objects.create(user = self.user, kind = TraderRule.MAX_SIZE, number = 3)
+
+        self.assertEqual(mentor_system(self.user), mentor_system(self.user))
+
+
+
 class SuggestionTests(APITestCase):
 
     def setUp(self):
@@ -2021,6 +2081,56 @@ class SuggestionTests(APITestCase):
 
         self.assertEqual(card["action"], "retire")
         self.assertIn("משאלה", card["detail"])
+
+    def test_a_rule_kept_a_couple_of_times_in_hundreds_is_still_a_wish(self):
+        """
+        **The one rule most worth retiring was the one the engine could not see.** He wrote
+        "only enter on a gamble" - obviously a rule to delete - and it was kept on the two
+        trades he had actually tagged `gamble`, out of hundreds. Demanding a perfect zero
+        meant two out of two hundred did not qualify.
+        """
+        for n in range(40):
+            at = BASE + timedelta(days = n)
+            Trade.objects.create(
+                user = self.user, executed_at = at, opened_at = at - timedelta(minutes = 9),
+                symbol = "MNQU6", instrument = "NQ", source_timezone = "Asia/Jerusalem",
+                currency = "USD", direction = "long", quantity = 1.0, pnl = -40.0,
+                outcome = "loss", duration_seconds = 540,
+                # Two of them really are gambles; the rest are not.
+                setups = "gamble" if n < 2 else "breakout",
+                dedup_hash = f"wish-{n}")
+
+        TraderRule.objects.create(user = self.user, kind = TraderRule.CUSTOM,
+                                  text = "להיכנס לעסקה רק בהימור",
+                                  terms = {"require": [["gamble"]], "forbid": []})
+
+        card = propose(self.user, [], compute_statistics(list(Trade.objects.all())))
+
+        self.assertIsNotNone(card, "a rule kept twice in forty was not offered for retirement")
+        self.assertEqual(card["action"], "retire")
+        self.assertIn("משאלה", card["detail"])
+
+    def test_a_rule_kept_a_fifth_of_the_time_is_not_called_a_wish(self):
+        """**It is a rule he is struggling with, which is a different conversation** - and
+        telling him to drop it would be telling him to stop trying."""
+        for n in range(40):
+            at = BASE + timedelta(days = n)
+            Trade.objects.create(
+                user = self.user, executed_at = at, opened_at = at - timedelta(minutes = 9),
+                symbol = "MNQU6", instrument = "NQ", source_timezone = "Asia/Jerusalem",
+                currency = "USD", direction = "long", quantity = 1.0, pnl = -40.0,
+                outcome = "loss", duration_seconds = 540,
+                setups = "gamble" if n < 8 else "breakout",
+                dedup_hash = f"trying-{n}")
+
+        TraderRule.objects.create(user = self.user, kind = TraderRule.CUSTOM,
+                                  text = "להיכנס לעסקה רק בהימור",
+                                  terms = {"require": [["gamble"]], "forbid": []})
+
+        card = propose(self.user, [], compute_statistics(list(Trade.objects.all())))
+
+        self.assertIsNone(card)
+
 
     def test_retiring_outranks_adding(self):
         """**Tidying what exists comes before adding more**, and it is the rarer moment."""
