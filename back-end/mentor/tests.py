@@ -18,6 +18,7 @@ from . import interpret as interpret_module
 from .compliance import build_rules, check_plan
 from .models import DismissedSuggestion, TraderRule
 from . import rules as rules_module
+from . import suggestions as suggestions_module
 from .suggestions import (_as_declarable, _clean_edge, asked_for_one, propose,
                           standings)
 from .rules import declared_rules
@@ -2117,6 +2118,83 @@ class SuggestionTests(APITestCase):
         self.assertNotIn("עומד בו", card["detail"])
         # And keeping it has to read as a real answer, not as failing to act.
         self.assertIn("להשאיר", card["detail"])
+
+    def test_a_rule_that_forbids_what_he_makes_money_on_is_offered_whatever_the_ratio(self):
+        """
+        **The case compliance ratios cannot see.** He wrote "only enter without IFVG" while
+        IFVG is the tag on his best setup. Larson said so in words - the rule forbids
+        exactly what he lives on - and the engine offered nothing, because how often a rule
+        is kept says nothing about whether it should exist.
+        """
+        for n in range(40):
+            at = BASE + timedelta(hours = n)
+            Trade.objects.create(
+                user = self.user, executed_at = at, opened_at = at - timedelta(minutes = 9),
+                symbol = "MNQU6", instrument = "NQ", source_timezone = "Asia/Jerusalem",
+                currency = "USD", direction = "long", quantity = 1.0,
+                pnl = 120.0, outcome = "win", duration_seconds = 540,
+                setups = "ifvg", dedup_hash = f"good-{n}")
+
+        TraderRule.objects.create(user = self.user, kind = TraderRule.CUSTOM,
+                                  text = "להיכנס לעסקה רק בלי ifvg",
+                                  terms = {"require": [], "forbid": ["ifvg"]})
+
+        card = propose(self.user, [], compute_statistics(list(Trade.objects.all())))
+
+        self.assertIsNotNone(card, "a rule forbidding his best setup was not offered")
+        self.assertEqual(card["action"], "retire")
+        self.assertIn("אוסר עליך", card["title"])
+        self.assertIn("עובד נגדך", card["detail"])
+
+    def test_the_rule_he_keeps_perfectly_is_the_dangerous_one(self):
+        """
+        **A rule he obeys while it blocks his best setup would have earned the graduation
+        card** - "forty in a row, zero breaches, this is who you are now" - congratulating
+        him for the thing costing him most. That is the worst sentence this feature could
+        produce, and the money check is what stops it.
+        """
+        for n in range(40):
+            at = BASE + timedelta(hours = n)
+            Trade.objects.create(
+                user = self.user, executed_at = at, opened_at = at - timedelta(minutes = 9),
+                symbol = "MNQU6", instrument = "NQ", source_timezone = "Asia/Jerusalem",
+                currency = "USD", direction = "long", quantity = 1.0,
+                pnl = 120.0, outcome = "win", duration_seconds = 540,
+                # Tagged with the profitable setup, so the rule below is kept on none of
+                # them... and the setup is exactly what it bans.
+                setups = "ifvg", dedup_hash = f"kept-{n}")
+
+        TraderRule.objects.create(user = self.user, kind = TraderRule.CUSTOM,
+                                  text = "בלי ifvg",
+                                  terms = {"require": [], "forbid": ["ifvg"]})
+
+        card = propose(self.user, [], compute_statistics(list(Trade.objects.all())))
+
+        # Not the graduation wording, and not the wish wording - the money one.
+        self.assertNotIn("זה כבר לא כלל", card["detail"])
+        self.assertNotIn("משאלה", card["detail"])
+        self.assertIn("עובד נגדך", card["detail"])
+
+    def test_a_rule_forbidding_something_unprofitable_is_left_alone(self):
+        """That is the rule doing its job."""
+        for n in range(40):
+            at = BASE + timedelta(hours = n)
+            Trade.objects.create(
+                user = self.user, executed_at = at, opened_at = at - timedelta(minutes = 9),
+                symbol = "MNQU6", instrument = "NQ", source_timezone = "Asia/Jerusalem",
+                currency = "USD", direction = "long", quantity = 1.0,
+                pnl = -90.0 if n < 20 else 140.0, outcome = "loss" if n < 20 else "win",
+                duration_seconds = 540,
+                setups = "revenge-fade" if n < 20 else "breakout",
+                dedup_hash = f"bad-{n}")
+
+        row = TraderRule.objects.create(user = self.user, kind = TraderRule.CUSTOM,
+                                        text = "בלי revenge-fade",
+                                        terms = {"require": [], "forbid": ["revenge-fade"]})
+
+        statistics = compute_statistics(list(Trade.objects.all()))
+
+        self.assertIsNone(suggestions_module._works_against_him(row, statistics, "USD"))
 
     def test_a_rule_missing_the_bar_by_a_fraction_of_a_trade_still_qualifies(self):
         """

@@ -1,6 +1,7 @@
-from analytics.formatting import trades as trade_count
+from analytics.formatting import money, trades as trade_count
 
 from .compliance import build_rules, check_plan
+from .interpret import matches
 from .models import DismissedSuggestion, TraderRule
 from .rules import clock, declared_rules
 
@@ -110,14 +111,58 @@ def propose(user, recent, statistics, currency = "USD", timezone_name = "Asia/Je
     declined = set(DismissedSuggestion.objects.filter(user = user)
                    .values_list("key", flat = True))
 
-    return (_retire(user, currency, timezone_name, declined)
+    return (_retire(user, currency, timezone_name, declined, statistics)
             or _add(user, recent, statistics, currency, timezone_name, declined, asked))
 
 
 
 # ------------------------- "SHOULD WE DROP THIS ONE?" ------------------------- #
 
-def _retire(user, currency, timezone_name, declined):
+# **A rule that forbids something profitable is a bad rule however faithfully he keeps it.**
+#
+# Everything else here judges a rule by how often it is kept, and that misses the case that
+# matters most: the trader wrote "only enter without IFVG" while IFVG is the tag on his best
+# setup. Larson said so in words - the rule forbids exactly what he lives on - and the
+# engine offered nothing, because compliance ratios cannot see money.
+#
+# **And the dangerous version is the one he keeps.** A rule he obeys perfectly while it
+# blocks his most profitable setup would have earned the graduation card: "forty trades in a
+# row, zero breaches, this is who you are now" - congratulating him for the thing costing
+# him the most. That is the single worst sentence this feature could produce, and nothing
+# before this could have stopped it.
+#
+# So this reason outranks both of the others: not how often, but whether it should exist.
+COSTS_HIM_AT_LEAST = 300.0
+
+
+def _works_against_him(row, statistics, currency):
+    """The profitable bucket this rule forbids, if it forbids one."""
+    terms = row.terms if isinstance(row.terms, dict) else {}
+
+    forbidden = list(terms.get("forbid", []))
+
+    if not forbidden:
+        return None
+
+    buckets = (statistics.get("breakdowns", {}).get("by_setup", [])
+               + statistics.get("breakdowns", {}).get("by_tag", []))
+
+    best = None
+
+    for group in buckets:
+        if not group.get("is_significant") or group.get("net_pnl", 0) < COSTS_HIM_AT_LEAST:
+            continue
+
+        label = str(group.get("key", "")).lower()
+
+        if any(matches(term, label) for term in forbidden):
+            if best is None or group["net_pnl"] > best["net_pnl"]:
+                best = group
+
+    return best
+
+
+def _retire(user, currency, timezone_name, declined, statistics = None):
     """
     A rule he has kept so consistently it is no longer a rule, or one he never keeps.
 
@@ -141,6 +186,8 @@ def _retire(user, currency, timezone_name, declined):
 
     # Judged over everything he has, with no inferred rules in the way - this is a question
     # about his own commitments only.
+    statistics = statistics or {}
+
     plan = check_plan({}, [], rows, currency, timezone_name, declared = declared)
 
     # The sentence a rule was translated into is the only handle a judged entry carries, so
@@ -172,6 +219,24 @@ def _retire(user, currency, timezone_name, declined):
         judged = entry.get("checked", 0)
         broke = entry.get("broke", 0)
         name = entry["rule"]
+
+        # **Before the ratios, because this is a reason to drop a rule and they are only
+        # symptoms.** Kept or broken, a rule that forbids what he makes money on should go.
+        costly = _works_against_him(row, statistics, currency)
+
+        if costly:
+            return {
+                "action": "retire",
+                "key": key,
+                "rule_id": row.id,
+                "title": f'"{name}" אוסר עליך את {costly["key"]}.',
+                "detail": f"{costly['key']} הוא {money(costly['net_pnl'], currency)} אצלך "
+                          f"על פני {trade_count(costly['trades'])}."
+                          + chr(10) +
+                          "הכלל הזה עובד נגדך — בין אם אתה שומר עליו ובין אם לא.",
+                "accept": "להוריד",
+                "decline": "להשאיר",
+            }
 
         if broke == 0 and judged >= GRADUATED_AFTER:
             return {
