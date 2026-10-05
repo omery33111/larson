@@ -200,23 +200,54 @@ const RuleTerms = ({ rule }: { rule: TraderRule }) => {
             className="app-input terms-input"
             value={adding}
             onChange={(event) => setAdding(event.target.value)}
-            onBlur={() => { add(where, adding); setTarget(null); }}
+            // No blur-to-commit: the tag list below belongs to this input, and clicking a
+            // tag blurs it. Committing here swallowed the click and dropped the tag into
+            // whichever row happened to be last.
             onKeyDown={(event) => {
               if (event.key === 'Enter') { event.preventDefault(); add(where, adding); }
               if (event.key === 'Escape') { setAdding(''); setTarget(null); }
             }}
-            placeholder="מילה מהתגית שלך"
+            placeholder={where === 'forbid' ? 'למשל gamble' : 'מילה מהתגית שלך'}
             autoFocus
           />
         )
         : (
+          // **The button is labelled with the word it creates.** There were two bare `+`
+          // buttons doing different things - one adding an alternative to this condition,
+          // one adding a second condition - and nothing on screen said which was which.
           <button type="button" className="terms-add"
                   onClick={() => { setAdding(''); setTarget(where); }}>
-            <FiPlus />
+            <FiPlus /> {where === 'forbid' ? '' : 'או'}
           </button>
         )}
     </div>
   );
+
+  /** **His tags, attached to the row being filled.** They used to sit in one list at the
+   *  bottom of the editor, which belonged to no row - so a tag clicked while the "must not
+   *  appear" input was open still landed under "וגם". Rendering them beneath the open input
+   *  removes the question entirely, and filtering as he types makes a long list usable. */
+  const picker = (where: number | 'forbid') => {
+    if (target !== where || !preview?.labels?.length) return null;
+
+    const typed = adding.trim().toLowerCase();
+    const shown = preview.labels
+      .filter((label) => !typed || label.toLowerCase().includes(typed))
+      .slice(0, 18);
+
+    if (!shown.length) return null;
+
+    return (
+      <div className="terms-picker">
+        {shown.map((label) => (
+          <button key={label} type="button" className="terms-vocab-chip"
+                  onClick={() => add(where, label)}>
+            {label}
+          </button>
+        ))}
+      </div>
+    );
+  };
 
   return (
     <div className="terms-editor">
@@ -228,44 +259,50 @@ const RuleTerms = ({ rule }: { rule: TraderRule }) => {
       {draft.require.map((group, index) => (
         <div key={index} className="terms-row">
           <span className="terms-row-label">{index === 0 ? 'חייב להופיע' : 'וגם'}</span>
-          {chips(index, group)}
+          <div className="terms-row-body">
+            {chips(index, group)}
+            {picker(index)}
+          </div>
         </div>
       ))}
 
-      <div className="terms-row">
-        <span className="terms-row-label">
-          {draft.require.length ? 'וגם' : 'חייב להופיע'}
-        </span>
-        {chips(draft.require.length, [])}
-      </div>
+      {/* **A button, not an empty row.** This used to render as a row labelled "וגם" with
+          nothing in it and a lone `+` floating beside it, which reads as a rendering fault
+          rather than as "add a second condition". The two are different actions and now
+          look different: `+ או` sits inside a condition and widens it, this one starts
+          another condition that must hold as well. */}
+      {target !== draft.require.length
+        ? (
+          <button type="button" className="terms-and"
+                  onClick={() => { setAdding(''); setTarget(draft.require.length); }}>
+            <FiPlus /> {draft.require.length ? 'עוד תנאי שחייב להתקיים' : 'תנאי שחייב להתקיים'}
+          </button>
+        )
+        : (
+          <div className="terms-row">
+            <span className="terms-row-label">
+              {draft.require.length ? 'וגם' : 'חייב להופיע'}
+            </span>
+            <div className="terms-row-body">
+              {chips(draft.require.length, [])}
+              {picker(draft.require.length)}
+            </div>
+          </div>
+        )}
 
       {(draft.forbid.length > 0 || target === 'forbid') &&
         <div className="terms-row">
           <span className="terms-row-label">אסור שיופיע</span>
-          {chips('forbid', draft.forbid)}
+          <div className="terms-row-body">
+            {chips('forbid', draft.forbid)}
+            {picker('forbid')}
+          </div>
         </div>}
 
       {!draft.forbid.length && target !== 'forbid' &&
         <button type="button" className="terms-add-forbid" onClick={() => setTarget('forbid')}>
           + מילה שאסור שתופיע
         </button>}
-
-      {/* **One click beats typing a guess**, and a label out of his own record cannot be
-          wrong about what exists. */}
-      {!!preview?.labels?.length &&
-        <div className="terms-vocab">
-          <span className="terms-vocab-title">התגיות שלך — לחיצה מוסיפה:</span>
-          <div className="terms-chips">
-            {preview.labels.slice(0, 24).map((label) => (
-              <button key={label} type="button" className="terms-vocab-chip"
-                      onClick={() => add(target === 'forbid' ? 'forbid'
-                                                             : Math.max(0, draft.require.length - 1),
-                                         label)}>
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>}
 
       <div className="terms-actions">
         <button type="button" className="app-btn app-btn-primary" onClick={save}

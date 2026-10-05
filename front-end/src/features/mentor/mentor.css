@@ -786,9 +786,29 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  padding: 0;
+  gap: 0.25rem;
+  padding-inline: 0.65rem;
 }
+
+/* The second action, and it has to look like a different one. Full width and left-aligned
+   so it reads as "add a row" rather than as another chip in the row above it. */
+.terms-and {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  width: 100%;
+  min-height: 44px;
+  margin-bottom: 0.5rem;
+  padding-inline: 0.5rem;
+  border: 1px dashed #2d313b;
+  border-radius: 9px;
+  background: transparent;
+  font-size: 0.78rem;
+  color: #8b909c;
+  cursor: pointer;
+}
+
+.terms-and:hover { color: #f0b90b; border-color: #6b5a1c; }
 
 .terms-add:hover,
 .terms-vocab-chip:hover { color: #f0b90b; border-color: #6b5a1c; border-style: solid; }
@@ -816,17 +836,27 @@
 
 .terms-add-forbid:hover { color: #8b909c; }
 
-.terms-vocab {
-  padding-top: 0.7rem;
-  margin-top: 0.3rem;
-  border-top: 1px solid #1f242c;
+.terms-row-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 0;
+  flex: 1;
 }
 
-.terms-vocab-title {
-  display: block;
-  margin-bottom: 0.4rem;
-  font-size: 0.74rem;
-  color: #626875;
+/* **Attached to the input it fills, not to the bottom of the panel.** A list that belongs
+   to no row drops its tag into whichever row was last touched, which is exactly the bug
+   this replaced. */
+.terms-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  padding: 0.5rem;
+  border: 1px solid #23262f;
+  border-radius: 9px;
+  background: #0f1115;
+  max-height: 11rem;
+  overflow-y: auto;
 }
 
 .terms-vocab-chip { direction: ltr; }
