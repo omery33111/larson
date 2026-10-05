@@ -1,10 +1,13 @@
+import logging
 import json
 import os
 
+from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework import status
+
+from mentor.rules import refresh as refresh_rules
 
 from django.db import IntegrityError
 from django.shortcuts import get_object_or_404
@@ -16,6 +19,9 @@ from project.throttling import AIBurstThrottle, AIDailyThrottle
 from .models import Trade, TradeFile
 from .parsers import SUPPORTED_EXTENSIONS, parse_file
 from .serializers import TradeFileSerializer, TradeSerializer
+
+
+log = logging.getLogger(__name__)
 
 
 
@@ -212,6 +218,23 @@ def confirm(request):
         trade_file.awaiting_debrief = True
 
     trade_file.save()
+
+    # ------------- AND HIS OWN RULES READ THEMSELVES AGAIN:
+    #
+    # **New labels only ever arrive with new trades, so this is the moment they appear.**
+    # A free-text rule interpreted against the words he used in June knows nothing about the
+    # word he starts tagging with in August - it keeps reporting, keeps sounding certain, and
+    # quietly stops seeing the thing it was written about. Nothing on any screen would say so.
+    #
+    # Here and not inside the debrief: the debrief is a streaming response he is watching,
+    # and a model call that is not about his question does not belong in front of it. It
+    # fires only when there are labels no rule has seen, so stable tagging costs nothing.
+    try:
+        refresh_rules(request.user)
+    except Exception:
+        # **Never fail the import over this.** The trades are saved and that is the thing he
+        # asked for; a rule reading itself a week late is a smaller cost by far.
+        log.exception("Could not re-read the trader's own rules after an import")
 
     return Response({
         "success": True,

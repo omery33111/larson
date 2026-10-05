@@ -98,6 +98,15 @@ class TraderRule(models.Model):
     # here unchecked.
     terms = models.JSONField(null = True, blank = True)
 
+    # **The labels that existed when the sentence was last interpreted.**
+    #
+    # Without it the interpretation is frozen on the day he wrote the rule, and that is the
+    # worst of the three ways this can miss: he starts tagging with a new word next month,
+    # the rule knows nothing about it, and **it degrades silently** - still reporting, still
+    # confident, and now wrong. Comparing this with his current vocabulary is how the rule
+    # knows to read itself again.
+    known_labels = models.JSONField(default = list, blank = True)
+
     # **Switched off rather than deleted, because a rule he kept for two months and then
     # dropped is part of the story.** The debrief only checks the active ones.
     is_active = models.BooleanField(default = True)

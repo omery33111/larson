@@ -16,7 +16,7 @@ from analytics.statistics import clean_label, compute_statistics
 from chat import retrieval
 
 from .compliance import check_plan
-from .interpret import MAX_RULE_LENGTH, coverage, interpret, read_back
+from .interpret import MAX_RULE_LENGTH, coverage, interpret, read_back, vocabulary
 from .models import TraderRule
 from .rules import declared_rules
 from .serializers import TraderRuleSerializer
@@ -338,7 +338,10 @@ def save_rule(request):
             return Response({"error": f"אפשר עד {MAX_CUSTOM_RULES} תנאים משלך."},
                             status = status.HTTP_400_BAD_REQUEST)
 
-        terms = interpret(text, billed_to = request.user)
+        # His own labels go in with the sentence, so a term comes back as a string that
+        # exists in his record rather than as a guess about what it might be called.
+        terms = interpret(text, billed_to = request.user,
+                          known_labels = vocabulary(request.user))
 
         if not terms:
             return Response({

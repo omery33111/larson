@@ -1,6 +1,7 @@
 from analytics.formatting import minutes, money, ratio, trades as trade_count
 from analytics.statistics import _split_tags, clean_label
 
+from .interpret import interpret, vocabulary
 from .models import TraderRule
 
 
@@ -136,5 +137,56 @@ def day_verdict(rule, day_rows):
         return False, None
 
     return None, None
+
+
+# ------------------------- RELEARNING, WHEN HIS WORDS CHANGE ------------------------- #
+
+def refresh(user):
+    """
+    Re-read every free-text rule whose vocabulary has grown since it was interpreted.
+
+    **This closes the one gap that fails silently.** A rule interpreted in June against the
+    labels he used in June does not know about the word he started tagging with in August -
+    so it keeps reporting, keeps sounding certain, and quietly stops seeing the thing it was
+    written about. Nothing on any screen would say so.
+
+    **Run on confirm and not inside the debrief**, deliberately. New labels only ever arrive
+    with new trades, so this is the moment they appear; and the debrief is a streaming
+    response the trader is watching, which is the wrong place to put a model call that is
+    not about his question.
+
+    Cheap by construction: it fires only when there are labels the rule has never seen, so a
+    trader whose tagging is stable never pays for it at all.
+    """
+    rows = list(TraderRule.objects.filter(user = user, kind = TraderRule.CUSTOM,
+                                          is_active = True))
+    if not rows:
+        return 0
+
+    current = vocabulary(user)
+    if not current:
+        return 0
+
+    relearned = 0
+
+    for row in rows:
+        seen = set(row.known_labels or [])
+
+        if not set(current) - seen:
+            continue
+
+        terms = interpret(row.text, billed_to = user, known_labels = current)
+
+        # **A failed re-read leaves the rule exactly as it was.** A rule that works against
+        # last month's words is worth more than no rule, and a transient API error must
+        # never be able to erase a commitment he made.
+        if terms:
+            row.terms = terms
+
+        row.known_labels = current
+        row.save(update_fields = ["terms", "known_labels"])
+        relearned += 1
+
+    return relearned
 
 # ------------------------- END ------------------------- #

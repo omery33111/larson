@@ -26,7 +26,7 @@ from analytics.formatting import trades as trade_count
 
 # A rule has to rest on something. Below this the "leak" is an anecdote, and telling a trader
 # to stop doing something on the strength of four trades is how a mentor loses credibility.
-from .interpret import trade_text
+from .interpret import _tokens, matches, trade_text
 from .rules import DAY_KINDS, day_verdict
 
 
@@ -240,12 +240,17 @@ def _breaks(rule, trade, tz, previous):
 
         terms = rule["value"]
 
+        # Tokenised once per trade rather than once per term - a short term is matched as a
+        # whole word, because `tl` inside `settled` is the kind of false positive that tells
+        # him he kept a rule he broke.
+        tokens = _tokens(haystack)
+
         for spellings in terms.get("require", []):
-            if not any(term in haystack for term in spellings):
+            if not any(matches(term, haystack, tokens) for term in spellings):
                 return True
 
         for term in terms.get("forbid", []):
-            if term in haystack:
+            if matches(term, haystack, tokens):
                 return True
 
         return False

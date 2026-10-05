@@ -4,7 +4,7 @@ import re
 
 from django.conf import settings
 
-from analytics.statistics import clean_label
+from analytics.statistics import _split_tags, clean_label
 from chat.context import MODEL
 
 
@@ -65,10 +65,56 @@ BRIEF = """אתה מתרגם כלל מסחר שסוחר כתב לעצמך למו
 - מונח הוא מילה או צירוף קצר, באותיות קטנות, בלי סימני פיסוק ובלי מירכאות.
 - אל תמציא מושגים שלא נאמרו. "רק כשיש IFVG" הוא דרישה אחת, לא שלוש.
 - תנאי על מחיר, על אחוזים או על כל דבר שאינו מילה שסוחר מקליד — דלג עליו.
-- אם אין בכלל מונח שאפשר לחפש בטקסט, החזר {"require": [], "forbid": []}."""
+- אם אין בכלל מונח שאפשר לחפש בטקסט, החזר {"require": [], "forbid": []}.
+
+**`התגיות_שהסוחר_משתמש_בהן` היא רשימת התגיות שהוא באמת כתב על העסקאות שלו.** אם אחת מהן
+מתארת את מה שהכלל מבקש — **תן אותה בדיוק כפי שהיא כתובה שם**, והוסף אותה לאיותים. היא
+הניחוש היחיד שבטוח קיים ברשומה שלו. כשהרשימה ריקה, תן את האיותים הסבירים מהידע שלך."""
 
 
-def interpret(sentence, billed_to = None):
+# **A trader's distinct tag vocabulary is small and this ceiling only has to be above it.**
+# 60 was a guess, and a ceiling that hides the one label the rule is about defeats the entire
+# mechanism - the labels are short, so 400 of them is still a small payload.
+MAX_VOCABULARY = 400
+
+
+def vocabulary(user):
+    """
+    **The words this trader actually tags with**, which is a far better input than the
+    model's general knowledge of what a term might be called.
+
+    It expanded `CISD` into `change in state of delivery` on its own, from what it knows
+    about the term - and that happened to be right. **But it is a one-shot guess**: a trader
+    who tags `שינוי במצב האספקה`, or `delivery shift`, gets a miss, and nothing says so until
+    a month of debriefs has quietly judged nothing.
+
+    Handing it his own labels replaces the guess with the answer. Same move as
+    `_own_instruments` in `chat/retrieval.py`, and for the same reason: **a vocabulary drawn
+    from his own rows is the only one guaranteed to exist in them.**
+
+    Not a security boundary here - these are his own labels going back into his own prompt -
+    but it is bounded and cleaned anyway, because this is free text out of a spreadsheet and
+    it is about to be written into a prompt.
+    """
+    from trades.models import Trade
+
+    seen = []
+
+    rows = Trade.objects.filter(user = user).values_list("setups", "tags", "mistakes")
+
+    for columns in rows.iterator():
+        for raw in columns:
+            for token in _split_tags(raw or ""):
+                token = clean_label(token, MAX_TERM_LENGTH)
+                if token and token not in seen:
+                    seen.append(token)
+                    if len(seen) >= MAX_VOCABULARY:
+                        return seen
+
+    return seen
+
+
+def interpret(sentence, billed_to = None, known_labels = ()):
     """
     His sentence to searchable terms, or `None` when nothing in it can be searched for.
 
@@ -96,7 +142,12 @@ def interpret(sentence, billed_to = None):
             # watches the save spinner.
             output_config = {"effort": "low"},
             system = BRIEF,
-            messages = [{"role": "user", "content": sentence}])
+            messages = [{"role": "user", "content": json.dumps({
+                "הכלל": sentence,
+                # **His own labels, so the terms come back as strings that exist in his
+                # record rather than as plausible guesses about what they might be called.**
+                "התגיות_שהסוחר_משתמש_בהן": list(known_labels)[:MAX_VOCABULARY],
+            }, ensure_ascii = False)}])
 
     except Exception:
         # The caller turns this into "we could not read the rule, try plainer wording" - a
@@ -115,7 +166,7 @@ def interpret(sentence, billed_to = None):
     if response.stop_reason == "refusal":
         return None
 
-    return _validate(_json_from(response))
+    return _validate(_json_from(response), known_labels)
 
 
 def _json_from(response):
@@ -137,7 +188,7 @@ def _json_from(response):
         return {}
 
 
-def _validate(body):
+def _validate(body, known_labels = ()):
     """
     Nothing the model returned survives this that was not asked for.
 
@@ -149,17 +200,24 @@ def _validate(body):
     if not isinstance(body, dict):
         return None
 
+    # **A short term is only trusted when it came from his own labels.** `TL` out of his
+    # vocabulary is his abbreviation and is exact; `TL` invented by the model is two letters
+    # that appear inside ordinary words, and nobody could have guessed a personal shorthand
+    # anyway. Dropping it is the difference between a rule that is quiet and one that is wrong.
+    labels = [label.lower() for label in known_labels]
+
     require = []
 
     for group in _as_list(body.get("require"))[:MAX_REQUIREMENTS]:
         # A bare string is a requirement with one spelling, and the model does write it that
         # way sometimes. Accepting it is not looseness: the meaning is unambiguous.
-        spellings = _terms([group] if isinstance(group, str) else _as_list(group))[:MAX_SPELLINGS]
+        spellings = _terms([group] if isinstance(group, str) else _as_list(group),
+                           labels)[:MAX_SPELLINGS]
 
         if spellings:
             require.append(spellings)
 
-    forbid = _terms(_as_list(body.get("forbid")))[:MAX_FORBIDDEN]
+    forbid = _terms(_as_list(body.get("forbid")), labels)[:MAX_FORBIDDEN]
 
     # **A rule with neither side is not a strict rule, it is a rule that cannot be broken.**
     if not require and not forbid:
@@ -172,7 +230,7 @@ def _as_list(value):
     return value if isinstance(value, list) else []
 
 
-def _terms(values):
+def _terms(values, labels = ()):
     """One line, lowercase, bounded - the same shape every label in this product is held to."""
     out = []
 
@@ -183,12 +241,67 @@ def _terms(values):
         term = clean_label(value, MAX_TERM_LENGTH).lower().strip(" \"'.,:;-")
 
         # One character matches almost everything, which reads as a rule that is always kept.
-        if len(term) >= 2 and term not in out:
-            out.append(term)
+        if len(term) < 2 or term in out:
+            continue
+
+        # A short term he does not actually use is a guess that will fire on ordinary words.
+        if len(term) < SHORT_TERM and not any(term in label.split() or term == label
+                                              for label in labels):
+            continue
+
+        out.append(term)
 
     return out
 
 
+
+
+# **Below this, a term is matched as a whole token and never as a substring.**
+#
+# `TL` is a real abbreviation a trader uses for "true liquidity", and as a substring it is
+# also inside `settle`, `little` and `bottle`. A rule that fires on the word "settled" in a
+# note is not a strict rule, it is a broken one - **and it fails in the direction that costs
+# most, telling him he kept a rule he did not.** Long terms stay substrings, because that is
+# what lets a saved `cisd` find his `cisd-sweep`.
+SHORT_TERM = 4
+
+
+def _tokens(text):
+    return set(re.split(r"[^0-9a-z֐-׿]+", text))
+
+
+def matches(term, haystack, tokens = None):
+    """Whether one term is present, by the rule its length earns."""
+    if len(term) >= SHORT_TERM:
+        return term in haystack
+
+    return term in (tokens if tokens is not None else _tokens(haystack))
+
+
+def unknown_terms(terms, known_labels):
+    """
+    The terms that match nothing he has ever written - **where every silent miss lives.**
+
+    A term drawn from his own labels cannot be wrong about what exists. A term the model
+    produced from its general knowledge might be: it expanded `CISD` into `change in state
+    of delivery`, which was right, and would just as confidently produce a phrasing he never
+    uses. **The difference is invisible in the rule and visible here**, so the screen can show
+    it instead of letting it fail quietly a month later.
+    """
+    if not isinstance(terms, dict):
+        return []
+
+    wanted = []
+    for group in terms.get("require", []):
+        wanted += list(group)
+    wanted += list(terms.get("forbid", []))
+
+    labels = [label.lower() for label in known_labels]
+
+    # Substring in both directions: a saved `cisd` is found inside his `cisd-sweep`, and his
+    # bare `cisd` is found inside a saved `cisd entry`. Either way the term is real.
+    return [term for term in wanted
+            if not any(term in label or label in term for label in labels)]
 
 
 def read_back(terms):
@@ -259,8 +372,11 @@ def coverage(trades, terms = None):
             wanted += list(group)
         wanted += list(terms.get("forbid", []))
 
+    # **The same matcher the verdict uses.** A coverage number computed by a second copy of
+    # the rule is a number that can disagree with the thing it is describing - the exact
+    # failure `statistics.py` exposing its slices was meant to end.
     matched = sum(1 for text in texts
-                  if text and any(term in text for term in wanted)) if wanted else 0
+                  if text and any(matches(term, text) for term in wanted)) if wanted else 0
 
     return {"answerable": answerable, "total": len(rows), "matched": matched}
 
