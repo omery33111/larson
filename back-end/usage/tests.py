@@ -1,4 +1,5 @@
 from datetime import timedelta
+from zoneinfo import ZoneInfo
 from unittest.mock import patch
 
 from rest_framework.test import APITestCase
@@ -563,4 +564,64 @@ class ReportTests(APITestCase):
         self.assertIn("omer", self.run_report(days = 60))
 
 # ------------------------- THE BETA REPORT TESTS END ------------------------- #
+
+
+class RenewalClockTests(APITestCase):
+    """
+    **"Some of it, in about four hours" is a countdown he has to keep re-reading.**
+
+    `renews_at` answers when the first piece comes back, which is the honest promise the
+    rolling window makes and also the less useful half. The hour the whole allowance is his
+    again is something he can plan around - and it is the question he asked the moment he
+    read the first half of that sentence.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username = "omer", password = "Tr4de-Pl4n!x")
+
+    def spend(self, ago_hours, tokens = 1000):
+        row = TokenSpend.objects.create(user = self.user, kind = "chat",
+                                        input_tokens = tokens, output_tokens = tokens)
+        # auto_now_add has to be written past, not set.
+        TokenSpend.objects.filter(id = row.id).update(
+            created_at = timezone.now() - timedelta(hours = ago_hours))
+        return row
+
+    def test_the_last_spend_is_the_one_that_frees_the_rest(self):
+        self.spend(ago_hours = 20)
+        self.spend(ago_hours = 3)
+
+        first = budget.renews_at(self.user)
+        whole = budget.fully_renewed_at(self.user)
+
+        # Four hours from now for the first piece; twenty-one for the whole thing.
+        self.assertLess(first, whole)
+        self.assertAlmostEqual((whole - timezone.now()).total_seconds() / 3600, 21, delta = 0.1)
+
+    def test_the_message_names_the_hour(self):
+        self.spend(ago_hours = 20)
+        self.spend(ago_hours = 3)
+
+        message = budget.exhausted_message(self.user)
+
+        self.assertIn("מלאה שוב ב-", message)
+        self.assertRegex(message, "[0-9]{2}:[0-9]{2}")
+
+    def test_the_hour_is_his_clock_and_not_the_server_s(self):
+        """
+        **The server runs in UTC and Israel is hours ahead of it.** A renewal at 21:40
+        printed as 18:40 is worse than printing nothing, because he would wait and nothing
+        would happen.
+        """
+        moment = timezone.now()
+
+        said = budget._wall_clock(moment)
+        israeli = timezone.localtime(moment, ZoneInfo("Asia/Jerusalem")).strftime("%H:%M")
+
+        self.assertEqual(said, israeli)
+        if timezone.localtime(moment, ZoneInfo("UTC")).strftime("%H:%M") != israeli:
+            self.assertNotEqual(said, moment.strftime("%H:%M"))
+
+    def test_nothing_spent_means_nothing_promised(self):
+        self.assertIsNone(budget.fully_renewed_at(self.user))
 

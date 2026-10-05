@@ -132,6 +132,37 @@ def renews_at(user):
     return (oldest.created_at + window()) if oldest else None
 
 
+def fully_renewed_at(user):
+    """
+    When the window is empty again - the clock time he actually wants.
+
+    `renews_at` is when the *first* piece comes back, which is the honest thing to promise
+    and is also the less useful of the two: "some of it in about four hours" tells him to
+    keep checking. **The last spend inside the window is the last to fall out of it**, so
+    that moment is when the whole allowance is his again, and it is a time he can plan
+    around rather than a countdown he has to re-read.
+    """
+    newest = (TokenSpend.objects
+              .filter(user = user, **{WITHIN: _since()})
+              .order_by("-created_at")
+              .first())
+
+    return (newest.created_at + window()) if newest else None
+
+
+def _wall_clock(moment):
+    """
+    His clock, not the server's.
+
+    The server runs in UTC and Israeli summer time is three hours ahead of it - a renewal
+    at 21:40 printed as 18:40 is worse than printing nothing, because he would wait and
+    nothing would happen. **The same zone the rest of the product displays in.**
+    """
+    from zoneinfo import ZoneInfo
+
+    return timezone.localtime(moment, ZoneInfo("Asia/Jerusalem")).strftime("%H:%M")
+
+
 def state(user):
     """Everything the client needs to decide whether to say anything, in one read."""
     used = spent(user)
@@ -225,8 +256,17 @@ def exhausted_message(user):
     minutes = max(round((when - timezone.now()).total_seconds() / 60), 1)
 
     if minutes < 60:
-        return f"הגעת למכסת השימוש להיום. חלק ממנה מתפנה בעוד כ-{minutes} דקות."
+        soon = f"חלק ממנה מתפנה בעוד כ-{minutes} דקות"
+    else:
+        hours = minutes // 60
+        soon = "חלק ממנה מתפנה בעוד " + ("כשעה" if hours == 1 else f"כ-{hours} שעות")
 
-    hours = minutes // 60
-    when_said = "כשעה" if hours == 1 else f"כ-{hours} שעות"
-    return f"הגעת למכסת השימוש להיום. חלק ממנה מתפנה בעוד {when_said}."
+    # **And the hour it is whole again, because "some of it, in about four hours" is a
+    # countdown he has to keep re-reading.** A clock time is something he can plan around -
+    # and it is the question he actually asked when he saw the first half of this sentence.
+    full = fully_renewed_at(user)
+
+    if full:
+        return f"הגעת למכסת השימוש להיום. {soon}, והיא מלאה שוב ב-{_wall_clock(full)}."
+
+    return f"הגעת למכסת השימוש להיום. {soon}."
