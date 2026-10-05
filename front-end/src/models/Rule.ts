@@ -25,8 +25,14 @@ export interface TraderRule {
  *  **The number that stops the feature from lying**: without it a rule reports "kept" over
  *  a year of trades that recorded nothing at all. */
 export interface RuleCoverage {
+    /** Trades carrying any text at all - these are the ones the rule can be judged against. */
     answerable: number;
     total: number;
+    /** **Trades where a term of this rule actually appears.** Zero means the engine has
+     *  never seen this concept in his record, which almost always means it cannot see it
+     *  at all - a news calendar, the VIX, the spread. Every tagged trade would then fail
+     *  the requirement, and telling him he broke a rule he kept is worse than silence. */
+    matched: number;
 }
 
 export interface RuleKind {

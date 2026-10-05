@@ -1285,7 +1285,45 @@ class CustomRuleTests(APITestCase):
                                         format = "json")
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data["coverage"], {"answerable": 4, "total": 10})
+        self.assertEqual(response.data["coverage"],
+                         {"answerable": 4, "total": 10, "matched": 4})
+
+    def test_a_rule_about_something_the_engine_cannot_see_is_flagged_at_save_time(self):
+        """
+        **The failure this number exists to catch, and it is worse than reporting nothing.**
+
+        A rule about the news calendar, the VIX or the spread produces terms that appear
+        nowhere in the record, because the engine reads four fields the trader filled in and
+        nothing else. Every trade that *does* carry tags then fails the requirement - so the
+        debrief reports a wall of breaches for a rule he may have kept perfectly. Telling him
+        he broke a rule he kept is the one outcome this feature cannot survive.
+
+        `matched == 0` with `answerable` above zero is exactly that shape, and the screen
+        warns on it instead of saving quietly.
+        """
+        make_trades(self.user, 8, setups = "breakout", tags = "london")
+
+        with patch("mentor.views.interpret", return_value = {"require": [["news"]],
+                                                             "forbid": []}):
+            response = self.client.post("/mentor/rules/save/",
+                                        {"kind": "custom", "text": "לא להיכנס בזמן חדשות"},
+                                        format = "json")
+
+        self.assertEqual(response.data["coverage"],
+                         {"answerable": 8, "total": 8, "matched": 0})
+
+    def test_an_either_or_rule_is_one_requirement_and_not_two(self):
+        """
+        "Only with an IFVG **or** a CISD" is satisfied by either; two separate requirements
+        would mean both, and would mark almost every trade as a breach. The interpreter's
+        brief states the distinction outright because it is the one it is most likely to
+        get backwards.
+        """
+        rows = make_trades(self.user, 1, setups = "cisd-sweep")
+        self.custom("כניסה רק כשיש IFVG או CISD",
+                    {"require": [["ifvg", "cisd"]], "forbid": []})
+
+        self.assertEqual(self.verdict(rows)["broken"], [])
 
     def test_a_sentence_that_cannot_be_interpreted_is_refused_and_nothing_is_saved(self):
         with patch("mentor.views.interpret", return_value = None):

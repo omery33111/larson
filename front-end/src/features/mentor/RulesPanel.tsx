@@ -49,12 +49,19 @@ const UNITS: Record<string, string> = {
 const SETUPS_KIND = 'only_setups';
 const CUSTOM_KIND = 'custom';
 
-/** Concrete, and in the language a trader tags with - an abstract placeholder would get an
- *  abstract rule, which is exactly the kind that cannot be checked against anything. */
+/**
+ * Concrete, and every one of them about something he writes on the trade himself.
+ *
+ * **"Do not enter during news" was here and was removed, and the reason generalises.** It
+ * invites him to expect the engine to know when news happened. It cannot - it reads four
+ * fields he filled in and nothing else - so every tagged trade without the word "news" on
+ * it would be reported as a breach of a rule he may have kept perfectly. An example that
+ * teaches the wrong model of what the feature knows is worse than one example fewer.
+ */
 const EXAMPLES = [
-  'להיכנס רק כשיש IFVG ודלתא גבוהה',
-  'לא להיכנס בזמן חדשות',
+  'כניסה לעסקה רק כשיש IFVG או CISD',
   'רק סטאפים שסימנתי כ-A+',
+  'לא להיכנס כשרשמתי לעצמי שאני עייף',
 ];
 
 
@@ -209,8 +216,9 @@ const RulesPanel = () => {
                 </h3>
 
                 <p className="rules-section-sub">
-                  תכתוב תנאי כמו שאתה חושב עליו. לארסון מתרגם אותו פעם אחת למה שהוא מחפש
-                  על העסקה — <b>ומשם זו בדיקה רגילה, על כל עסקה, בדיוק כמו כל כלל אחר.</b>
+                  תכתוב תנאי כמו שאתה חושב עליו. לארסון מחפש אותו <b>בתגיות, בשם הסטאפ
+                  ובהערות שאתה כותב על העסקה</b> — ומשם זו בדיקה רגילה על כל עסקה, בדיוק
+                  כמו כל כלל אחר. <b>מה שלא רשמת על העסקה, הוא לא רואה.</b>
                 </p>
 
                 {mine.map((rule) => (
@@ -242,14 +250,23 @@ const RulesPanel = () => {
                     {/* **The number that stops this from lying.** Shown next to the rule it
                         belongs to, right after he saves it, and never again - it answers a
                         question about that save and not a standing fact about the screen. */}
+                    {/* **Three states, because the middle one is a trap.** A rule whose
+                        words appear in none of his trades is almost always a rule about
+                        something the engine cannot see, and left alone it would report
+                        every tagged trade as a breach. */}
                     {coverage?.id === rule.id &&
-                      <p className={`rules-coverage ${coverage.answerable ? '' : 'rules-coverage-none'}`}>
-                        {coverage.answerable
-                          ? <>מתוך {coverage.total} עסקאות ברזומה, <b>{coverage.answerable} נושאות
-                              טקסט שאפשר לבדוק מולו.</b> השאר לא תועדו ולכן לא ייספרו לכאן
-                              ולא לכאן.</>
-                          : <><b>אף אחת מהעסקאות שלך לא נושאת תגית, סטאפ או הערה</b>, ולכן אין
-                              מול מה לבדוק את התנאי הזה עדיין. הוא יתחיל לעבוד ברגע שתתעד.</>}
+                      <p className={`rules-coverage ${coverage.matched ? '' : 'rules-coverage-none'}`}>
+                        {!coverage.answerable
+                          ? <><b>אף אחת מהעסקאות שלך לא נושאת תגית, סטאפ או הערה</b>, ולכן אין
+                              מול מה לבדוק את התנאי הזה עדיין. הוא יתחיל לעבוד ברגע שתתעד.</>
+                          : !coverage.matched
+                            ? <><b>המילים של התנאי הזה לא מופיעות באף אחת מ-{coverage.answerable} העסקאות
+                                שתיעדת.</b> לארסון קורא רק מה שאתה רושם על העסקה — אם מדובר במשהו
+                                שהוא לא יכול לראות (חדשות, VIX, ספרד), <b>הוא יסמן כל עסקה כהפרה
+                                גם אם שמרת על הכלל.</b> כדאי לנסח מחדש במונחים שאתה מתייג בהם.</>
+                            : <>מתוך {coverage.total} עסקאות, <b>{coverage.matched} נושאות את
+                                המילים של התנאי הזה</b> ו-{coverage.answerable} תועדו בכלל.
+                                מה שלא תועד לא ייספר לכאן ולא לכאן.</>}
                       </p>}
                   </div>
                 ))}

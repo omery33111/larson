@@ -360,10 +360,8 @@ def save_rule(request):
 
         # **How many of his trades can answer it at all.** Without this he reads "kept" over a
         # year of trades that recorded nothing, and believes he followed a plan he never did.
-        answerable, total = coverage(Trade.objects.filter(user = request.user))
-
         return Response({**TraderRuleSerializer(row).data,
-                         "coverage": {"answerable": answerable, "total": total}},
+                         "coverage": coverage(Trade.objects.filter(user = request.user), terms)},
                         status = status.HTTP_201_CREATED)
 
     if kind == TraderRule.ONLY_SETUPS:

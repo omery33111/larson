@@ -51,10 +51,15 @@ BRIEF = """אתה מתרגם כלל מסחר שסוחר כתב לעצמך למו
 
 {"require": [["ifvg", "inverse fvg"], ["delta"]], "forbid": ["news"]}
 
-"require" — רשימה של דרישות. כל דרישה היא רשימת איותים לאותו מושג, והיא מתקיימת אם
-            אחד מהם מופיע. תגית נכתבת באנגלית, בעברית, בקיצור ובמילה מלאה — תן את
-            הווריאציות הסבירות, עד 4 לכל דרישה.
+"require" — רשימה של דרישות. **כל דרישה חייבת להתקיים; בתוך דרישה מספיק מונח אחד.**
 "forbid"  — מונחים שנוכחותם שוברת את הכלל.
+
+**זה ההבדל שחייב לצאת נכון:**
+- "רק כשיש IFVG **או** CISD" → דרישה אחת עם שניהם:  {"require": [["ifvg", "cisd"]]}
+- "רק כשיש IFVG **וגם** דלתא" → שתי דרישות נפרדות:  {"require": [["ifvg"], ["delta"]]}
+
+בתוך דרישה אחת תן גם את האיותים הסבירים של אותו מושג — אנגלית, עברית, קיצור ומילה
+מלאה — עד 4 בסך הכל.
 
 כללים קשיחים:
 - מונח הוא מילה או צירוף קצר, באותיות קטנות, בלי סימני פיסוק ובלי מירכאות.
@@ -200,15 +205,35 @@ def trade_text(trade):
     return " ".join(part for part in parts if part).lower()
 
 
-def coverage(trades):
+def coverage(trades, terms = None):
     """
-    How many of his trades carry any text at all - the number that stops this from lying.
+    Three numbers, and the third one is the one that matters.
 
-    Without it a rule reports "kept" across a year of trades that said nothing, and he
-    believes a plan he never actually followed is a plan he did.
+    `answerable` - trades carrying any text at all. Without it a rule reports "kept" across
+    a year of trades that said nothing, and he believes a plan he never followed is one he did.
+
+    **`matched` - trades where any term of this rule actually appears**, and it is here
+    because of a failure the first version had. A rule about something the engine cannot
+    see - the news calendar, the VIX, the spread - produces terms that are nowhere in the
+    record. Every trade that *does* carry tags then fails the requirement, so the debrief
+    reports a wall of breaches for a rule he may have kept perfectly. **Telling him he broke
+    a rule he kept is worse than saying nothing at all**, and `matched == 0` is how that is
+    caught at save time rather than discovered a month later.
     """
     rows = list(trades)
+    texts = [trade_text(trade) for trade in rows]
 
-    return sum(1 for trade in rows if trade_text(trade)), len(rows)
+    answerable = sum(1 for text in texts if text)
+
+    wanted = []
+    if isinstance(terms, dict):
+        for group in terms.get("require", []):
+            wanted += list(group)
+        wanted += list(terms.get("forbid", []))
+
+    matched = sum(1 for text in texts
+                  if text and any(term in text for term in wanted)) if wanted else 0
+
+    return {"answerable": answerable, "total": len(rows), "matched": matched}
 
 # ------------------------- END ------------------------- #
