@@ -1,0 +1,276 @@
+from analytics.formatting import trades as trade_count
+
+from .compliance import build_rules, check_plan
+from .models import DismissedSuggestion, TraderRule
+from .rules import clock, declared_rules
+
+
+
+# ------------------------- LARSON ASKS ONE QUESTION ------------------------- #
+#
+# **The server asks it, in Larson's voice.** Python finds the condition, computes the
+# figure and composes the card; the model never writes a row and never presses anything.
+# That is not a detail - "the model has no tools" is the entire reason an injection in a
+# trade file cannot reach anyone's data, and a feature that let it create rules would end
+# that argument. The same shape as the receipt line, which the server has always written.
+#
+# **Two questions, and the second is the one worth having:**
+#
+#     "Should I hold you to this?"   - a losing pattern he just repeated
+#     "Should we drop this one?"     - a rule he has outgrown, or one he never keeps
+#
+# Any analytics product can propose a rule. **Retiring one is what a mentor does**, and it
+# is why `retire` outranks `add` when both apply: tidying what exists comes before adding
+# more, and it is the rarer moment.
+#
+# **One card per debrief, never two.** A mentor who offers three rules is a form.
+#
+# **And a no is remembered for good** (`DismissedSuggestion`). The condition that produced a
+# suggestion is usually still true next week, so without that the same card returns every
+# debrief until he gives in or stops reading. That is the failure mode that kills features
+# like this one, and it is cheap to avoid.
+
+
+# ------------- WHEN A RULE HAS BEEN OUTGROWN, AND WHEN IT WAS NEVER REAL:
+#
+# Measured over his whole record rather than over one file - a single debrief judges a
+# handful of trades, which is nowhere near enough to retire a commitment on.
+GRADUATED_AFTER = 25
+NEVER_KEPT_AFTER = 10
+
+# A pattern has to have cost real money and have happened again just now.
+MIN_WORTH_A_RULE = 150.0
+
+
+def propose(user, recent, statistics, currency = "USD", timezone_name = "Asia/Jerusalem"):
+    """
+    The one card to put under this debrief, or `None` - which is the usual answer.
+
+    `recent` is what he just uploaded; `statistics` is the resume it landed on.
+    """
+    declined = set(DismissedSuggestion.objects.filter(user = user)
+                   .values_list("key", flat = True))
+
+    return (_retire(user, currency, timezone_name, declined)
+            or _add(user, recent, statistics, currency, timezone_name, declined))
+
+
+
+# ------------------------- "SHOULD WE DROP THIS ONE?" ------------------------- #
+
+def _retire(user, currency, timezone_name, declined):
+    """
+    A rule he has kept so consistently it is no longer a rule, or one he never keeps.
+
+    **Both are real mentor moments and neither is a reproach.** Forty clean trades in a row
+    is a habit, not a restriction, and saying so out loud is one of the few times software
+    gets to tell somebody they have changed. A rule broken every single time is not
+    discipline failing - it is a plan that does not fit him, and pretending otherwise
+    teaches him to ignore the whole section.
+    """
+    from trades.models import Trade
+
+    rows = list(Trade.objects.filter(user = user))
+
+    if not rows:
+        return None
+
+    declared = declared_rules(user, currency)
+
+    if not declared:
+        return None
+
+    # Judged over everything he has, with no inferred rules in the way - this is a question
+    # about his own commitments only.
+    plan = check_plan({}, [], rows, currency, timezone_name, declared = declared)
+
+    # The sentence a rule was translated into is the only handle a judged entry carries, so
+    # the map is built with the same translator the checker used - not with a second copy
+    # of the wording, which is how the two would drift apart.
+    from .rules import _translate
+
+    by_sentence = {}
+
+    for row in TraderRule.objects.filter(user = user, is_active = True):
+        translated = _translate(row, currency)
+        if translated:
+            by_sentence[translated["rule"]] = row
+
+    for entry in plan["kept"] + plan["broken"]:
+        if not entry.get("declared"):
+            continue
+
+        row = by_sentence.get(entry["rule"])
+
+        if row is None:
+            continue
+
+        key = f"retire:{row.id}"
+
+        if key in declined:
+            continue
+
+        judged = entry.get("checked", 0)
+        broke = entry.get("broke", 0)
+        name = entry["rule"]
+
+        if broke == 0 and judged >= GRADUATED_AFTER:
+            return {
+                "action": "retire",
+                "key": key,
+                "rule_id": row.id,
+                "title": f'שמרת על "{name}" {trade_count(judged)} ברצף, אפס חריגות.',
+                "detail": "זה כבר לא כלל — זה אתה. אפשר להוריד אותו ולפנות מקום למשהו שעוד נבדק.",
+                "accept": "להוריד",
+                "decline": "להשאיר",
+            }
+
+        if judged >= NEVER_KEPT_AFTER and broke == judged:
+            return {
+                "action": "retire",
+                "key": key,
+                "rule_id": row.id,
+                "title": f'"{name}" נשבר בכל {trade_count(judged)} שנבדקו.',
+                "detail": "זו לא תוכנית, זו משאלה. עדיף לשנות את המספר למשהו שאתה באמת "
+                          "עומד בו, או להוריד אותו.",
+                "accept": "להוריד",
+                "decline": "להשאיר",
+            }
+
+    return None
+
+
+
+# ------------------------- "SHOULD I HOLD YOU TO THIS?" ------------------------- #
+
+def _add(user, recent, statistics, currency, timezone_name, declined):
+    """
+    A losing pattern with money behind it **that he just did again.**
+
+    The "just did again" is what makes it a moment rather than a report. The same finding
+    sitting in a panel he has to open is a finding nobody acts on; arriving underneath the
+    debrief where he has only now repeated it, carrying what it would have cost, is the one
+    time the answer might be yes.
+    """
+    if not recent:
+        return None
+
+    inferred = [rule for rule in build_rules(statistics, currency)
+                if rule.get("weight", 0) >= MIN_WORTH_A_RULE]
+
+    if not inferred:
+        return None
+
+    already = {row.kind for row in TraderRule.objects.filter(user = user, is_active = True)}
+
+    # Heaviest first: the one worth the single question he gets is the expensive one.
+    for rule in sorted(inferred, key = lambda r: -r.get("weight", 0)):
+        offer = _as_declarable(rule, statistics, timezone_name)
+
+        if not offer or offer["kind"] in already:
+            continue
+
+        key = f"add:{rule['key']}"
+
+        if key in declined:
+            continue
+
+        # It has to have happened in what he just uploaded, or this is a report and not a
+        # moment. `check_plan` already knows how to ask that question of these exact rules.
+        plan = check_plan(statistics, [], recent, currency, timezone_name)
+        hit = next((e for e in plan["broken"] if e["rule"] == rule["rule"]), None)
+
+        if not hit:
+            continue
+
+        return {
+            "action": "add",
+            "key": key,
+            "title": offer["title"],
+            "detail": f"{rule['why']} — וזה קרה שוב עכשיו.",
+            "rule_kind": offer["kind"],
+            "rule_number": offer.get("number"),
+            "rule_text": offer.get("text"),
+            "rule_terms": offer.get("terms"),
+            "accept": "להוסיף ככלל",
+            "decline": "לא",
+        }
+
+    return None
+
+
+def _as_declarable(rule, statistics, timezone_name):
+    """
+    The inferred rule as something he could actually commit to - or `None`.
+
+    **Not every finding maps onto a rule, and forcing one is how the feature starts lying.**
+    "You lose at 09:00" is not "do not enter before 10:00" unless the losing hours sit at
+    one end of his day; if 08:00 is fine and 09:00 is not, a cut-off would ban a stretch the
+    record says nothing against. Where the shape does not fit, there is no card.
+    """
+    kind = rule["kind"]
+
+    if kind == "size":
+        return {"kind": TraderRule.MAX_SIZE,
+                "number": float(rule["value"]),
+                "title": f"החוזים הגדולים שלך מפסידים — לקבוע תקרה של {rule['value']}?"}
+
+    if kind == "revenge":
+        return {"kind": TraderRule.NO_REVENGE_WITHIN,
+                "number": float(rule["value"]),
+                "title": f"כניסה תוך {rule['value']} דקות מהפסד — להפוך את זה לכלל?"}
+
+    if kind == "setup":
+        setup = str(rule["value"]).lower()
+        return {"kind": TraderRule.CUSTOM,
+                "text": f"לא לקחת את הסטאפ {rule['value']}",
+                "terms": {"require": [], "forbid": [setup]},
+                "title": f"הסטאפ {rule['value']} מדמם — להפוך את זה לכלל?"}
+
+    if kind == "hour":
+        edge = _clean_edge(rule["value"], statistics)
+        if not edge:
+            return None
+
+        side, hour = edge
+        word = "לפני" if side == TraderRule.NO_BEFORE else "אחרי"
+
+        return {"kind": side,
+                "number": float(hour * 60),
+                "title": f"כל ההפסדים שלך {word} {clock(hour * 60)} — לקבוע את זה ככלל?"}
+
+    # `duration` and `instrument` have no kind he can declare, so they stay findings.
+    return None
+
+
+def _clean_edge(bad_hour, statistics):
+    """
+    Whether the losing hours sit at one end of his trading day, so a cut-off is honest.
+
+    **This is the check that stops the card from proposing a rule the evidence does not
+    support.** A single bad hour in the middle of a good day is a finding; it is not a
+    reason to ban everything before it.
+    """
+    hours = [group for group in statistics.get("breakdowns", {}).get("by_hour", [])
+             if group.get("is_significant")]
+
+    if len(hours) < 3:
+        return None
+
+    losing = sorted(int(g["key"]) for g in hours if g.get("net_pnl", 0) < 0)
+    winning = sorted(int(g["key"]) for g in hours if g.get("net_pnl", 0) >= 0)
+
+    if not losing or not winning or int(bad_hour) not in losing:
+        return None
+
+    # Every losing hour earlier than every winning one: a morning he should not be trading.
+    if max(losing) < min(winning):
+        return TraderRule.NO_BEFORE, min(winning)
+
+    # And the mirror of it, an afternoon he should be done before.
+    if min(losing) > max(winning):
+        return TraderRule.NO_AFTER, max(winning)
+
+    return None
+
+# ------------------------- END ------------------------- #

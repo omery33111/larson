@@ -61,6 +61,12 @@ class Message(models.Model):
     # Whether this answer was a debrief that found broken rules, or one that found none. It
     # is stored rather than sent once, because a signal that vanishes on refresh is a signal
     # nobody can trust. Empty on every message that is not a debrief.
+    # **The one question Larson asks under a debrief**, stored rather than only streamed -
+    # the same lesson as `verdict` one field down. A card that exists only in the stream is
+    # a card that vanishes on refresh, and this one asks him to commit to something.
+    # Cleared the moment he answers it, either way.
+    suggestion = models.JSONField(null = True, blank = True)
+
     verdict = models.CharField(max_length = 20, blank = True, choices = [
         ("kept", "Kept the rules"),
         ("broken", "Broke a rule"),

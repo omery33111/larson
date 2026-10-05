@@ -1,7 +1,7 @@
 import axios from "axios";
 import { accessToken, freshAccessToken } from "../../app/session";
 import {
-    deleteMentorRuleURL, previewMentorRuleURL, mentorPendingURL, mentorRulesURL, mentorStreamURL, mentorURL,
+    acceptSuggestionURL, deleteMentorRuleURL, dismissSuggestionURL, previewMentorRuleURL, mentorPendingURL, mentorRulesURL, mentorStreamURL, mentorURL,
     saveMentorRuleURL
 } from "../../endpoints/endpoints";
 import { StreamEvent, readEventStream } from "../chat/chatAPI";
@@ -108,6 +108,17 @@ const previewRule = async (terms: unknown) => {
 };
 
 
+// **Python writes the row, not the model.** These two are the whole of the write path for
+// a suggestion, and nothing on the model's side of the product can reach them.
+const answerSuggestion = async (messageId: number, accepted: boolean) => {
+    const response = await axios.post(accepted ? acceptSuggestionURL : dismissSuggestionURL,
+        { message_id: messageId },
+        { headers: { 'Authorization': `Bearer ${accessToken()}` } });
+
+    return response.data;
+};
+
+
 const deleteRule = async (id: number) => {
     await axios.delete(deleteMentorRuleURL(id), {
         headers: { 'Authorization': `Bearer ${accessToken()}` }
@@ -125,6 +136,7 @@ const mentorService = {
     getRules,
     saveRule,
     previewRule,
+    answerSuggestion,
     deleteRule,
 };
 

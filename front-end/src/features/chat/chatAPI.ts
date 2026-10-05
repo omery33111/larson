@@ -1,4 +1,5 @@
 import axios from "axios";
+import { RuleSuggestion } from "../../models/Rule";
 import { accessToken, freshAccessToken } from "../../app/session";
 import {
     conversationURL, conversationsURL, starMessageURL, starredMessagesURL, streamMessageURL
@@ -109,7 +110,10 @@ import type { UsagePayload } from '../usage/usageSlice';
 export type StreamEvent =
     | { type: 'start'; message_id: number; question_id: number; title: string; verdict?: string }
     | { type: 'delta'; text: string }
-    | { type: 'done'; message_id: number; usage?: UsagePayload }
+    // `suggestion` only ever arrives on a mentor debrief, and only when python found a
+    // condition worth one question. It rides `done` rather than `start` because it
+    // belongs under a finished answer.
+    | { type: 'done'; message_id: number; usage?: UsagePayload; suggestion?: RuleSuggestion | null }
     | { type: 'error'; error: string; usage?: UsagePayload };
 
 

@@ -5,6 +5,7 @@ import { toast } from 'react-toastify'
 import { useAppDispatch, useAppSelector } from '../../app/hooks'
 import { selectIsLogged } from '../authentication/authenticationSlice'
 import ChatMessage from '../chat/ChatMessage'
+import SuggestionCard from './SuggestionCard'
 import { clearJumpTarget, selectJumpTargetId } from '../chat/chatSlice'
 import { useTypewriter } from '../chat/useTypewriter'
 import LarsonMark from '../larson/LarsonMark'
@@ -265,11 +266,17 @@ const MentorPage = () => {
                 </p>
               </div>
             ) : messages.map((row) => (
-              <ChatMessage
-                key={`${row.role}-${row.id}-${row.created_at}`}
-                message={row}
-                isFound={row.id === jumpTargetId}
-              />
+              <div key={`${row.role}-${row.id}-${row.created_at}`}>
+                <ChatMessage message={row} isFound={row.id === jumpTargetId} />
+
+                {/* **Under the finished answer, never beside a streaming one.** Asking him
+                    to commit while he is still reading why is asking before he has heard
+                    the reason - which is also why it rides the `done` event and not
+                    `start`. It is stored on the message, so a refresh does not lose a
+                    question he has not answered yet. */}
+                {row.suggestion &&
+                  <SuggestionCard messageId={row.id} card={row.suggestion} />}
+              </div>
             ))}
 
             {isStreaming && (

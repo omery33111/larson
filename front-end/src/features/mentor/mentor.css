@@ -884,6 +884,78 @@
 }
 
 
+/* ------------------------- LARSON'S ONE QUESTION ------------------------- */
+/* Gold, because it is the only thing on the page asking him to decide something. It sits
+   under the answer rather than inside it: the answer is Larson talking, this is a choice. */
+
+.suggestion {
+  margin: 0.2rem 0 1.2rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid #3a3115;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #1a1710 0%, #15181f 100%);
+}
+
+/* The rarer one, and the only moment in the product that tells him he has changed. */
+.suggestion-retire {
+  border-color: #1d3b2a;
+  background: linear-gradient(180deg, #111d17 0%, #15181f 100%);
+}
+
+.suggestion-title {
+  margin: 0 0 0.3rem;
+  font-size: 0.93rem;
+  line-height: 1.6;
+  font-weight: 600;
+  color: #e8e8e8;
+}
+
+.suggestion-detail {
+  margin: 0 0 0.85rem;
+  font-size: 0.83rem;
+  line-height: 1.7;
+  color: #8b909c;
+}
+
+.suggestion-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.suggestion-yes {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 44px;
+}
+
+.suggestion-retire .suggestion-yes {
+  background-color: #2fa66a;
+  border-color: #2fa66a;
+  color: #0b1f16;
+}
+
+.suggestion-no {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 44px;
+  padding-inline: 0.8rem;
+  border: 1px solid #2d313b;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 0.84rem;
+  color: #8b909c;
+  cursor: pointer;
+}
+
+.suggestion-no:hover { color: #e8e8e8; border-color: #3a3f4b; }
+
+.suggestion button:disabled { opacity: 0.5; cursor: default; }
+
+
 /* ------------------------- LAPTOP RESPONSIVE STYLING ------------------------- */
 @media (min-width: 1025px) and (max-width: 1919px) {
   .mentor-shell {

@@ -9,7 +9,7 @@ class MessageSerializer(serializers.ModelSerializer):
         model = Message
         # The digest itself is prompt material, not screen material - the user sees the file
         # name he attached, not the table we made out of it.
-        fields = ["id", "role", "content", "attachment_name", "verdict", "is_starred",
+        fields = ["id", "role", "content", "attachment_name", "verdict", "suggestion", "is_starred",
                   "created_at"]
 
 

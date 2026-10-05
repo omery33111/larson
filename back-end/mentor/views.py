@@ -1,3 +1,5 @@
+import logging
+
 from django.conf import settings
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -18,8 +20,9 @@ from chat import retrieval
 from .compliance import check_plan
 from .interpret import (MAX_RULE_LENGTH, coverage, interpret, per_term, read_back,
                         validate_his_own, vocabulary)
-from .models import TraderRule
+from .models import DismissedSuggestion, TraderRule
 from .rules import declared_rules
+from .suggestions import propose
 from .serializers import TraderRuleSerializer
 
 from .context import (GREETING, baseline_set, mentor_messages, mentor_system, receipt,
@@ -27,6 +30,8 @@ from .context import (GREETING, baseline_set, mentor_messages, mentor_system, re
 from .deviation import build_deviation
 
 
+
+log = logging.getLogger(__name__)
 
 MENTOR_TITLE = "המנטור"
 
@@ -191,6 +196,7 @@ def stream(request):
 
     prelude = ""
     verdict = ""
+    suggestion = None
     briefing = text
 
     if trade_file_id:
@@ -233,6 +239,17 @@ def stream(request):
             trade_file.awaiting_debrief = False
             trade_file.save(update_fields = ["awaiting_debrief"])
 
+        # **Larson's one question, composed here and never by the model.** Python found the
+        # condition and computed the figure; the model will not see this and cannot press
+        # anything - the same shape as the receipt line directly below.
+        try:
+            suggestion = propose(request.user, recent, compute_statistics(baseline + recent),
+                                 currency, zone)
+        except Exception:
+            # A debrief must not fail over an optional card.
+            log.exception("Could not compose a suggestion")
+            suggestion = None
+
         prelude = receipt(trade_file)
         # `text` is still whatever he typed here - the fallback title below has not run yet -
         # so a note sent with the file reaches the model instead of being replaced away.
@@ -264,7 +281,7 @@ def stream(request):
                                                        billed_to = request.user))
 
     return _sse(_answer(row, question, system, messages, prelude, verdict,
-                        budget_kind = "mentor"))
+                        budget_kind = "mentor", suggestion = suggestion))
 
 
 def _currency(trades):
@@ -493,3 +510,84 @@ def preview_rule(request):
         # a list he stops reading.
         "labels": vocabulary(request.user)[:120],
     })
+
+
+# ------------------------- ANSWERING LARSON'S QUESTION ------------------------- #
+#
+# **Two endpoints, and between them is the line the whole security argument rests on.**
+# Python found the condition and composed the card; the trader presses a button; python
+# writes the row. The model is not in this path at all and never was - it cannot create a
+# rule, delete one, or reach these endpoints, which is what keeps "the model has no tools"
+# true after this feature exists.
+
+def _card(message_id, user):
+    """The message carrying the open question, or `None` if it is already answered."""
+    row = Message.objects.filter(id = message_id, conversation__user = user,
+                                 conversation__is_mentor = True).first()
+
+    return row if row and row.suggestion else None
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def accept_suggestion(request):
+    """His yes, which is what turns Larson's observation into his own commitment."""
+    row = _card(request.data.get("message_id"), request.user)
+
+    if not row:
+        return Response({"error": "ההצעה כבר נענתה."}, status = status.HTTP_404_NOT_FOUND)
+
+    card = row.suggestion
+
+    if card.get("action") == "retire":
+        TraderRule.objects.filter(user = request.user, id = card.get("rule_id")).delete()
+
+    else:
+        kind = card.get("rule_kind")
+
+        if kind not in dict(TraderRule.KINDS):
+            return Response({"error": "סוג כלל לא מוכר."},
+                            status = status.HTTP_400_BAD_REQUEST)
+
+        if kind == TraderRule.CUSTOM:
+            TraderRule.objects.create(
+                user = request.user, kind = kind,
+                text = clean_label(card.get("rule_text", ""), MAX_RULE_LENGTH),
+                terms = validate_his_own(card.get("rule_terms") or {}),
+                known_labels = vocabulary(request.user))
+        else:
+            TraderRule.objects.update_or_create(
+                user = request.user, kind = kind,
+                defaults = {"number": card.get("rule_number"), "is_active": True})
+
+    # **Cleared either way**, so the card cannot be answered twice or reappear on a reload.
+    row.suggestion = None
+    row.save(update_fields = ["suggestion"])
+
+    return Response({"done": True})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def dismiss_suggestion(request):
+    """
+    His no, remembered for good.
+
+    The condition behind a suggestion is usually still true next week, so without this the
+    same card returns every debrief until he gives in or stops reading them. **A mentor who
+    asks the same question weekly is not persistent, he is ignorable.**
+    """
+    row = _card(request.data.get("message_id"), request.user)
+
+    if not row:
+        return Response({"error": "ההצעה כבר נענתה."}, status = status.HTTP_404_NOT_FOUND)
+
+    key = row.suggestion.get("key")
+
+    if key:
+        DismissedSuggestion.objects.get_or_create(user = request.user, key = key)
+
+    row.suggestion = None
+    row.save(update_fields = ["suggestion"])
+
+    return Response({"done": True})

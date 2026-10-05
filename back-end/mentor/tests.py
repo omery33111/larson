@@ -16,8 +16,9 @@ from analytics.statistics import compute_statistics
 
 from . import interpret as interpret_module
 from .compliance import build_rules, check_plan
-from .models import TraderRule
+from .models import DismissedSuggestion, TraderRule
 from . import rules as rules_module
+from .suggestions import _as_declarable, _clean_edge, propose
 from .rules import declared_rules
 from .context import baseline_set, receipt
 from .deviation import MIN_BASELINE_TRADES, MIN_RECENT_TRADES, build_deviation
@@ -1814,5 +1815,296 @@ class RemovedRuleTests(APITestCase):
         response = self.client.get("/mentor/rules/")
 
         self.assertEqual(response.data["kinds"][0]["kind"], "custom")
+
+
+# ------------------------- LARSON'S ONE QUESTION ------------------------- #
+#
+# **The server asks it and python writes the row**, which is the property these tests exist
+# to hold. A version where the model creates rules would end the argument that an injected
+# instruction in a trade file cannot reach anybody's data, and nothing in the feature itself
+# would look different on the day that changed.
+
+class SuggestionTests(APITestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_user(username = "omer", password = "Tr4de-Pl4n!x")
+        self.client.force_authenticate(self.user)
+
+    def oversized_losses(self, count = 40):
+        """Big trades that lose and small ones that win - the shape `size` is built on."""
+        rows = []
+        for n in range(count):
+            big = n % 2 == 0
+            at = BASE + timedelta(days = n // 2, hours = n % 2)
+            rows.append(Trade.objects.create(
+                user = self.user, executed_at = at, opened_at = at - timedelta(minutes = 9),
+                symbol = "MNQU6", instrument = "NQ", source_timezone = "Asia/Jerusalem",
+                currency = "USD", direction = "long",
+                quantity = 8.0 if big else 1.0,
+                pnl = -260.0 if big else 90.0,
+                outcome = "loss" if big else "win",
+                duration_seconds = 540, setups = "breakout",
+                dedup_hash = f"sg-{n}"))
+        return rows
+
+
+    # ------------- THE QUESTION ITSELF:
+
+    def test_a_pattern_he_just_repeated_becomes_one_question(self):
+        rows = self.oversized_losses()
+        statistics = compute_statistics(rows)
+
+        card = propose(self.user, rows[-6:], statistics)
+
+        self.assertIsNotNone(card)
+        self.assertEqual(card["action"], "add")
+        self.assertIn(card["rule_kind"], dict(TraderRule.KINDS))
+
+    def test_nothing_is_offered_when_nothing_was_repeated(self):
+        """**The "just did it again" is what makes it a moment rather than a report.** The
+        same finding sitting in a panel is one nobody acts on."""
+        rows = self.oversized_losses()
+        statistics = compute_statistics(rows)
+
+        # A clean recent file: small size, profitable.
+        clean = [Trade(user = self.user, executed_at = BASE + timedelta(days = 90),
+                       opened_at = BASE + timedelta(days = 90) - timedelta(minutes = 9),
+                       symbol = "MNQU6", instrument = "NQ",
+                       source_timezone = "Asia/Jerusalem", currency = "USD",
+                       direction = "long", quantity = 1.0, pnl = 120.0, outcome = "win",
+                       # A different setup too: the one in the baseline is itself a losing
+                       # bucket, so reusing it would be repeating a pattern, not avoiding one.
+                       duration_seconds = 540, setups = "pullback", dedup_hash = "clean")]
+
+        self.assertIsNone(propose(self.user, clean, statistics))
+
+    def test_it_never_offers_a_rule_he_already_has(self):
+        rows = self.oversized_losses()
+        TraderRule.objects.create(user = self.user, kind = TraderRule.MAX_SIZE, number = 2)
+
+        card = propose(self.user, rows[-6:], compute_statistics(rows))
+
+        self.assertNotEqual((card or {}).get("rule_kind"), TraderRule.MAX_SIZE)
+
+    def test_a_no_is_remembered_for_good(self):
+        """
+        **The condition is usually still true next week**, so without this the same card
+        comes back every debrief until he gives in or stops reading them. A mentor who asks
+        the same question weekly is not persistent, he is ignorable.
+        """
+        rows = self.oversized_losses()
+        statistics = compute_statistics(rows)
+
+        first = propose(self.user, rows[-6:], statistics)
+        self.assertIsNotNone(first)
+
+        DismissedSuggestion.objects.create(user = self.user, key = first["key"])
+
+        again = propose(self.user, rows[-6:], statistics)
+        self.assertNotEqual((again or {}).get("key"), first["key"])
+
+
+    # ------------- AND THE HALF THAT IS ACTUALLY THE MENTOR:
+
+    def test_a_rule_he_has_outgrown_is_offered_for_retirement(self):
+        """
+        **Any analytics product can propose a rule from a losing bucket.** Telling a trader
+        he no longer needs one is the thing nothing else in this product gets to say.
+        """
+        for n in range(30):
+            at = BASE + timedelta(days = n)
+            Trade.objects.create(
+                user = self.user, executed_at = at, opened_at = at - timedelta(minutes = 9),
+                symbol = "MNQU6", instrument = "NQ", source_timezone = "Asia/Jerusalem",
+                currency = "USD", direction = "long", quantity = 1.0, pnl = 100.0,
+                outcome = "win", duration_seconds = 540, dedup_hash = f"kept-{n}")
+
+        TraderRule.objects.create(user = self.user, kind = TraderRule.MAX_SIZE, number = 3)
+
+        card = propose(self.user, [], compute_statistics(list(Trade.objects.all())))
+
+        self.assertEqual(card["action"], "retire")
+        self.assertIn("אפס חריגות", card["detail"] + card["title"])
+
+    def test_a_rule_he_never_keeps_is_called_a_wish(self):
+        """Not discipline failing - a plan that does not fit him. Pretending otherwise
+        teaches him to ignore the whole section."""
+        for n in range(14):
+            at = BASE + timedelta(days = n)
+            Trade.objects.create(
+                user = self.user, executed_at = at, opened_at = at - timedelta(minutes = 9),
+                symbol = "MNQU6", instrument = "NQ", source_timezone = "Asia/Jerusalem",
+                currency = "USD", direction = "long", quantity = 9.0, pnl = -40.0,
+                outcome = "loss", duration_seconds = 540, dedup_hash = f"broke-{n}")
+
+        TraderRule.objects.create(user = self.user, kind = TraderRule.MAX_SIZE, number = 2)
+
+        card = propose(self.user, [], compute_statistics(list(Trade.objects.all())))
+
+        self.assertEqual(card["action"], "retire")
+        self.assertIn("משאלה", card["detail"])
+
+    def test_retiring_outranks_adding(self):
+        """**Tidying what exists comes before adding more**, and it is the rarer moment."""
+        rows = self.oversized_losses()
+        TraderRule.objects.create(user = self.user, kind = TraderRule.NO_REVENGE_WITHIN,
+                                  number = 1)
+
+        card = propose(self.user, rows[-6:], compute_statistics(rows))
+
+        if card:
+            self.assertEqual(card["action"], "retire")
+
+
+    # ------------- WHAT IT REFUSES TO PROPOSE:
+
+    def test_a_losing_hour_in_the_middle_of_a_good_day_is_not_a_cut_off(self):
+        """
+        **This is the check that stops the card from proposing a rule the evidence does not
+        support.** "You lose at 11:00" is not "do not enter before 12:00" when 09:00 and
+        14:00 are both fine - a cut-off would ban a stretch the record says nothing against.
+        """
+        statistics = {"breakdowns": {"by_hour": [
+            {"key": "9", "net_pnl": 500.0, "is_significant": True},
+            {"key": "11", "net_pnl": -900.0, "is_significant": True},
+            {"key": "14", "net_pnl": 700.0, "is_significant": True},
+        ]}}
+
+        self.assertIsNone(_clean_edge(11, statistics))
+
+    def test_a_losing_morning_is_a_cut_off(self):
+        statistics = {"breakdowns": {"by_hour": [
+            {"key": "8", "net_pnl": -500.0, "is_significant": True},
+            {"key": "9", "net_pnl": -300.0, "is_significant": True},
+            {"key": "14", "net_pnl": 700.0, "is_significant": True},
+        ]}}
+
+        self.assertEqual(_clean_edge(9, statistics), (TraderRule.NO_BEFORE, 14))
+
+    def test_a_finding_with_no_declarable_shape_produces_no_card(self):
+        """`duration` and `instrument` have no kind he can commit to, so they stay findings.
+        **Forcing a mapping is how this feature would start lying.**"""
+        for kind in ("duration", "instrument"):
+            with self.subTest(kind = kind):
+                self.assertIsNone(_as_declarable({"kind": kind, "value": "x"}, {}, "Asia/Jerusalem"))
+
+
+    # ------------- THE LINE THE SECURITY ARGUMENT RESTS ON:
+
+    def test_the_model_is_not_in_the_write_path(self):
+        """
+        **Python found the condition, he pressed a button, python wrote the row.** If the
+        model could ever create a rule it would be a tool, and "the model has no tools" is
+        the entire reason an injected instruction in a trade file cannot reach anyone's
+        data. Nothing in the feature would look different on the day that changed, which is
+        why it is asserted rather than remembered.
+        """
+        import inspect
+        from mentor import suggestions
+
+        source = inspect.getsource(suggestions)
+
+        for forbidden in ("anthropic", "messages.create", "client."):
+            self.assertNotIn(forbidden, source,
+                             f"the suggestion engine reached for {forbidden}")
+
+
+    # ------------- ANSWERING IT:
+
+    def answered_debrief(self, card):
+        conversation = Conversation.objects.create(user = self.user, is_mentor = True,
+                                                   title = "המנטור")
+        return Message.objects.create(conversation = conversation, role = ASSISTANT,
+                                      content = "תחקיר", suggestion = card)
+
+    def test_yes_creates_the_rule_and_clears_the_card(self):
+        row = self.answered_debrief({"action": "add", "key": "add:size",
+                                     "rule_kind": "max_size", "rule_number": 3.0})
+
+        response = self.client.post("/mentor/suggestion/accept/", {"message_id": row.id},
+                                    format = "json")
+
+        row.refresh_from_db()
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(TraderRule.objects.get().number, 3.0)
+        self.assertIsNone(row.suggestion)
+
+    def test_yes_on_a_retirement_removes_the_rule(self):
+        rule = TraderRule.objects.create(user = self.user, kind = TraderRule.MAX_SIZE,
+                                         number = 3)
+        row = self.answered_debrief({"action": "retire", "key": f"retire:{rule.id}",
+                                     "rule_id": rule.id})
+
+        self.client.post("/mentor/suggestion/accept/", {"message_id": row.id},
+                         format = "json")
+
+        self.assertFalse(TraderRule.objects.exists())
+
+    def test_no_is_recorded_and_the_card_is_cleared(self):
+        row = self.answered_debrief({"action": "add", "key": "add:size",
+                                     "rule_kind": "max_size", "rule_number": 3.0})
+
+        self.client.post("/mentor/suggestion/dismiss/", {"message_id": row.id},
+                         format = "json")
+
+        row.refresh_from_db()
+
+        self.assertFalse(TraderRule.objects.exists())
+        self.assertIsNone(row.suggestion)
+        self.assertTrue(DismissedSuggestion.objects.filter(user = self.user,
+                                                           key = "add:size").exists())
+
+    def test_the_same_card_cannot_be_answered_twice(self):
+        """It is cleared on the first answer, so a second press cannot make a second rule."""
+        row = self.answered_debrief({"action": "add", "key": "add:size",
+                                     "rule_kind": "max_size", "rule_number": 3.0})
+
+        self.client.post("/mentor/suggestion/accept/", {"message_id": row.id}, format = "json")
+        again = self.client.post("/mentor/suggestion/accept/", {"message_id": row.id},
+                                 format = "json")
+
+        self.assertEqual(again.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(TraderRule.objects.count(), 1)
+
+    def test_he_cannot_answer_somebody_else_s_card(self):
+        other = User.objects.create_user(username = "zoe", password = "Tr4de-Pl4n!x")
+        conversation = Conversation.objects.create(user = other, is_mentor = True,
+                                                   title = "המנטור")
+        theirs = Message.objects.create(conversation = conversation, role = ASSISTANT,
+                                        content = "x",
+                                        suggestion = {"action": "add", "key": "add:size",
+                                                      "rule_kind": "max_size",
+                                                      "rule_number": 3.0})
+
+        response = self.client.post("/mentor/suggestion/accept/", {"message_id": theirs.id},
+                                    format = "json")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertFalse(TraderRule.objects.exists())
+
+    def test_a_card_naming_an_unknown_kind_is_refused(self):
+        """It cannot happen from the engine, and that is exactly why it is checked - the
+        row is json on a message, and the day something else writes one it must not be able
+        to name a kind the product does not have."""
+        row = self.answered_debrief({"action": "add", "key": "x", "rule_kind": "min_hold",
+                                     "rule_number": 5.0})
+
+        response = self.client.post("/mentor/suggestion/accept/", {"message_id": row.id},
+                                    format = "json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(TraderRule.objects.exists())
+
+    def test_the_card_survives_a_reload(self):
+        """A question that vanishes on refresh is one he never gets to answer - the same
+        lesson the verdict already carries."""
+        row = self.answered_debrief({"action": "add", "key": "add:size",
+                                     "rule_kind": "max_size", "rule_number": 3.0})
+
+        served = self.client.get("/mentor/").data
+
+        card = next(m["suggestion"] for m in served["messages"] if m["id"] == row.id)
+        self.assertEqual(card["rule_kind"], "max_size")
 
 

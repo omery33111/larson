@@ -57,6 +57,23 @@ export interface RulePreview {
     labels: string[];
 }
 
+/** The one question Larson asks under a debrief. **Composed by the server, in his voice** -
+ *  the model never sees it and cannot press anything, which is what keeps "the model has no
+ *  tools" true after this feature exists. */
+export interface RuleSuggestion {
+    action: 'add' | 'retire';
+    key: string;
+    title: string;
+    detail: string;
+    accept: string;
+    decline: string;
+    rule_id?: number;
+    rule_kind?: string;
+    rule_number?: number | null;
+    rule_text?: string | null;
+    rule_terms?: RuleTerms | null;
+}
+
 export interface RuleKind {
     kind: string;
     label: string;

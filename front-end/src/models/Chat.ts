@@ -1,3 +1,4 @@
+import { RuleSuggestion } from './Rule';
 export interface ChatMessage {
     id: number;
     role: 'user' | 'assistant';
@@ -7,6 +8,9 @@ export interface ChatMessage {
     // Only a debrief carries one: whether the new trades kept the rules his own history
     // argues for, or broke one. It is what turns the visor green or red.
     verdict?: 'kept' | 'broken' | '';
+    /** Larson's one question under this answer. Cleared the moment it is answered, so a
+     *  reload never shows a card he has already decided on. */
+    suggestion?: RuleSuggestion | null;
 
     is_starred: boolean;
     created_at: string;

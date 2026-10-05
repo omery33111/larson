@@ -1272,6 +1272,8 @@ class PublicEndpointTests(SignUpBase):
             ("get", "/authentication/email/preferences/"),
             ("get", "/mentor/rules/"),
             ("post", "/mentor/rules/preview/"),
+            ("post", "/mentor/suggestion/accept/"),
+            ("post", "/mentor/suggestion/dismiss/"),
         ):
             response = getattr(self.client, method)(path)
 

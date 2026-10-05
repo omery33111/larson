@@ -120,6 +120,10 @@ export const saveMentorRuleURL = `${myServer}/mentor/rules/save/`;
 
 export const previewMentorRuleURL = `${myServer}/mentor/rules/preview/`;
 
+export const acceptSuggestionURL = `${myServer}/mentor/suggestion/accept/`;
+
+export const dismissSuggestionURL = `${myServer}/mentor/suggestion/dismiss/`;
+
 export const deleteMentorRuleURL = (id: number) => `${myServer}/mentor/rules/${id}/`;
 
 

@@ -134,3 +134,37 @@ class TraderRule(models.Model):
         return f"{self.user.username} - {self.kind}"
 
 # ------------------------- DECLARED RULES END ------------------------- #
+
+# ------------------------- WHAT HE ALREADY SAID NO TO ------------------------- #
+
+class DismissedSuggestion(models.Model):
+    """
+    One suggestion the trader turned down, remembered for good.
+
+    **Without this the feature is a nagger.** The condition that produced a suggestion is
+    usually still true next week - the losing hour is still a losing hour - so the same card
+    would come back every single debrief until he gave in or stopped reading them. A mentor
+    who asks the same question weekly is not persistent, he is ignorable.
+
+    Keyed on what the suggestion was about rather than on the row it would have made,
+    because the row was never created.
+    """
+
+    user = models.ForeignKey(User, on_delete = models.CASCADE,
+                             related_name = "dismissed_suggestions")
+
+    # "add:hour:9", "retire:14" - stable across debriefs, which is the whole point.
+    key = models.CharField(max_length = 120)
+
+    created_at = models.DateTimeField(auto_now_add = True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields = ["user", "key"], name = "one_dismissal_per_thing"),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.key}"
+
+
+# ------------------------- END ------------------------- #

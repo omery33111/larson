@@ -265,7 +265,7 @@ def stream(request, conversation_id):
 
 
 def _answer(row, question, system, messages, prelude = "", verdict = "",
-            budget_kind = "chat"):
+            budget_kind = "chat", suggestion = None):
     """
     Yields the answer token by token, then stores it.
 
@@ -295,10 +295,12 @@ def _answer(row, question, system, messages, prelude = "", verdict = "",
     client = anthropic.Anthropic(api_key = settings.ANTHROPIC_API_KEY)
 
     answer = Message.objects.create(conversation = row, role = ASSISTANT, content = prelude,
-                                    verdict = verdict)
+                                    verdict = verdict, suggestion = suggestion)
 
     # The verdict rides the start event as well, so the avatar carries it while the answer is
-    # still being written rather than only after a reload.
+    # still being written rather than only after a reload. The card does not: it belongs
+    # **under** a finished answer, and showing it while he is still reading would ask him to
+    # decide before he has heard why.
     yield _event({"type": "start", "message_id": answer.id, "question_id": question.id,
                   "title": row.title, "verdict": verdict})
 
@@ -350,7 +352,7 @@ def _answer(row, question, system, messages, prelude = "", verdict = "",
 
         # The fresh state rides the last event, so the meter is current without the client
         # having to ask for it after every answer.
-        yield _event({"type": "done", "message_id": answer.id,
+        yield _event({"type": "done", "suggestion": suggestion, "message_id": answer.id,
                       "usage": budget.state(row.user)})
 
     finally:

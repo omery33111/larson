@@ -16,6 +16,7 @@ const initialState: MentorState =
 
     streamingText: "",
     streamingMessageId: null,
+    streamingSuggestion: null,
     streamingVerdict: "",
     isStreaming: false,
     isWaiting: false,
@@ -104,6 +105,12 @@ export const sendToMentorAsync = createAsyncThunk(
             // The quota rides the last event of every answer - and the refusal too, which is
             // the one time the client most needs the fresh figure. Nothing polls for it.
                 thunkAPI.dispatch(usageReported(event.usage));
+
+                // **Larson's question rides `done` and not `start`**: it belongs under a
+                // finished answer, and showing it mid-stream would ask him to commit before
+                // he has read why. The server already stored it on the message, so this is
+                // only so he does not have to reload to see it.
+                if (event.suggestion) thunkAPI.dispatch(debriefSuggested(event.suggestion));
             }
             else if (event.type === 'error') {
                 failure = event.error;
@@ -146,6 +153,38 @@ export const stopMentor = () => {
 // record - the losing buckets, each with the evidence behind it - and that finds what is
 // broken. What it could not do was hold him to something **he decided**, because nothing
 // stored that he had decided it.
+
+export const acceptSuggestionAsync = createAsyncThunk(
+    "mentor/acceptSuggestion",
+    async (messageId: number, thunkAPI) => {
+        try {
+            await mentorService.answerSuggestion(messageId, true);
+            return messageId;
+        } catch (error: any) {
+            if (error.response?.status === 401) {
+                thunkAPI.dispatch(sessionExpired());
+                return thunkAPI.rejectWithValue("");
+            }
+            return thunkAPI.rejectWithValue(error.response?.data?.error || "לא הצלחנו לשמור.");
+        }
+    });
+
+
+export const dismissSuggestionAsync = createAsyncThunk(
+    "mentor/dismissSuggestion",
+    async (messageId: number, thunkAPI) => {
+        try {
+            await mentorService.answerSuggestion(messageId, false);
+            return messageId;
+        } catch (error: any) {
+            if (error.response?.status === 401) {
+                thunkAPI.dispatch(sessionExpired());
+                return thunkAPI.rejectWithValue("");
+            }
+            return thunkAPI.rejectWithValue("");
+        }
+    });
+
 
 export const getRulesAsync = createAsyncThunk("mentor/getRules", async (_, thunkAPI) => {
     try {
@@ -205,6 +244,11 @@ export const mentorSlice = createSlice({
         openRules: (state) =>
         {
             state.isRulesOpen = true
+        },
+
+        debriefSuggested: (state, action) =>
+        {
+            state.streamingSuggestion = action.payload
         },
 
         closeRules: (state) =>
@@ -346,6 +390,24 @@ export const mentorSlice = createSlice({
         })
 
 
+        // **Cleared on screen the moment he answers, either way.** The server clears its
+        // copy in the same request; a card that lingers invites a second press on a
+        // question already decided.
+        .addCase(acceptSuggestionAsync.fulfilled, (state, action) =>
+        {
+            state.messages = state.messages.map((message) =>
+                message.id === action.payload ? { ...message, suggestion: null } : message);
+        })
+        .addCase(dismissSuggestionAsync.fulfilled, (state, action) =>
+        {
+            state.messages = state.messages.map((message) =>
+                message.id === action.payload ? { ...message, suggestion: null } : message);
+        })
+        .addCase(acceptSuggestionAsync.rejected, (state, action) =>
+        {
+            state.message = action.payload as string;
+        })
+
         .addCase(getRulesAsync.pending, (state) =>
         {
             state.isRulesLoading = true;
@@ -421,6 +483,7 @@ function settle(state: MentorState) {
             content: state.streamingText,
             attachment_name: "",
             verdict: state.streamingVerdict,
+            suggestion: state.streamingSuggestion,
             is_starred: false,
             created_at: new Date().toISOString(),
         })
@@ -429,6 +492,7 @@ function settle(state: MentorState) {
     state.streamingText = ""
     state.streamingMessageId = null
     state.streamingVerdict = ""
+    state.streamingSuggestion = null
 }
 
 
@@ -456,7 +520,7 @@ export const selectMentorMessage = (state: RootState) => state.mentor.message;
 export const {
     resetMentorMessage, setMentorDraft, setMentorDragging,
     expectIngestion,
-    debriefOpened, debriefDelta, openRules, closeRules,
+    debriefOpened, debriefDelta, debriefSuggested, openRules, closeRules,
 } = mentorSlice.actions;
 
 export default mentorSlice.reducer;
