@@ -208,8 +208,31 @@ def _has_declared(plan):
 # that there is nothing to offer. The card is still composed in python and the model still
 # writes nothing; this only stops the two from contradicting each other.
 
-def suggestion_brief(card):
-    """What to tell the model about the card it is about to be shown underneath."""
+def suggestion_brief(card, standings = ()):
+    """
+    What to tell the model about the card it is about to be shown underneath.
+
+    `standings` is how each of his rules is doing, and it is there for the case the first
+    version got wrong: he asks which condition he would give up, Larson picks one, and no
+    button appears because the engine's bar is higher than the model's opinion. **Both can
+    be right and the user still reads it as broken** - so the model is handed the same
+    figures and can say which one it would pick *and* why there is nothing to press.
+    """
+    if standings and not card:
+        lines = "\n".join(
+            f"- \"{row['הכלל']}\": נבדק על {row['נבדק_על']}, נשמר ב-{row['נשמר']}, נשבר ב-{row['נשבר']}"
+            for row in standings)
+
+        return f"""**הסוחר שאל על הכללים שלו, ואין כרגע כלל שעומד בסף להצעת הורדה.**
+
+כך כל אחד מהם עומד בפועל:
+{lines}
+
+**מותר ומומלץ לענות על השאלה** — אם הוא שאל על איזה היה מוותר, תגיד איזה ולמה, עם המספרים.
+**אבל אמור לו גם שאין כפתור, ולמה:** המערכת מציעה להוריד כלל רק כשהוא נשבר כמעט תמיד
+(90% ומעלה) או כשהוא נשמר לגמרי לאורך זמן. **כלל שהוא שומר עליו בחלק מהמקרים הוא כלל שהוא
+עובד עליו, ולהציע למחוק אותו זה להגיד לו להפסיק לנסות.**"""
+
     if card:
         return (f"**הסוחר ביקש כלל, ומתחת לתשובה שלך יופיע כפתור שמציע לו בדיוק את זה:**"
                 + chr(10) + card["title"] + chr(10) + card["detail"] + chr(10) * 2

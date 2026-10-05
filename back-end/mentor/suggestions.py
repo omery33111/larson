@@ -205,6 +205,49 @@ def _retire(user, currency, timezone_name, declined):
 
 
 
+def standings(user, currency = "USD", timezone_name = "Asia/Jerusalem"):
+    """
+    How each of his rules is actually doing, for the model to answer from.
+
+    **Without this the words and the button disagree, and the user reads that as broken.**
+    He asked which condition he would give up if he had to; Larson picked one and no button
+    appeared, because the engine's bar for "this is dead weight" is 90% broken and that rule
+    sits at 77%. Both were right - 23% kept is somebody working on a rule rather than
+    ignoring one, and offering to delete it would be telling him to stop trying.
+
+    What was missing is that the model had no idea. Given the figures it can answer the
+    forced choice honestly *and* say why there is nothing to press, which is a better
+    answer than either half alone.
+    """
+    from trades.models import Trade
+
+    rows = list(Trade.objects.filter(user = user))
+    declared = declared_rules(user, currency)
+
+    if not rows or not declared:
+        return []
+
+    plan = check_plan({}, [], rows, currency, timezone_name, declared = declared)
+
+    out = []
+
+    for entry in plan["kept"] + plan["broken"]:
+        if not entry.get("declared"):
+            continue
+
+        judged = entry.get("checked", 0)
+        broke = entry.get("broke", 0)
+
+        out.append({
+            "הכלל": entry["rule"],
+            "נבדק_על": judged,
+            "נשבר": broke,
+            "נשמר": judged - broke,
+        })
+
+    return out
+
+
 # ------------------------- "SHOULD I HOLD YOU TO THIS?" ------------------------- #
 
 def _add(user, recent, statistics, currency, timezone_name, declined, asked = False):
@@ -276,6 +319,15 @@ def _as_declarable(rule, statistics, timezone_name):
     kind = rule["kind"]
 
     if kind == "size":
+        # **A ceiling nothing exceeds is not a rule.** A trader who always takes one
+        # contract has `avg_size == max_size`, and the inferred finding still fires because
+        # his "biggest" slice is simply all of his trades. Offering him a cap at his own
+        # only size produces a commitment that can never be broken and never says anything.
+        size = statistics.get("behaviour", {}).get("size_discipline", {})
+
+        if size.get("max_size", 0) <= float(rule["value"]):
+            return None
+
         return {"kind": TraderRule.MAX_SIZE,
                 "number": float(rule["value"]),
                 "title": f"החוזים הגדולים שלך מפסידים — לקבוע תקרה של {rule['value']}?"}

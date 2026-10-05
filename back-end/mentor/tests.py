@@ -18,7 +18,8 @@ from . import interpret as interpret_module
 from .compliance import build_rules, check_plan
 from .models import DismissedSuggestion, TraderRule
 from . import rules as rules_module
-from .suggestions import _as_declarable, _clean_edge, asked_for_one, propose
+from .suggestions import (_as_declarable, _clean_edge, asked_for_one, propose,
+                          standings)
 from .rules import declared_rules
 from .context import baseline_set, mentor_system, receipt, suggestion_brief
 from .deviation import MIN_BASELINE_TRADES, MIN_RECENT_TRADES, build_deviation
@@ -2549,6 +2550,88 @@ class RuleEdgeTests(APITestCase):
 
 
 # ------------------------- WHAT HE ACTUALLY TYPES ------------------------- #
+
+class StandingsTests(APITestCase):
+    """
+    **The words and the button disagreed, and the user reads that as broken.**
+
+    He asked which condition he would give up if he had to. Larson picked one and no button
+    appeared, because the bar for "this is dead weight" is 90% broken and that rule sits at
+    77%. Both were right - 23% kept is somebody working on a rule rather than ignoring one,
+    and offering to delete it would be telling him to stop trying.
+
+    What was missing is that the model had no idea where the bar is. Given the same figures
+    the engine judges on, it can answer the forced choice *and* say why there is nothing to
+    press, which is a better answer than either half alone - and better than moving the bar
+    to match an opinion.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username = "omer", password = "Tr4de-Pl4n!x")
+
+    def test_a_rule_between_the_two_bars_produces_figures_and_no_card(self):
+        # Kept on a fifth of them: too often to be a wish, too rarely to have been outgrown.
+        for n in range(40):
+            at = BASE + timedelta(days = n)
+            Trade.objects.create(
+                user = self.user, executed_at = at, opened_at = at - timedelta(minutes = 9),
+                symbol = "MNQU6", instrument = "NQ", source_timezone = "Asia/Jerusalem",
+                currency = "USD", direction = "long", quantity = 1.0, pnl = 60.0,
+                outcome = "win", duration_seconds = 540,
+                setups = "ifvg" if n < 9 else "breakout", dedup_hash = f"mid-{n}")
+
+        TraderRule.objects.create(user = self.user, kind = TraderRule.CUSTOM,
+                                  text = "להיכנס רק על IFVG",
+                                  terms = {"require": [["ifvg"]], "forbid": []})
+
+        statistics = compute_statistics(list(Trade.objects.all()))
+
+        card = propose(self.user, [], statistics, asked = True)
+
+        # Nothing is offered for retirement: it sits between the two bars on purpose.
+        self.assertNotEqual((card or {}).get("action"), "retire")
+
+        figures = standings(self.user)
+
+        self.assertEqual(len(figures), 1)
+        self.assertEqual(figures[0]["נשמר"], 9)
+        self.assertEqual(figures[0]["נשבר"], 31)
+
+    def test_the_brief_answers_the_question_and_explains_the_missing_button(self):
+        brief = suggestion_brief(None, [{"הכלל": "רק IFVG", "נבדק_על": 83,
+                                         "נשמר": 19, "נשבר": 64}])
+
+        # The figures, so the answer is grounded in the same numbers the engine used.
+        self.assertIn("נשמר ב-19", brief)
+        # Permission to answer, which the first version did not give.
+        self.assertIn("מותר ומומלץ לענות", brief)
+        # And why there is nothing to press.
+        self.assertIn("אין כפתור", brief)
+        self.assertIn("להפסיק לנסות", brief)
+
+    def test_a_ceiling_nothing_exceeds_is_not_offered(self):
+        """
+        **A trader who always takes one contract has `avg_size == max_size`**, and the
+        inferred finding still fires because his "biggest" slice is simply all of his
+        trades. A cap at his own only size is a commitment that can never be broken and
+        never says anything - found while writing the test above, not by anybody hitting it.
+        """
+        uniform = {"behaviour": {"size_discipline": {"available": True, "avg_size": 1.0,
+                                                     "max_size": 1.0}}}
+        varied = {"behaviour": {"size_discipline": {"available": True, "avg_size": 2.0,
+                                                    "max_size": 9.0}}}
+
+        rule = {"kind": "size", "value": 2.0}
+
+        self.assertIsNone(_as_declarable(rule, uniform, "Asia/Jerusalem"))
+        self.assertIsNotNone(_as_declarable(rule, varied, "Asia/Jerusalem"))
+
+    def test_a_trader_with_no_rules_has_no_standings(self):
+        make_trades(self.user, 3)
+
+        self.assertEqual(standings(self.user), [])
+
+
 
 class AskingForOneTests(SimpleTestCase):
     """

@@ -23,7 +23,7 @@ from .interpret import (MAX_RULE_LENGTH, coverage, interpret, per_term, read_bac
                         validate_his_own, vocabulary)
 from .models import DismissedSuggestion, TraderRule
 from .rules import declared_rules
-from .suggestions import asked_for_one, propose
+from .suggestions import asked_for_one, propose, standings
 from .serializers import TraderRuleSerializer
 
 from .context import (GREETING, baseline_set, mentor_messages, mentor_system, receipt,
@@ -299,8 +299,17 @@ def stream(request):
             # blocks once prompt caching is on, and `list += str` appends the string one
             # character at a time - which the API rejects with
             # `messages.N.content.1: Input should be an object`. It cost a production
-            # outage; `attach` has handled both shapes since the retrieval path was written.
-            retrieval.attach(messages, chr(10) * 2 + suggestion_brief(suggestion))
+            if messages:
+                # The standings go with it, so the model can answer the forced choice
+                # even when nothing clears the bar for a button.
+                try:
+                    figures = standings(request.user, _currency(own), _timezone(own))
+                except Exception:
+                    log.exception("Could not read the rule standings")
+                    figures = []
+
+                retrieval.attach(messages,
+                                 chr(10) * 2 + suggestion_brief(suggestion, figures))
 
     return _sse(_answer(row, question, system, messages, prelude, verdict,
                         budget_kind = "mentor", suggestion = suggestion))
