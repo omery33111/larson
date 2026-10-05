@@ -1,4 +1,7 @@
-from analytics.formatting import money, trades as trade_count
+from collections import defaultdict
+from zoneinfo import ZoneInfo
+
+from analytics.formatting import money, ratio, trades as trade_count
 
 from .compliance import build_rules, check_plan
 from .interpret import matches
@@ -135,6 +138,147 @@ def propose(user, recent, statistics, currency = "USD", timezone_name = "Asia/Je
 COSTS_HIM_AT_LEAST = 300.0
 
 
+def _structured_works_against_him(row, statistics):
+    """
+    A threshold that cuts off a part of his record that makes money.
+
+    Each kind is asked the same question in its own units: **what does the rule stop him
+    doing, and is that thing profitable?** The figure is his own, out of the breakdowns -
+    nothing here is estimated.
+    """
+    kind, value = row.kind, row.number
+    breakdowns = statistics.get("breakdowns", {})
+    behaviour = statistics.get("behaviour", {})
+
+    if value is None:
+        return None
+
+    # ------------- THE HOURS IT BANS:
+    if kind in (TraderRule.NO_BEFORE, TraderRule.NO_AFTER):
+        hours = [g for g in breakdowns.get("by_hour", []) if g.get("is_significant")]
+        edge = int(value) // 60
+
+        banned = [g for g in hours
+                  if (int(g["key"]) < edge if kind == TraderRule.NO_BEFORE
+                      else int(g["key"]) > edge)]
+
+        earned = sum(g.get("net_pnl", 0) for g in banned)
+
+        if earned >= COSTS_HIM_AT_LEAST:
+            best = max(banned, key = lambda g: g.get("net_pnl", 0))
+            return {"group": {"key": f"השעות ש{'לפני' if kind == TraderRule.NO_BEFORE else 'אחרי'} "
+                                     f"{clock(value)}",
+                              "net_pnl": earned,
+                              "trades": sum(g.get("trades", 0) for g in banned)},
+                    "shape": "forbids", "detail_extra": f"הטובה שבהן היא {int(best['key']):02d}:00"}
+
+    # ------------- THE SIZE IT CAPS:
+    if kind == TraderRule.MAX_SIZE:
+        size = behaviour.get("size_discipline", {})
+
+        # **Only the per-trade expectancy is published, not how many trades it covers** -
+        # so this reports the expectancy and says so, rather than multiplying by a count
+        # nobody measured. A figure invented to look bigger is the one thing this product
+        # does not do.
+        if (size.get("available") and size.get("max_size", 0) > value
+                and size.get("biggest_size_expectancy", 0) > 0):
+            return {"group": {"key": f"העסקאות הגדולות שלך (מעל {ratio(value)} חוזים)",
+                              "net_pnl": size["biggest_size_expectancy"],
+                              "trades": None},
+                    "shape": "forbids", "per_trade": True}
+
+    # ------------- THE RE-ENTRY IT BLOCKS:
+    if kind == TraderRule.NO_REVENGE_WITHIN:
+        revenge = behaviour.get("revenge", {})
+        # **`is_worse` false means his re-entries after a loss do better than the rest** -
+        # and that is true of this trader right now. A rule banning them is banning the
+        # better half.
+        if (revenge.get("available") and revenge.get("is_significant")
+                and not revenge.get("is_worse")
+                and revenge.get("total_pnl", 0) >= COSTS_HIM_AT_LEAST):
+            return {"group": {"key": "הכניסות שלך אחרי הפסד",
+                              "net_pnl": revenge["total_pnl"],
+                              "trades": revenge.get("count", 0)},
+                    "shape": "forbids"}
+
+    return None
+
+
+# **A margin, because "never broken" and "never tested" are not the same thing.**
+#
+# A trader who always takes exactly three contracts under a "maximum three" rule has never
+# broken it - and he is sitting precisely on it, which is a rule he respects to the
+# contract rather than one that does nothing. Calling that vacuous would be insulting and
+# wrong. What is vacuous is a threshold he never comes near: a cap of ninety-nine from
+# somebody whose largest position is three.
+NEVER_NEAR = 0.75
+
+# For the two clock rules the same idea is an hour rather than a ratio - 09:00 against a
+# 10:00 cut-off is near it; 14:00 is not.
+NEVER_NEAR_MINUTES = 60
+
+
+def _zone(name):
+    try:
+        return ZoneInfo(name)
+    except Exception:
+        return ZoneInfo("Asia/Jerusalem")
+
+
+def _never_tested(row, rows, tz):
+    """
+    A rule his record never comes near - **the graduation card's evil twin.**
+
+    "Do not exceed 99 contracts" from a trader who never takes more than three is judged on
+    every trade, broken by none, and therefore earns the warmest thing this feature says:
+    *forty in a row, zero breaches, this is who you are now*. **It congratulated him for a
+    rule that cannot be broken**, which is worse than saying nothing: it teaches him the
+    praise is automatic, and the next time it is earned he will not believe it.
+
+    A habit is a threshold he comes close to and respects. A threshold nothing approaches
+    is not discipline, it is a no-op.
+    """
+    kind, value = row.kind, row.number
+
+    if kind == TraderRule.CUSTOM or value is None:
+        return None
+
+    if kind == TraderRule.MAX_SIZE:
+        biggest = max((t.quantity for t in rows if t.quantity), default = 0)
+        if biggest and biggest < value * NEVER_NEAR:
+            return f"הגודל הגדול ביותר שלך הוא {ratio(biggest)} חוזים"
+
+    if kind in (TraderRule.NO_BEFORE, TraderRule.NO_AFTER):
+        entries = [(t.opened_at or t.executed_at).astimezone(tz) for t in rows]
+        if not entries:
+            return None
+        minutes = [e.hour * 60 + e.minute for e in entries]
+
+        if kind == TraderRule.NO_BEFORE and min(minutes) >= value + NEVER_NEAR_MINUTES:
+            return f"הכניסה המוקדמת ביותר שלך היא {clock(min(minutes))}"
+        if kind == TraderRule.NO_AFTER and max(minutes) <= value - NEVER_NEAR_MINUTES:
+            return f"הכניסה המאוחרת ביותר שלך היא {clock(max(minutes))}"
+
+    if kind == TraderRule.MAX_TRADES_PER_DAY:
+        per_day = defaultdict(int)
+        for trade in rows:
+            per_day[trade.executed_at.astimezone(tz).date()] += 1
+        busiest = max(per_day.values(), default = 0)
+        if busiest and busiest < value * NEVER_NEAR:
+            return f"היום העמוס ביותר שלך היה {trade_count(busiest)}"
+
+    if kind == TraderRule.MAX_DAILY_LOSS:
+        per_day = defaultdict(float)
+        for trade in rows:
+            if trade.pnl:
+                per_day[trade.executed_at.astimezone(tz).date()] += trade.pnl
+        worst = min(per_day.values(), default = 0)
+        if worst > -abs(value) * NEVER_NEAR:
+            return f"היום הגרוע ביותר שלך היה {money(worst)}"
+
+    return None
+
+
 def _works_against_him(row, statistics, currency):
     """
     Whether this rule points him at the wrong half of his own record.
@@ -147,6 +291,15 @@ def _works_against_him(row, statistics, currency):
 
     Returns the bucket and which way round it is, or `None` when the rule is doing its job.
     """
+    # ------------- THE STRUCTURED KINDS:
+    #
+    # **The same question, asked of a number instead of a tag.** "Do not enter before
+    # 10:00" is costing him exactly as much as "never with IFVG" if his mornings are where
+    # he makes money - and until now only the free-text rules were checked, so the two
+    # halves of the panel were held to different standards.
+    if row.kind != TraderRule.CUSTOM:
+        return _structured_works_against_him(row, statistics)
+
     terms = row.terms if isinstance(row.terms, dict) else {}
 
     forbidden = list(terms.get("forbid", []))
@@ -253,15 +406,37 @@ def _retire(user, currency, timezone_name, declined, statistics = None):
             group = costly["group"]
             verb = "אוסר עליך את" if costly["shape"] == "forbids" else "מחייב אותך דווקא את"
 
+            figure = money(group["net_pnl"], currency)
+            scale = (f"{figure} לעסקה" if costly.get("per_trade")
+                     else f"{figure} על פני {trade_count(group['trades'])}")
+
             return {
                 "action": "retire",
                 "key": f"retire:{row.id}:costly",
                 "rule_id": row.id,
                 "title": f'"{name}" {verb} {group["key"]}.',
-                "detail": f"{group['key']} הוא {money(group['net_pnl'], currency)} אצלך "
-                          f"על פני {trade_count(group['trades'])}."
+                "detail": f"{group['key']} — {scale} אצלך."
+                          + (chr(10) + costly["detail_extra"] + "."
+                             if costly.get("detail_extra") else "")
                           + chr(10) +
                           "הכלל הזה עובד נגדך — בין אם אתה שומר עליו ובין אם לא.",
+                "accept": "להוריד",
+                "decline": "להשאיר",
+            }
+
+        # **Before the graduation card, which is the thing it exists to stop.** A rule
+        # nothing approaches would otherwise collect the warmest sentence in the product.
+        vacuous = _never_tested(row, rows, _zone(timezone_name))
+
+        if vacuous and not asked_before("vacuous"):
+            return {
+                "action": "retire",
+                "key": f"retire:{row.id}:vacuous",
+                "rule_id": row.id,
+                "title": f'"{name}" לא נבדק אף פעם באמת.',
+                "detail": f"{vacuous} — הכלל הזה לא יכול להישבר, ולכן הוא גם לא אומר לך כלום."
+                          + chr(10) +
+                          "כלל שימושי הוא כזה שאתה מתקרב אליו.",
                 "accept": "להוריד",
                 "decline": "להשאיר",
             }

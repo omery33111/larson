@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
@@ -2051,12 +2052,16 @@ class SuggestionTests(APITestCase):
         **Any analytics product can propose a rule from a losing bucket.** Telling a trader
         he no longer needs one is the thing nothing else in this product gets to say.
         """
+        # **At the ceiling, not far below it.** This test used to put him at one contract
+        # under a cap of three and expect praise - which is the vacuous-rule bug it is now
+        # protected from, demonstrated by the test itself. A habit is a threshold he
+        # approaches and respects.
         for n in range(30):
             at = BASE + timedelta(days = n)
             Trade.objects.create(
                 user = self.user, executed_at = at, opened_at = at - timedelta(minutes = 9),
                 symbol = "MNQU6", instrument = "NQ", source_timezone = "Asia/Jerusalem",
-                currency = "USD", direction = "long", quantity = 1.0, pnl = 100.0,
+                currency = "USD", direction = "long", quantity = 3.0, pnl = 100.0,
                 outcome = "win", duration_seconds = 540, dedup_hash = f"kept-{n}")
 
         TraderRule.objects.create(user = self.user, kind = TraderRule.MAX_SIZE, number = 3)
@@ -2893,5 +2898,180 @@ class AskingForOneTests(SimpleTestCase):
 
         for forbidden in ("anthropic", "messages.create", "interpret("):
             self.assertNotIn(forbidden, source)
+
+
+# ------------------------- WHEN THE RULE ITSELF IS THE PROBLEM ------------------------- #
+#
+# **The sweep that matters, and the one my first pass was not.** Empty input and caps are
+# the tester's first hour; these are the cases where the feature is *confidently wrong* -
+# it reports, it sounds certain, and the advice is bad. A trader cannot tell those from
+# working software, which is exactly why they have to be found here.
+
+class BadAdviceTests(APITestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_user(username = "omer", password = "Tr4de-Pl4n!x")
+
+    def trade(self, n, **fields):
+        at = fields.pop("at", BASE + timedelta(hours = n))
+        base = dict(user = self.user, executed_at = at,
+                    opened_at = fields.pop("opened_at", at - timedelta(minutes = 9)),
+                    symbol = "MNQU6", instrument = "NQ",
+                    source_timezone = "Asia/Jerusalem", currency = "USD",
+                    direction = "long", quantity = 1.0, pnl = 100.0, outcome = "win",
+                    duration_seconds = 540, dedup_hash = f"bad-{n}")
+        base.update(fields)
+        return Trade.objects.create(**base)
+
+    def card(self):
+        return propose(self.user, [], compute_statistics(list(Trade.objects.all())))
+
+
+    # ------------- A RULE THAT CANNOT BE BROKEN:
+
+    def test_a_ceiling_nothing_approaches_is_called_out_not_praised(self):
+        """
+        **The graduation card's evil twin, and I walked past it.** I set max_size 99 on a
+        trader who never exceeds three, watched the engine judge 231 trades with zero
+        breaches, and read back "this is who you are now" without stopping.
+
+        It congratulated him for a rule that cannot be broken, which is worse than silence:
+        it teaches him the praise is automatic, and the next time it is earned he will not
+        believe it.
+        """
+        for n in range(30):
+            self.trade(n, quantity = 2.0)
+
+        TraderRule.objects.create(user = self.user, kind = TraderRule.MAX_SIZE, number = 99)
+
+        card = self.card()
+
+        self.assertEqual(card["action"], "retire")
+        self.assertIn("לא נבדק אף פעם באמת", card["title"])
+        self.assertNotIn("זה כבר לא כלל", card["detail"])
+
+    def test_an_hour_before_everything_he_does_is_called_out(self):
+        for n in range(30):
+            at = BASE.replace(hour = 14) + timedelta(days = n)
+            self.trade(n, at = at, opened_at = at - timedelta(minutes = 9))
+
+        # 05:00 Israel - hours before he has ever opened a position.
+        TraderRule.objects.create(user = self.user, kind = TraderRule.NO_BEFORE,
+                                  number = 5 * 60)
+
+        self.assertIn("לא נבדק אף פעם באמת", self.card()["title"])
+
+    def test_a_daily_cap_above_his_busiest_day_is_called_out(self):
+        for n in range(30):
+            self.trade(n, at = BASE + timedelta(days = n))
+
+        TraderRule.objects.create(user = self.user, kind = TraderRule.MAX_TRADES_PER_DAY,
+                                  number = 50)
+
+        self.assertIn("לא נבדק אף פעם באמת", self.card()["title"])
+
+    def test_a_threshold_he_does_come_near_is_left_alone(self):
+        """**A habit is a threshold he approaches and respects**, and that one has earned
+        the praise."""
+        for n in range(30):
+            self.trade(n, quantity = 3.0)
+
+        row = TraderRule.objects.create(user = self.user, kind = TraderRule.MAX_SIZE,
+                                        number = 3)
+
+        self.assertIsNone(suggestions_module._never_tested(
+            row, list(Trade.objects.all()), ZoneInfo("Asia/Jerusalem")))
+
+
+    # ------------- A STRUCTURED RULE THAT BLOCKS WHAT HE MAKES MONEY ON:
+
+    def test_an_hour_rule_that_bans_his_best_hours_is_offered(self):
+        """
+        **The same question asked of a number instead of a tag.** "Do not enter before
+        10:00" costs him exactly as much as "never with IFVG" if his mornings are where he
+        makes money - and until now only the free-text rules were checked, so the two
+        halves of the same panel were held to different standards.
+        """
+        # 06:00 UTC is 09:00 Israel in June; profitable. 12:00 UTC is 15:00; losing.
+        for n in range(30):
+            at = BASE.replace(hour = 6) + timedelta(days = n)
+            self.trade(n, at = at, opened_at = at - timedelta(minutes = 5), pnl = 140.0)
+        for n in range(30, 60):
+            at = BASE.replace(hour = 12) + timedelta(days = n - 30)
+            self.trade(n, at = at, opened_at = at - timedelta(minutes = 5),
+                       pnl = -60.0, outcome = "loss")
+
+        TraderRule.objects.create(user = self.user, kind = TraderRule.NO_BEFORE,
+                                  number = 12 * 60)
+
+        card = self.card()
+
+        self.assertEqual(card["action"], "retire")
+        self.assertIn("אוסר עליך", card["title"])
+        self.assertIn("עובד נגדך", card["detail"])
+
+    def test_a_revenge_rule_is_offered_when_his_re_entries_do_better(self):
+        """
+        **True of this trader right now** - his trades after a loss carry a higher
+        expectancy than the rest. A rule banning them bans the better half, and no ratio
+        would ever have noticed.
+        """
+        rows = []
+        for n in range(60):
+            at = BASE + timedelta(hours = n)
+            losing = n % 2 == 0
+            rows.append(self.trade(
+                n, at = at,
+                opened_at = at - timedelta(minutes = 5 if not losing else 40),
+                pnl = -50.0 if losing else 300.0,
+                outcome = "loss" if losing else "win"))
+
+        statistics = compute_statistics(rows)
+        revenge = statistics["behaviour"]["revenge"]
+
+        if not (revenge.get("is_significant") and not revenge.get("is_worse")):
+            self.skipTest("the shape this test needs did not materialise")
+
+        row = TraderRule.objects.create(user = self.user,
+                                        kind = TraderRule.NO_REVENGE_WITHIN, number = 30)
+
+        found = suggestions_module._structured_works_against_him(row, statistics)
+
+        self.assertIsNotNone(found)
+        self.assertIn("אחרי הפסד", found["group"]["key"])
+
+    def test_an_hour_rule_that_bans_losing_hours_is_left_alone(self):
+        """That is the rule working, and touching it would be the feature arguing with
+        itself."""
+        for n in range(30):
+            at = BASE.replace(hour = 6) + timedelta(days = n)
+            self.trade(n, at = at, opened_at = at - timedelta(minutes = 5),
+                       pnl = -90.0, outcome = "loss")
+        for n in range(30, 60):
+            at = BASE.replace(hour = 12) + timedelta(days = n - 30)
+            self.trade(n, at = at, opened_at = at - timedelta(minutes = 5), pnl = 140.0)
+
+        row = TraderRule.objects.create(user = self.user, kind = TraderRule.NO_BEFORE,
+                                        number = 12 * 60)
+
+        statistics = compute_statistics(list(Trade.objects.all()))
+
+        self.assertIsNone(suggestions_module._structured_works_against_him(row, statistics))
+
+    def test_no_figure_in_any_of_these_cards_was_invented(self):
+        """
+        Every number on a card comes out of the breakdowns. The size case publishes only a
+        per-trade expectancy and no count, so it says "per trade" rather than multiplying
+        by a number nobody measured.
+        """
+        size_only = {"behaviour": {"size_discipline": {"available": True, "max_size": 9.0,
+                                                        "biggest_size_expectancy": 400.0}}}
+        row = TraderRule.objects.create(user = self.user, kind = TraderRule.MAX_SIZE,
+                                        number = 2)
+
+        found = suggestions_module._structured_works_against_him(row, size_only)
+
+        self.assertTrue(found["per_trade"])
+        self.assertIsNone(found["group"]["trades"])
 
 
