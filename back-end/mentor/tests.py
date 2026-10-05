@@ -1234,13 +1234,15 @@ class CustomRuleTests(APITestCase):
         self.assertEqual(len(self.verdict(rows)["broken"]), 1)
 
     def test_a_forbidden_term_breaks_the_rule_on_its_own(self):
-        rows = make_trades(self.user, 1, setups = "breakout", notes = "נכנסתי על NEWS")
+        # A tag and not a note: prose is no longer matched, because a sentence can say the
+        # opposite of what a keyword hit implies.
+        rows = make_trades(self.user, 1, setups = "breakout", tags = "news")
         self.custom("לא להיכנס בזמן חדשות", {"require": [], "forbid": ["news"]})
 
         self.assertEqual(len(self.verdict(rows)["broken"]), 1)
 
-    def test_it_reads_all_four_fields_the_trader_writes_on(self):
-        for field in ("setups", "tags", "mistakes", "notes"):
+    def test_it_reads_the_labels_he_classified_the_trade_with(self):
+        for field in ("setups", "tags", "mistakes"):
             with self.subTest(field = field):
                 Trade.objects.all().delete()
                 blank = {"setups": "", "tags": "", "mistakes": "", "notes": ""}
@@ -1248,6 +1250,51 @@ class CustomRuleTests(APITestCase):
 
                 self.assertTrue(interpret_module.trade_text(rows[0]))
                 self.assertIn("ifvg", interpret_module.trade_text(rows[0]))
+
+    def test_a_note_saying_he_did_not_do_it_cannot_satisfy_the_rule(self):
+        """
+        **The worst outcome this feature can produce, and it was live until a trader asked
+        the obvious question.** He writes "this time I did NOT enter on a CISD"; the matcher
+        finds `cisd` and reports the rule kept - confirming a plan he did not follow.
+
+        Negation is only one of at least four ways prose breaks it, which is why the fix is
+        not a negation check. A tag is a classification he applied; a note is a sentence,
+        and it can just as easily say he almost did, wishes he had, or intends to next time.
+        Each of those contains the term and asserts the opposite of what a match means.
+        """
+        against_the_rule = [
+            "הפעם לא נכנסתי על CISD",
+            "כמעט נכנסתי על CISD",
+            "הייתי צריך לחכות ל-CISD",
+            "בפעם הבאה רק CISD",
+        ]
+
+        for note in against_the_rule:
+            with self.subTest(note = note):
+                Trade.objects.all().delete()
+                rows = make_trades(self.user, 1, setups = "", tags = "", mistakes = "",
+                                   notes = note)
+                TraderRule.objects.all().delete()
+                self.custom("רק עם CISD", {"require": [["cisd"]], "forbid": []})
+
+                plan = self.verdict(rows)
+
+                self.assertFalse(
+                    any(e["rule"] == "רק עם CISD" for e in plan["kept"]),
+                    f"a note saying otherwise was counted as keeping the rule: {note}")
+
+    def test_the_note_still_reaches_larson_as_evidence(self):
+        """**His notes are not wasted - they do a different job.** The named trade carries
+        the note into the prompt, so Larson reads what he wrote and can talk about it. That
+        is what prose is good for; judging it mechanically is not."""
+        from analytics.evidence import describe_trade
+        from zoneinfo import ZoneInfo
+
+        rows = make_trades(self.user, 1, notes = "הפעם לא נכנסתי על CISD")
+
+        line = describe_trade(rows[0], ZoneInfo("Asia/Jerusalem"), "USD")
+
+        self.assertIn("לא נכנסתי על CISD", line)
 
     def test_a_trade_that_recorded_nothing_is_unjudged_and_never_kept(self):
         """
@@ -1317,13 +1364,13 @@ class CustomRuleTests(APITestCase):
         rule is a number that can contradict the verdict it describes - the failure that
         exposing the slices in `statistics.py` was meant to end.
         """
-        rows = make_trades(self.user, 1, setups = "", tags = "", notes = "the trade settled")
+        rows = make_trades(self.user, 1, setups = "settled", tags = "")
         self.custom("רק עם TL", {"require": [["tl"]], "forbid": []})
 
         broke = len(self.verdict(rows)["broken"])
         matched = interpret_module.coverage(rows, {"require": [["tl"]], "forbid": []})["matched"]
 
-        # The note does not carry `tl` as a word, so it broke the rule and matched nothing.
+        # `settled` does not carry `tl` as a word, so it broke the rule and matched nothing.
         self.assertEqual(broke, 1)
         self.assertEqual(matched, 0)
 

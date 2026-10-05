@@ -218,9 +218,23 @@ const RulesPanel = () => {
                 </h3>
 
                 <p className="rules-section-sub">
-                  תכתוב תנאי כמו שאתה חושב עליו. לארסון מחפש אותו <b>בתגיות, בשם הסטאפ
-                  ובהערות שאתה כותב על העסקה</b> — ומשם זו בדיקה רגילה על כל עסקה, בדיוק
-                  כמו כל כלל אחר. <b>מה שלא רשמת על העסקה, הוא לא רואה.</b>
+                  תכתוב תנאי כמו שאתה חושב עליו. לארסון מחפש אותו <b>בתגיות ובשמות הסטאפים
+                  שסימנת על העסקה</b> — ומשם זו בדיקה רגילה על כל עסקה, בדיוק כמו כל כלל
+                  אחר. <b>מה שלא תייגת, הוא לא רואה.</b>
+                </p>
+
+                {/* **Said outright rather than left to the omission.** He asked what happens
+                    when a note says "this time I did NOT enter on a CISD" - the word is
+                    there and the meaning is the opposite, and the same holds for "almost",
+                    "should have" and "next time". A tag is a classification he applied; a
+                    sentence is not, and a trader who assumes his notes are scanned is one
+                    bad verdict away from distrusting the whole feature. */}
+                <p className="rules-section-sub rules-why-not-notes">
+                  <b>הערות חופשיות לא נסרקות כאן, בכוונה.</b> אפשר לכתוב בהערה <i>"הפעם לא
+                  נכנסתי על CISD"</i> — המילה בפנים והכוונה הפוכה, וכך גם ב<i>"כמעט"</i>,
+                  ב<i>"הייתי צריך"</i> וב<i>"בפעם הבאה"</i>. תגית היא סיווג שקבעת; משפט הוא
+                  לא. <b>ההערות שלך כן מגיעות ללארסון</b> — הוא קורא אותן ליד העסקה עצמה
+                  ומדבר עליהן איתך.
                 </p>
 
                 {/* **Said before he writes, not after.** The whole mechanism rests on his
@@ -228,7 +242,7 @@ const RulesPanel = () => {
                     learning it one step too late. */}
                 {!hasLabels &&
                   <p className="rules-needs-tags">
-                    <b>אין עדיין אף תגית, שם סטאפ או הערה על העסקאות שלך</b>, ולכן אין מול מה
+                    <b>אין עדיין אף תגית או שם סטאפ על העסקאות שלך</b>, ולכן אין מול מה
                     לבדוק תנאי כזה. הוא יתחיל לעבוד ברגע שהייצוא שלך יישא אותם — ועד אז
                     <b> התבניות שלמטה עובדות במלואן</b>, כי הן נבדקות מול שעה, כמות ורצף.
                   </p>}
@@ -275,11 +289,11 @@ const RulesPanel = () => {
                     {coverage?.id === rule.id &&
                       <p className={`rules-coverage ${coverage.matched ? '' : 'rules-coverage-none'}`}>
                         {!coverage.answerable
-                          ? <><b>אף אחת מהעסקאות שלך לא נושאת תגית, סטאפ או הערה</b>, ולכן אין
-                              מול מה לבדוק את התנאי הזה עדיין. הוא יתחיל לעבוד ברגע שתתעד.</>
+                          ? <><b>אף אחת מהעסקאות שלך לא נושאת תגית או שם סטאפ</b>, ולכן אין
+                              מול מה לבדוק את התנאי הזה עדיין. הוא יתחיל לעבוד ברגע שתתייג.</>
                           : !coverage.matched
                             ? <><b>המילים של התנאי הזה לא מופיעות באף אחת מ-{coverage.answerable} העסקאות
-                                שתיעדת.</b> לארסון קורא רק מה שאתה רושם על העסקה — אם מדובר במשהו
+                                שתיעדת.</b> לארסון קורא רק את התגיות שסימנת — אם מדובר במשהו
                                 שהוא לא יכול לראות (חדשות, VIX, ספרד), <b>הוא יסמן כל עסקה כהפרה
                                 גם אם שמרת על הכלל.</b> כדאי לנסח מחדש במונחים שאתה מתייג בהם.</>
                             : <>מתוך {coverage.total} עסקאות, <b>{coverage.matched} נושאות את

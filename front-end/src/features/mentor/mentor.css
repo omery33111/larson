@@ -469,6 +469,20 @@
 
 .rules-section-sub b { color: #c9ccd3; }
 
+/* Quieter than the line above it: it is the caveat, not the instruction. */
+.rules-why-not-notes {
+  padding: 0.6rem 0.7rem;
+  border-inline-start: 2px solid #2d313b;
+  border-radius: 0 7px 7px 0;
+  background: #12151b;
+  font-size: 0.78rem;
+}
+
+.rules-why-not-notes i {
+  color: #c9ccd3;
+  font-style: normal;
+}
+
 .rules-mine-row {
   padding: 0.7rem 0;
   border-top: 1px solid #23262f;
@@ -561,15 +575,33 @@
   border-style: solid;
 }
 
+/* **One box per term, never one around the whole line.** A single box reads as an opaque
+   string; boxing the terms alone makes them read as what they are - the tags it will go
+   looking for - and leaves "או" and "וגם" as the sentence holding them together. */
 .rules-looking {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3rem;
   margin: 0.5rem 0 0;
   font-size: 0.79rem;
   color: #8b909c;
 }
 
+.rules-looking-label { flex-shrink: 0; }
+
+.rules-looking-terms,
+.rules-looking-group {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
 .rules-looking code {
-  padding: 0.1rem 0.4rem;
-  border-radius: 5px;
+  padding: 0.18rem 0.45rem;
+  border: 1px solid #23262f;
+  border-radius: 6px;
   background: #0f1115;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.78rem;
@@ -577,6 +609,21 @@
   /* The terms are latin inside a Hebrew sentence; without this the browser reorders them. */
   direction: ltr;
   display: inline-block;
+}
+
+/* Outside the boxes, and quieter than them - it is the grammar, not the content. */
+.rules-join {
+  padding-inline: 0.1rem;
+  font-size: 0.74rem;
+  font-style: normal;
+  color: #626875;
+}
+
+/* Scoped rather than forced. `.rules-looking code` is (0,1,1), so a bare class loses to it -
+   and the moment one `!important` goes in, the next one follows. The project has none. */
+.rules-looking code.rules-forbidden {
+  color: #d1494e;
+  border-color: #3a2326;
 }
 
 /* **The line that stops the feature from lying.** Quiet, because it is information and not
@@ -649,6 +696,14 @@
 
 .terms-help b { color: #c9ccd3; }
 
+.terms-help-quiet {
+  margin-top: -0.4rem;
+  font-size: 0.76rem;
+  color: #626875;
+}
+
+.terms-help-quiet i { color: #8b909c; }
+
 .terms-row {
   display: flex;
   align-items: flex-start;
@@ -677,7 +732,9 @@
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  min-height: 36px;
+  /* 44px, like every target in the product. The chip is the editor's main content, so it
+     carrying the height rather than a cramped hit area inside it is the right place for it. */
+  min-height: 44px;
   padding: 0.2rem 0.3rem 0.2rem 0.55rem;
   border: 1px solid #2d313b;
   border-radius: 999px;
@@ -707,8 +764,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   border: 0;
   border-radius: 50%;
   background: transparent;
@@ -720,7 +777,7 @@
 
 .terms-add,
 .terms-vocab-chip {
-  min-height: 36px;
+  min-height: 44px;
   padding-inline: 0.7rem;
   border: 1px dashed #3a3f4b;
   border-radius: 999px;
@@ -734,7 +791,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
+  width: 44px;
   padding: 0;
 }
 
@@ -743,7 +800,7 @@
 
 .terms-input {
   width: 11rem;
-  min-height: 36px;
+  min-height: 44px;
   /* 16px floor: below it Safari on iOS zooms the page on focus. */
   font-size: 1rem;
   direction: ltr;
@@ -751,7 +808,10 @@
 }
 
 .terms-add-forbid {
-  margin-bottom: 0.6rem;
+  /* Measured at 16px on the deployed editor - a line of text acting as a button. */
+  min-height: 44px;
+  padding-inline: 0.2rem;
+  margin-bottom: 0.3rem;
   border: 0;
   background: transparent;
   font-size: 0.76rem;

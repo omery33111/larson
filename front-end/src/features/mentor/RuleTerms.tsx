@@ -116,9 +116,47 @@ const RuleTerms = ({ rule }: { rule: TraderRule }) => {
   // ------------- THE QUIET LINE, WHEN HE IS NOT EDITING:
 
   if (!open) {
+    const groups = rule.terms?.require ?? [];
+    const forbidden = rule.terms?.forbid ?? [];
+    const nothing = !groups.length && !forbidden.length;
+
     return (
       <p className="rules-looking">
-        מחפש על העסקה: <code>{rule.looking_for || '—'}</code>
+        <span className="rules-looking-label">מחפש על העסקה:</span>
+
+        {/* **Each term in its own box, and the connectives outside them.** One box around
+            the whole line reads as a single opaque string; boxing the terms alone makes
+            them read as what they are - the tags it will go looking for - and leaves "או"
+            and "וגם" as the sentence holding them together. */}
+        {nothing
+          ? <code>{rule.looking_for || '—'}</code>
+          : (
+            <span className="rules-looking-terms">
+              {groups.map((group, index) => (
+                <span key={index} className="rules-looking-group">
+                  {index > 0 && <em className="rules-join">וגם</em>}
+                  {group.map((term, position) => (
+                    <span key={term}>
+                      {position > 0 && <em className="rules-join">או</em>}
+                      <code>{term}</code>
+                    </span>
+                  ))}
+                </span>
+              ))}
+
+              {forbidden.length > 0 &&
+                <span className="rules-looking-group">
+                  <em className="rules-join">{groups.length ? 'וגם בלי' : 'בלי'}</em>
+                  {forbidden.map((term, position) => (
+                    <span key={term}>
+                      {position > 0 && <em className="rules-join">או</em>}
+                      <code className="rules-forbidden">{term}</code>
+                    </span>
+                  ))}
+                </span>}
+            </span>
+          )}
+
         <button type="button" className="rules-edit-terms" onClick={start}>
           <FiEdit2 /> לדייק
         </button>
@@ -175,8 +213,17 @@ const RuleTerms = ({ rule }: { rule: TraderRule }) => {
     <div className="terms-editor">
 
       <p className="terms-help">
-        <b>לארסון קורא את התגיות, שם הסטאפ וההערות שלך.</b> אם המילה כאן לא בדיוק מה שאתה
-        רושם — תחליף אותה. <b>מונח שמראה "לא נמצא" לא עושה כלום.</b>
+        <b>לארסון מחפש את המילים האלה בתגיות ובשמות הסטאפים שלך.</b> אם המילה כאן לא בדיוק
+        מה שאתה מסמן — תחליף אותה. <b>מונח שמראה "לא נמצא" לא עושה כלום.</b>
+      </p>
+
+      {/* **Why prose is excluded, said where he would otherwise wonder.** A note can say
+          "this time I did not enter on a CISD" - the word is there and the meaning is the
+          opposite, and the same is true of "almost", "should have" and "next time". */}
+      <p className="terms-help terms-help-quiet">
+        הערות חופשיות לא נבדקות כאן בכוונה: משפט יכול לומר <i>"הפעם לא נכנסתי על CISD"</i>,
+        והמילה עדיין בתוכו. <b>הן כן מגיעות ללארסון</b> — הוא קורא אותן ליד העסקה עצמה
+        ומדבר עליהן.
       </p>
 
       {draft.require.map((group, index) => (

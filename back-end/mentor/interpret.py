@@ -43,9 +43,11 @@ log = logging.getLogger(__name__)
 
 BRIEF = """אתה מתרגם כלל מסחר שסוחר כתב לעצמך למונחים שניתן לחפש בטקסט של עסקה.
 
-הטקסט של עסקה הוא התגיות, הסטאפים, הטעויות וההערות שהסוחר עצמו רשם עליה — ותו לא.
+הטקסט של עסקה הוא התגיות, שמות הסטאפים והטעויות שהסוחר עצמו סימן עליה — ותו לא.
+**הערות חופשיות אינן נבדקות**, כי משפט יכול לומר "הפעם לא נכנסתי על X" והמילה עדיין
+מופיעה בו. לכן תן מונחים שסביר שיופיעו כ**תגית**, לא כמילה בתוך משפט.
 אין לך גישה למחיר, לנפח, לאינדיקטורים או לכל נתון שוק. תרגם אך ורק למילים שסביר
-שסוחר יקליד בתגית או בהערה.
+שסוחר יקליד כתגית או כשם סטאפ.
 
 החזר JSON בלבד, בדיוק בצורה הזו:
 
@@ -378,13 +380,35 @@ def read_back(terms):
 
 def trade_text(trade):
     """
-    Everything the trader himself wrote on one trade, as one lowercase haystack.
+    The labels the trader classified this trade with - and **deliberately not his notes.**
 
-    **These four fields and no others.** Price, size and timestamps are numbers the engine
-    already judges with proper rules; searching them as text would make "10" match a rule
-    about the 10:00 hour and a rule about 10 contracts at once.
+    Price, size and timestamps are out because they are numbers the engine already judges
+    with proper rules; searching them as text would make "10" match a rule about the 10:00
+    hour and one about 10 contracts at once.
+
+    **`notes` is out for a different and much more important reason, and it was in here
+    until a trader asked the obvious question: what happens when the note says "this time I
+    did NOT enter on a CISD"?** The matcher finds `cisd` and reports the rule kept. That is
+    the worst outcome this feature can produce - confirming a plan he did not follow.
+
+    **And negation is only one of at least four ways prose breaks it:**
+
+        "לא נכנסתי על CISD"            - he did not
+        "כמעט נכנסתי על CISD"          - he almost did
+        "הייתי צריך לחכות ל-CISD"      - he wishes he had
+        "בפעם הבאה רק CISD"            - he intends to
+
+    Every one of them contains the term and asserts the opposite of what a match means.
+    **A tag is a classification he applied; a note is a sentence** - and matching a keyword
+    in prose, then treating the hit as an assertion, is a category error rather than a bug
+    with a fix. Adding a negation check would catch the first line and leave the other three,
+    which is worse than not trying: it would make the feature feel safe.
+
+    **His notes are not wasted - they just do a different job.** `evidence.py` carries the
+    note on the named trade into the prompt, so Larson reads what he wrote and can talk
+    about it. That is what prose is good for. Judging it mechanically is not.
     """
-    parts = [trade.setups, trade.tags, trade.mistakes, trade.notes]
+    parts = [trade.setups, trade.tags, trade.mistakes]
 
     return " ".join(part for part in parts if part).lower()
 
