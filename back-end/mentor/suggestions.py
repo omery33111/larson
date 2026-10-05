@@ -173,11 +173,19 @@ def _retire(user, currency, timezone_name, declined):
                 "key": key,
                 "rule_id": row.id,
                 "title": f'"{name}" נשבר ב-{broke} מתוך {trade_count(judged)} שנבדקו.',
-                # **"The number" is wrong for a free-text rule, which has no number** - it
-                # has a condition. And for a structured rule the number is the more useful
-                # word of the two, because it names exactly the thing he would edit.
-                "detail": f"זו לא תוכנית, זו משאלה. עדיף לשנות את {_what_to_change(row)} "
-                          f"למשהו שאתה באמת עומד בו, או להוריד אותו.",
+                # **The first version told him to lower the rule to something he already
+                # meets, and he was right that it is wrong at the root: a rule is set in
+                # order to be worked towards.** "Change it to what you already do" turns a
+                # commitment into a description and removes the only reason to have one.
+                #
+                # What is actually true here is not about his discipline at all - it is
+                # about the debrief. A verdict that never varies carries no information, so
+                # the rule has stopped reporting anything whether or not he is improving.
+                # **And that leaves two honest doors, which is exactly the two buttons:**
+                # still working on it, or it does not fit him. Keeping it is a real answer
+                # and the wording has to let it be one.
+                "detail": "כלל שהתשובה עליו קבועה כבר לא אומר לך כלום בתחקיר. "
+                          "אם אתה עדיין עובד עליו — להשאיר; אם הוא לא מתאים לך — להוריד.",
                 "accept": "להוריד",
                 "decline": "להשאיר",
             }
@@ -187,11 +195,6 @@ def _retire(user, currency, timezone_name, declined):
 
 
 # ------------------------- "SHOULD I HOLD YOU TO THIS?" ------------------------- #
-
-def _what_to_change(row):
-    """What he would actually edit on this rule - the words differ because the rules do."""
-    return "התנאי" if row.kind == TraderRule.CUSTOM else "המספר"
-
 
 def _add(user, recent, statistics, currency, timezone_name, declined, asked = False):
     """
