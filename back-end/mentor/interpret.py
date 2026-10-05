@@ -260,6 +260,12 @@ def _terms(values, labels = (), trusted = False):
         if len(term) < 2 or term in out:
             continue
 
+        # **And a term has to contain something searchable.** `!!!` survived the cleaning,
+        # matched nothing, and therefore reported every single trade as a breach - the
+        # failure direction that costs most. Punctuation is not a tag.
+        if not any(ch.isalnum() for ch in term):
+            continue
+
         # A short term he does not actually use is a guess that will fire on ordinary words -
         # unless he typed it himself, in which case it is his own shorthand and he knows.
         if not trusted and len(term) < SHORT_TERM and not any(

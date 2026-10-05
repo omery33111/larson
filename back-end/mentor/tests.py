@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.db.utils import IntegrityError
-from django.test import override_settings
+from django.test import SimpleTestCase, override_settings
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -2301,5 +2301,303 @@ class SuggestionTests(APITestCase):
 
         card = next(m["suggestion"] for m in served["messages"] if m["id"] == row.id)
         self.assertEqual(card["rule_kind"], "max_size")
+
+
+# ------------------------- THE EDGES, BEFORE ANYBODY ELSE FINDS THEM ------------------------- #
+#
+# **A sweep rather than a reaction.** Everything above was written against a defect somebody
+# had already hit; this is the pass that goes looking. The feature is being closed before
+# testers arrive, and the cases below are the ones a tester produces in the first hour -
+# empty input, absurd input, the same thing twice, the boundary of every cap, and a record
+# that has none of what the feature reads.
+
+class RuleEdgeTests(APITestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_user(username = "omer", password = "Tr4de-Pl4n!x")
+        self.client.force_authenticate(self.user)
+
+    def save(self, **body):
+        return self.client.post("/mentor/rules/save/", {"kind": "custom", **body},
+                                format = "json")
+
+
+    # ------------- NOTHING, OR ALMOST NOTHING:
+
+    def test_an_empty_or_blank_sentence_is_refused(self):
+        for text in ("", "   ", "\\n\\n", "\\t"):
+            with self.subTest(text = repr(text)):
+                self.assertEqual(self.save(text = text).status_code,
+                                 status.HTTP_400_BAD_REQUEST)
+                self.assertFalse(TraderRule.objects.exists())
+
+    def test_punctuation_only_carries_no_term(self):
+        """`clean_label` strips it to nothing, and a rule with no terms is kept by every
+        trade forever."""
+        self.assertIsNone(interpret_module.validate_his_own(
+            {"require": [["...", "!!!", "—"]], "forbid": []}))
+
+    def test_a_very_long_sentence_is_cut_rather_than_stored_whole(self):
+        response = self.save(text = "א" * 5000,
+                             terms = {"require": [["ifvg"]], "forbid": []})
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        # `clean_label` keeps `limit` characters and appends an ellipsis to say it cut -
+        # the contract every label in the product is held to, so the bound is limit + 1.
+        self.assertLessEqual(len(TraderRule.objects.get().text),
+                             interpret_module.MAX_RULE_LENGTH + 1)
+        self.assertTrue(TraderRule.objects.get().text.endswith("…"))
+
+    def test_a_very_long_term_is_cut_too(self):
+        out = interpret_module.validate_his_own({"require": [["x" * 500]], "forbid": []})
+
+        self.assertLessEqual(len(out["require"][0][0]), interpret_module.MAX_TERM_LENGTH + 1)
+
+    def test_the_same_term_twice_is_stored_once(self):
+        out = interpret_module.validate_his_own(
+            {"require": [["ifvg", "IFVG", " ifvg "]], "forbid": []})
+
+        self.assertEqual(out["require"], [["ifvg"]])
+
+
+    # ------------- THE CAPS, AT THE BOUNDARY AND ONE PAST IT:
+
+    def test_the_fifth_custom_rule_is_allowed_and_the_sixth_is_not(self):
+        for n in range(5):
+            TraderRule.objects.create(user = self.user, kind = TraderRule.CUSTOM,
+                                      text = f"תנאי {n}",
+                                      terms = {"require": [[f"t{n}"]], "forbid": []})
+
+        self.assertEqual(TraderRule.objects.count(), 5)
+
+        with patch("mentor.views.interpret",
+                   return_value = {"require": [["x"]], "forbid": []}):
+            response = self.save(text = "השישי")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(TraderRule.objects.count(), 5)
+
+    def test_rewording_one_at_the_cap_still_works(self):
+        """**The cap is on how many he has, not on touching the ones he has.** Counting an
+        edit as a new rule would lock him out of his own list the moment it was full."""
+        rows = [TraderRule.objects.create(user = self.user, kind = TraderRule.CUSTOM,
+                                          text = f"תנאי {n}",
+                                          terms = {"require": [[f"t{n}"]], "forbid": []})
+                for n in range(5)]
+
+        response = self.save(id = rows[0].id, text = "ניסוח חדש",
+                             terms = {"require": [["ifvg"]], "forbid": []})
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(TraderRule.objects.count(), 5)
+        rows[0].refresh_from_db()
+        self.assertEqual(rows[0].text, "ניסוח חדש")
+
+    def test_more_requirements_than_the_ceiling_are_dropped_not_rejected(self):
+        """A confused reply should cost him the extras, not the rule."""
+        out = interpret_module.validate_his_own(
+            {"require": [[f"term{n}"] for n in range(30)], "forbid": []})
+
+        self.assertEqual(len(out["require"]), interpret_module.MAX_REQUIREMENTS)
+
+
+    # ------------- A RECORD THAT CANNOT ANSWER:
+
+    def test_everything_still_works_with_no_trades_at_all(self):
+        for call in (lambda: interpret_module.vocabulary(self.user),
+                     lambda: interpret_module.coverage([], {"require": [["x"]], "forbid": []}),
+                     lambda: rules_module.refresh(self.user),
+                     lambda: propose(self.user, [], {})):
+            with self.subTest(call = call):
+                call()
+
+    def test_the_preview_on_an_empty_record_says_zero_rather_than_failing(self):
+        response = self.client.post("/mentor/rules/preview/",
+                                    {"terms": {"require": [["ifvg"]], "forbid": []}},
+                                    format = "json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["coverage"]["total"], 0)
+        self.assertEqual(response.data["labels"], [])
+
+    def test_a_trade_missing_every_optional_field_does_not_crash_the_checker(self):
+        """A file with three columns is a file this product accepts, so every rule has to
+        survive one."""
+        bare = Trade(user = self.user, executed_at = BASE, opened_at = None,
+                     symbol = "MNQU6", instrument = "NQ",
+                     source_timezone = "Asia/Jerusalem", currency = "USD",
+                     direction = "", quantity = None, pnl = -50.0, outcome = "loss",
+                     duration_seconds = None, dedup_hash = "bare")
+        bare.save()
+
+        for kind, number in ((TraderRule.MAX_SIZE, 3), (TraderRule.NO_BEFORE, 600),
+                             (TraderRule.NO_REVENGE_WITHIN, 30),
+                             (TraderRule.MAX_TRADES_PER_DAY, 2),
+                             (TraderRule.MAX_DAILY_LOSS, 100)):
+            with self.subTest(kind = kind):
+                TraderRule.objects.all().delete()
+                TraderRule.objects.create(user = self.user, kind = kind, number = number)
+
+                plan = check_plan(compute_statistics([bare]), [], [bare],
+                                  declared = declared_rules(self.user))
+
+                self.assertIn("broken", plan)
+
+    def test_a_custom_rule_on_a_trade_with_no_text_is_unjudged(self):
+        bare = Trade.objects.create(
+            user = self.user, executed_at = BASE, opened_at = BASE,
+            symbol = "MNQU6", instrument = "NQ", source_timezone = "Asia/Jerusalem",
+            currency = "USD", direction = "long", quantity = 1.0, pnl = -50.0,
+            outcome = "loss", duration_seconds = 300, dedup_hash = "silent")
+
+        TraderRule.objects.create(user = self.user, kind = TraderRule.CUSTOM,
+                                  text = "רק עם IFVG",
+                                  terms = {"require": [["ifvg"]], "forbid": []})
+
+        plan = check_plan(compute_statistics([bare]), [], [bare],
+                          declared = declared_rules(self.user))
+
+        self.assertEqual(plan["broken"], [])
+        self.assertEqual(plan["kept"], [])
+
+
+    # ------------- MATCHING, WHERE PRECISION ACTUALLY LIVES:
+
+    def test_a_tag_inside_a_longer_tag_matches_and_the_reverse_does_not(self):
+        self.assertTrue(interpret_module.matches("ifvg", "1m ifvg retest"))
+        self.assertFalse(interpret_module.matches("1m ifvg retest", "ifvg"))
+
+    def test_case_and_surrounding_space_do_not_matter(self):
+        for haystack in ("IFVG", "  ifvg  ", "Ifvg-sweep"):
+            with self.subTest(haystack = haystack):
+                self.assertTrue(interpret_module.matches("ifvg", haystack.lower()))
+
+    def test_hebrew_terms_match_hebrew_tags(self):
+        self.assertTrue(interpret_module.matches("נזילות", "לקיחת נזילות"))
+        self.assertTrue(interpret_module.matches("נקמה", "נקמה"))
+
+    def test_a_short_hebrew_term_is_a_whole_word_too(self):
+        """The token split has to understand Hebrew letters or every short Hebrew term
+        would match nothing at all."""
+        self.assertTrue(interpret_module.matches("או", "או ifvg"))
+        self.assertFalse(interpret_module.matches("או", "ifvg אורך"))
+
+
+    # ------------- THE CARD, WHERE IT COULD POINT AT NOTHING:
+
+    def test_accepting_a_card_whose_rule_was_already_deleted_is_not_a_crash(self):
+        """He can delete it from the panel with the card still on screen."""
+        conversation = Conversation.objects.create(user = self.user, is_mentor = True,
+                                                   title = "המנטור")
+        row = Message.objects.create(
+            conversation = conversation, role = ASSISTANT, content = "x",
+            suggestion = {"action": "retire", "key": "retire:999", "rule_id": 999})
+
+        response = self.client.post("/mentor/suggestion/accept/", {"message_id": row.id},
+                                    format = "json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        row.refresh_from_db()
+        self.assertIsNone(row.suggestion)
+
+    def test_a_card_with_a_missing_message_id_is_refused(self):
+        for body in ({}, {"message_id": None}, {"message_id": 99999}):
+            with self.subTest(body = body):
+                response = self.client.post("/mentor/suggestion/accept/", body,
+                                            format = "json")
+                self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_dismissing_the_same_thing_twice_is_one_record(self):
+        DismissedSuggestion.objects.create(user = self.user, key = "add:size")
+
+        conversation = Conversation.objects.create(user = self.user, is_mentor = True,
+                                                   title = "המנטור")
+        row = Message.objects.create(conversation = conversation, role = ASSISTANT,
+                                     content = "x",
+                                     suggestion = {"action": "add", "key": "add:size",
+                                                   "rule_kind": "max_size",
+                                                   "rule_number": 3.0})
+
+        response = self.client.post("/mentor/suggestion/dismiss/", {"message_id": row.id},
+                                    format = "json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(DismissedSuggestion.objects.filter(key = "add:size").count(), 1)
+
+
+    # ------------- AND ONE TRADER'S THINGS ARE HIS OWN:
+
+    def test_nothing_in_the_feature_crosses_between_traders(self):
+        other = User.objects.create_user(username = "zoe", password = "Tr4de-Pl4n!x")
+        make_trades(other, 4, setups = "secret-setup")
+        TraderRule.objects.create(user = other, kind = TraderRule.CUSTOM,
+                                  text = "התנאי של זואי",
+                                  terms = {"require": [["secret-setup"]], "forbid": []})
+
+        self.assertEqual(interpret_module.vocabulary(self.user), [])
+        self.assertEqual(declared_rules(self.user), [])
+        self.assertIsNone(propose(self.user, [], {}))
+
+        listed = self.client.get("/mentor/rules/").data
+        self.assertEqual(listed["rules"], [])
+
+        preview = self.client.post("/mentor/rules/preview/",
+                                   {"terms": {"require": [["secret-setup"]], "forbid": []}},
+                                   format = "json").data
+        self.assertEqual(preview["per_term"]["secret-setup"], 0)
+
+
+
+# ------------------------- WHAT HE ACTUALLY TYPES ------------------------- #
+
+class AskingForOneTests(SimpleTestCase):
+    """
+    **The screen calls them "התנאים שלך" and the detector only knew "כלל".**
+
+    He asked "על איזה אחד מהתנאים היית מציע לי לוותר" - in the product's own word - and got
+    nothing back. From the outside that is the feature being broken rather than the question
+    being missed, and the vocabulary gap was mine on both sides of the screen.
+    """
+
+    ASKS = (
+        "על איזה אחד מהתנאים היית מציע לי לוותר אם הייתי חייב?",
+        "תציע לי כלל להוסיף לכללים שלי",
+        "איזה כלל כדאי לי להוריד?",
+        "יש תנאי שכדאי לי למחוק?",
+        "תמליץ לי על כלל",
+        "מה שווה לי להוסיף ככלל?",
+        "which rule should I drop?",
+        "suggest a condition",
+    )
+
+    QUIET = (
+        "מה הדליפה שלי?",
+        "מה קרה ב-18/8?",
+        "כמה הרווחתי החודש?",
+        "תמליץ לי על ספר על מסחר",
+        "מה התנאים בשוק היום?",
+        "",
+    )
+
+    def test_it_hears_the_question_however_he_phrases_it(self):
+        for question in self.ASKS:
+            with self.subTest(question = question):
+                self.assertTrue(asked_for_one(question))
+
+    def test_it_stays_quiet_on_everything_else(self):
+        for question in self.QUIET:
+            with self.subTest(question = question):
+                self.assertFalse(asked_for_one(question))
+
+    def test_it_never_asks_a_model_to_decide_whether_to_ask_a_model(self):
+        """Deterministic, like `looks_specific` in the retrieval path - and nothing about
+        it can be steered by what the model said last."""
+        import inspect
+        from mentor import suggestions
+
+        source = inspect.getsource(suggestions.asked_for_one)
+
+        for forbidden in ("anthropic", "messages.create", "interpret("):
+            self.assertNotIn(forbidden, source)
 
 

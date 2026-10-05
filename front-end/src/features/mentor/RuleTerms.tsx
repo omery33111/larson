@@ -292,7 +292,10 @@ const RuleTerms = ({ rule }: { rule: TraderRule }) => {
 
       {(draft.forbid.length > 0 || target === 'forbid') &&
         <div className="terms-row">
-          <span className="terms-row-label">אסור שיופיע</span>
+          {/* The row label and the button that opens it say the same thing, because they
+              are the same thing - and both say what it does to his trading rather than
+              what it does to the matcher. */}
+          <span className="terms-row-label">ולא לסחור עם</span>
           <div className="terms-row-body">
             {chips('forbid', draft.forbid)}
             {picker('forbid')}
@@ -301,7 +304,7 @@ const RuleTerms = ({ rule }: { rule: TraderRule }) => {
 
       {!draft.forbid.length && target !== 'forbid' &&
         <button type="button" className="terms-add-forbid" onClick={() => setTarget('forbid')}>
-          + מילה שאסור שתופיע
+          + ולא לסחור עם תגית מסוימת
         </button>}
 
       <div className="terms-actions">

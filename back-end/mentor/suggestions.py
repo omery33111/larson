@@ -61,14 +61,25 @@ MIN_WORTH_A_RULE = 150.0
 # Deterministic, like `looks_specific` in the retrieval path: a phrase match in python, no
 # model call to decide whether the model should be asked something.
 
+# **Both halves have to be wide, and the first version was narrow in a way I had built.**
+# The screen calls them "התנאים שלך"; the detector only knew "כלל". A trader who asked
+# "על איזה אחד מהתנאים היית מציע לי לוותר" - in the product's own word - got nothing, and
+# from the outside that is the feature being broken rather than the question being missed.
+#
+# Verb and noun are matched separately so neither list has to anticipate phrasings. The
+# verbs cover asking for one and asking to be rid of one, because "which would you drop" is
+# the same request as "suggest me one" as far as this is concerned: it wants the card.
 _ASKING = (
-    "תציע", "הצע", "המלץ", "תמליץ", "המלצה", "איזה כלל", "כלל חדש",
-    "להוסיף כלל", "כלל להוסיף", "כללים להוסיף", "תוסיף כלל",
-    "suggest a rule", "recommend a rule",
+    "תציע", "מציע", "הצע", "המלץ", "תמליץ", "ממליץ", "המלצה", "הצעה",
+    "כדאי", "שווה", "לוותר", "להוריד", "למחוק", "לבטל", "להוסיף", "איזה", "איזו",
+    "suggest", "recommend", "should i",
 )
 
-_ABOUT_RULES = ("כלל", "כללים", "rule")
-
+# **"תנאי" is in here because it is what the screen says**, and a product whose own
+# vocabulary its detector does not recognise is a product that ignores you in your words.
+_ABOUT_RULES = (
+    "כלל", "כללים", "תנאי", "תנאים", "rule", "condition",
+)
 
 def asked_for_one(text):
     """Whether this message is a request for a rule rather than a question about trading."""
