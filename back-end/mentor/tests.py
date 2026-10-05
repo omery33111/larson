@@ -2118,6 +2118,34 @@ class SuggestionTests(APITestCase):
         # And keeping it has to read as a real answer, not as failing to act.
         self.assertIn("להשאיר", card["detail"])
 
+    def test_a_rule_missing_the_bar_by_a_fraction_of_a_trade_still_qualifies(self):
+        """
+        **The bar was 90% and his rule sat at 89.2% - broken on 74 of 83.** Larson's own
+        text recommended dropping it and no button appeared, which reads as the feature
+        being broken rather than as a judgement.
+
+        The reasoning always said a fifth; the code said a tenth. This is the case that
+        lived between them.
+        """
+        for n in range(83):
+            at = BASE + timedelta(hours = n)
+            Trade.objects.create(
+                user = self.user, executed_at = at, opened_at = at - timedelta(minutes = 9),
+                symbol = "MNQU6", instrument = "NQ", source_timezone = "Asia/Jerusalem",
+                currency = "USD", direction = "long", quantity = 1.0, pnl = -30.0,
+                outcome = "loss", duration_seconds = 540,
+                # 74 carry the forbidden tag, 9 do not.
+                setups = "ifvg" if n < 74 else "breakout", dedup_hash = f"edge-{n}")
+
+        TraderRule.objects.create(user = self.user, kind = TraderRule.CUSTOM,
+                                  text = "להיכנס לעסקה רק בלי ifvg",
+                                  terms = {"require": [], "forbid": ["ifvg"]})
+
+        card = propose(self.user, [], compute_statistics(list(Trade.objects.all())))
+
+        self.assertIsNotNone(card, "89.2% broken was not offered for retirement")
+        self.assertEqual(card["action"], "retire")
+
     def test_a_rule_kept_a_fifth_of_the_time_is_not_called_a_wish(self):
         """**It is a rule he is struggling with, which is a different conversation** - and
         telling him to drop it would be telling him to stop trying."""
@@ -2128,7 +2156,9 @@ class SuggestionTests(APITestCase):
                 symbol = "MNQU6", instrument = "NQ", source_timezone = "Asia/Jerusalem",
                 currency = "USD", direction = "long", quantity = 1.0, pnl = -40.0,
                 outcome = "loss", duration_seconds = 540,
-                setups = "gamble" if n < 8 else "breakout",
+                # Twelve of forty: thirty percent kept, which is somebody working on a
+                # rule rather than ignoring one.
+                setups = "gamble" if n < 12 else "breakout",
                 dedup_hash = f"trying-{n}")
 
         TraderRule.objects.create(user = self.user, kind = TraderRule.CUSTOM,

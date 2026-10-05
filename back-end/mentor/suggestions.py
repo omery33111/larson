@@ -38,12 +38,18 @@ from .rules import clock, declared_rules
 GRADUATED_AFTER = 25
 NEVER_KEPT_AFTER = 10
 
-# **A ratio and not "zero kept", which is what it was.** The trader wrote "only enter on a
-# gamble" - a rule he obviously wants gone - and it was kept on the two trades he had
-# actually tagged `gamble` out of hundreds. Two out of two hundred is a wish by any reading,
-# and demanding a perfect zero meant the one rule most worth retiring was the one the engine
-# could not see.
-BARELY_KEPT = 0.1
+# **A fifth, which is the number the reasoning always used.**
+#
+# The argument for having a floor at all is that a rule kept *sometimes* is one he is
+# working on, and offering to delete that is telling him to stop trying. The line I argued
+# for out loud was a fifth; the line I wrote was a tenth, and nobody noticed until a real
+# rule landed between them.
+#
+# His was broken on 74 of 83 - **89.2% against a 90% bar, missing by less than one trade** -
+# while Larson's own text recommended dropping it. A threshold that disagrees with the
+# answer beside it by a fraction of a trade is not protecting anything; it is just brittle,
+# and it reads as the feature being broken.
+BARELY_KEPT = 0.2
 
 # A pattern has to have cost real money and have happened again just now.
 MIN_WORTH_A_RULE = 150.0
@@ -178,7 +184,8 @@ def _retire(user, currency, timezone_name, declined):
                 "decline": "להשאיר",
             }
 
-        if judged >= NEVER_KEPT_AFTER and broke >= judged * (1 - BARELY_KEPT):
+        # Strictly fewer than a fifth kept: at exactly a fifth he is still working on it.
+        if judged >= NEVER_KEPT_AFTER and (judged - broke) < judged * BARELY_KEPT:
             return {
                 "action": "retire",
                 "key": key,
