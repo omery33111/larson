@@ -183,11 +183,23 @@ REST_FRAMEWORK = {
 #
 # The ceiling that actually bounds the money is the site-wide one below, not this. This one
 # only decides how it is shared out.
-AI_DAILY_UNITS = int(os.environ.get('AI_DAILY_UNITS', '400000'))
+# **600,000 and not 400,000, because the first number was sized against the wrong prompt.**
+# It assumed around 56 answers a day; measured on a real 231-trade resume it bought 13 to 35,
+# and the difference is almost entirely thinking. Output is priced at five times input and
+# `effort: high` spends it before a word reaches the screen - so an answer that reads as 200
+# tokens can bill ten times that. 600,000 is roughly 35 turns in a window, which covers a
+# session with room to be curious in it.
+AI_DAILY_UNITS = int(os.environ.get('AI_DAILY_UNITS', '600000'))
 
 # Rolling, not a reset at midnight: a window with an edge can be spent twice across it, which
 # is exactly the shape a runaway loop produces.
-AI_BUDGET_WINDOW_HOURS = int(os.environ.get('AI_BUDGET_WINDOW_HOURS', '24'))
+#
+# **Six hours and not twenty-four.** A trader who runs out should wait for the next session,
+# not for tomorrow - and the per-trader budget was never what bounds the money anyway. Its
+# job is to stop one runaway loop, and a loop is stopped just as well by a six-hour ceiling
+# as by a daily one. **What a shorter window must not do is quietly multiply the site's
+# ceiling**, which is why that one now has a window of its own below.
+AI_BUDGET_WINDOW_HOURS = int(os.environ.get('AI_BUDGET_WINDOW_HOURS', '6'))
 
 # **And a ceiling on the whole site, because the per-trader budget does not bound anything by
 # itself.** One trader's dollar a day multiplied by however many people sign up tomorrow is a
@@ -200,6 +212,13 @@ AI_BUDGET_WINDOW_HOURS = int(os.environ.get('AI_BUDGET_WINDOW_HOURS', '24'))
 # however keen any one of them is, the whole site cannot spend more than this in a day. Raise
 # it as the number of real users grows; set it to 0 to lift it entirely.
 AI_GLOBAL_DAILY_UNITS = int(os.environ.get('AI_GLOBAL_DAILY_UNITS', '4000000'))
+
+# **A day, always, and deliberately not the trader's window.** The two numbers answer
+# different questions: his window decides how long a cap is allowed to punish him, and this
+# one is the money. They shared a window until the first was shortened, and sharing it would
+# have turned "$20 a day" into "$20 every six hours" - the same $80, with nothing anywhere
+# saying it had changed. That is the kind of mistake a budget exists to prevent.
+AI_GLOBAL_WINDOW_HOURS = int(os.environ.get('AI_GLOBAL_WINDOW_HOURS', '24'))
 
 # When to say anything at all. **Late on purpose**: the point of the notice is that the wall
 # is not a surprise, not that the trader can budget around it - and somebody who ends the day

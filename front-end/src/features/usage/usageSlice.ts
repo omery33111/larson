@@ -15,6 +15,7 @@ export interface UsageState {
     exhausted: boolean;
 
     renewsAt: string | null;
+    fullyRenewsAt: string | null;
     windowHours: number;
 
     isLoaded: boolean;
@@ -27,6 +28,7 @@ const initialState: UsageState = {
     shouldWarn: false,
     exhausted: false,
     renewsAt: null,
+    fullyRenewsAt: null,
     windowHours: 24,
     isLoaded: false,
 };
@@ -39,6 +41,7 @@ export interface UsagePayload {
     should_warn: boolean;
     exhausted: boolean;
     renews_at: string | null;
+    fully_renews_at?: string | null;
     window_hours: number;
 }
 
@@ -70,6 +73,7 @@ export const usageSlice = createSlice({
             state.shouldWarn = body.should_warn;
             state.exhausted = body.exhausted;
             state.renewsAt = body.renews_at;
+            state.fullyRenewsAt = body.fully_renews_at ?? null;
             state.windowHours = body.window_hours;
             state.isLoaded = true;
         },
@@ -84,6 +88,7 @@ export const usageSlice = createSlice({
             state.shouldWarn = body.should_warn;
             state.exhausted = body.exhausted;
             state.renewsAt = body.renews_at;
+            state.fullyRenewsAt = body.fully_renews_at ?? null;
             state.windowHours = body.window_hours;
             state.isLoaded = true;
         });
@@ -96,6 +101,8 @@ export const selectRemainingPercent = (state: RootState) => state.usage.remainin
 export const selectShouldWarn = (state: RootState) => state.usage.shouldWarn;
 export const selectIsExhausted = (state: RootState) => state.usage.exhausted;
 export const selectRenewsAt = (state: RootState) => state.usage.renewsAt;
+
+export const selectFullyRenewsAt = (state: RootState) => state.usage.fullyRenewsAt;
 
 export const { usageReported } = usageSlice.actions;
 

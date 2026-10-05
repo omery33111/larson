@@ -113,8 +113,15 @@ export const sendToMentorAsync = createAsyncThunk(
                 if (event.suggestion) thunkAPI.dispatch(debriefSuggested(event.suggestion));
             }
             else if (event.type === 'error') {
-                failure = event.error;
+                // **The quota panel above the chat already says this, with the hour on it.**
+                // A toast on top of it covers the clearer of the two and says less - so the
+                // usage figure still goes to the store (which is what raises the panel) and
+                // only the duplicate message is dropped. Every other error still speaks:
+                // the site-wide ceiling has no panel of its own, and a failed call has
+                // nothing on screen at all.
                 thunkAPI.dispatch(usageReported(event.usage));
+
+                if (!event.usage?.exhausted) failure = event.error;
             }
         }, controller.signal);
     } catch (error: any) {

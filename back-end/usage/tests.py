@@ -588,23 +588,23 @@ class RenewalClockTests(APITestCase):
         return row
 
     def test_the_last_spend_is_the_one_that_frees_the_rest(self):
-        self.spend(ago_hours = 20)
-        self.spend(ago_hours = 3)
+        self.spend(ago_hours = 5)
+        self.spend(ago_hours = 1)
 
         first = budget.renews_at(self.user)
         whole = budget.fully_renewed_at(self.user)
 
-        # Four hours from now for the first piece; twenty-one for the whole thing.
+        # One hour from now for the first piece; five for the whole thing.
         self.assertLess(first, whole)
-        self.assertAlmostEqual((whole - timezone.now()).total_seconds() / 3600, 21, delta = 0.1)
+        self.assertAlmostEqual((whole - timezone.now()).total_seconds() / 3600, 5, delta = 0.1)
 
     def test_the_message_names_the_hour(self):
-        self.spend(ago_hours = 20)
-        self.spend(ago_hours = 3)
+        self.spend(ago_hours = 5)
+        self.spend(ago_hours = 1)
 
         message = budget.exhausted_message(self.user)
 
-        self.assertIn("מלאה שוב ב-", message)
+        self.assertIn("מלאה שוב", message)
         self.assertRegex(message, "[0-9]{2}:[0-9]{2}")
 
     def test_the_hour_is_his_clock_and_not_the_server_s(self):
@@ -618,10 +618,91 @@ class RenewalClockTests(APITestCase):
         said = budget._wall_clock(moment)
         israeli = timezone.localtime(moment, ZoneInfo("Asia/Jerusalem")).strftime("%H:%M")
 
-        self.assertEqual(said, israeli)
+        self.assertIn(israeli, said)
         if timezone.localtime(moment, ZoneInfo("UTC")).strftime("%H:%M") != israeli:
             self.assertNotEqual(said, moment.strftime("%H:%M"))
 
+    @override_settings(AI_BUDGET_WINDOW_HOURS = 24)
+    def test_a_time_tomorrow_says_tomorrow(self):
+        """
+        **The hour was right and the sentence was still misleading**, which is the harder of
+        the two to catch. A bare "20:41" for something twenty-three hours away reads as this
+        evening, and he would plan around a time that is a day out.
+        """
+        self.spend(ago_hours = 1)
+
+        message = budget.exhausted_message(self.user)
+
+        self.assertIn("מחר ב-", message)
+
+    def test_a_time_later_today_does_not(self):
+        self.spend(ago_hours = 5.5)
+
+        said = budget._wall_clock(timezone.now() + timedelta(minutes = 20))
+
+        self.assertNotIn("מחר", said)
+        self.assertTrue(said.startswith("ב-"), said)
+
+    def test_the_panel_is_given_the_figure_too(self):
+        """**The panel above the chat is the one he reads**, and it only had the partial
+        time - the half that is a countdown rather than something he can plan around."""
+        self.spend(ago_hours = 5)
+        self.spend(ago_hours = 1)
+
+        payload = budget.state(self.user)
+
+        self.assertIsNotNone(payload["fully_renews_at"])
+        # Oldest out first, newest out last - with one row they are the same moment, which
+        # is right rather than a bug, so this needs two to say anything.
+        self.assertGreater(payload["fully_renews_at"], payload["renews_at"])
+
     def test_nothing_spent_means_nothing_promised(self):
         self.assertIsNone(budget.fully_renewed_at(self.user))
+
+
+class TwoWindowsTests(APITestCase):
+    """
+    **The trader's window and the site's are different numbers answering different
+    questions**, and they shared one until his was shortened.
+
+    His decides how long a cap is allowed to punish him - six hours, so running out means
+    waiting for the next session rather than for tomorrow. The site's is the money, and it
+    is a day. Sharing a six-hour window would have turned "$20 a day" into "$20 every six
+    hours": the same configuration, four times the bill, and nothing anywhere saying it had
+    changed. **A budget exists to make the worst case sayable out loud, so a change that
+    quietly quadruples it is the one failure it cannot have.**
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username = "omer", password = "Tr4de-Pl4n!x")
+
+    def spend(self, ago_hours, tokens = 100_000):
+        row = TokenSpend.objects.create(user = self.user, kind = "chat",
+                                        input_tokens = tokens, output_tokens = tokens)
+        TokenSpend.objects.filter(id = row.id).update(
+            created_at = timezone.now() - timedelta(hours = ago_hours))
+
+    def test_the_site_counts_a_whole_day_whatever_his_window_is(self):
+        # Eight hours ago: outside his six-hour window, inside the site's day.
+        self.spend(ago_hours = 8)
+
+        self.assertEqual(budget.spent(self.user), 0)
+        self.assertGreater(budget.site_spent(), 0)
+
+    def test_shortening_his_window_cannot_raise_the_site_ceiling(self):
+        """The regression this class exists for."""
+        with override_settings(AI_BUDGET_WINDOW_HOURS = 1):
+            self.spend(ago_hours = 8)
+
+            # Still counted against the site, because the site has its own day.
+            self.assertGreater(budget.site_spent(), 0)
+
+    def test_his_cap_frees_up_within_his_window_and_not_a_day_later(self):
+        """**Running out should cost him a session, not a day** - which was the complaint."""
+        self.spend(ago_hours = 5)
+
+        when = budget.renews_at(self.user)
+        hours = (when - timezone.now()).total_seconds() / 3600
+
+        self.assertLess(hours, 2)
 

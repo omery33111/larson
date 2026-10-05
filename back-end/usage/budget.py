@@ -152,15 +152,33 @@ def fully_renewed_at(user):
 
 def _wall_clock(moment):
     """
-    His clock, not the server's.
+    His clock, and **which day it is**, which the first version left out.
 
-    The server runs in UTC and Israeli summer time is three hours ahead of it - a renewal
-    at 21:40 printed as 18:40 is worse than printing nothing, because he would wait and
-    nothing would happen. **The same zone the rest of the product displays in.**
+    Two things go wrong without the day. The server runs in UTC and Israel is hours ahead
+    of it, so a renewal at 21:40 printed as 18:40 is worse than printing nothing - he would
+    wait and nothing would happen. And a bare "20:41" for something twenty-three hours away
+    reads as this evening: **the hour was right and the sentence was still misleading**,
+    which is the harder of the two to notice.
     """
     from zoneinfo import ZoneInfo
 
-    return timezone.localtime(moment, ZoneInfo("Asia/Jerusalem")).strftime("%H:%M")
+    zone = ZoneInfo("Asia/Jerusalem")
+    local = timezone.localtime(moment, zone)
+    today = timezone.localtime(timezone.now(), zone).date()
+
+    days = (local.date() - today).days
+    clock = local.strftime("%H:%M")
+
+    # A phrase rather than a bare time, so the caller never has to glue a preposition onto
+    # it - which is where the one-line mess this replaced came from.
+    if days <= 0:
+        return f"ב-{clock}"
+    if days == 1:
+        return f"מחר ב-{clock}"
+
+    # The window is capped at a day, so this cannot happen today - but a config change
+    # should not quietly turn the sentence back into a lie.
+    return local.strftime("ב-%d/%m בשעה ") + clock
 
 
 def state(user):
@@ -177,13 +195,26 @@ def state(user):
         "exhausted": used >= total,
         "should_warn": share >= warn_at(),
         "renews_at": when.isoformat() if when else None,
+        # **The panel above the chat is the one he reads**, and it only had the partial
+        # time - the half that is a countdown rather than something he can plan around.
+        "fully_renews_at": (lambda f: f.isoformat() if f else None)(fully_renewed_at(user)),
         "window_hours": settings.AI_BUDGET_WINDOW_HOURS,
     }
 
 
+def site_window():
+    """
+    **A day, and not the trader's window.** The two answer different questions - his decides
+    how long a cap may punish him, this one is the money - and they shared a window until
+    his was shortened to six hours. Sharing it would have turned "$20 a day" into "$20 every
+    six hours", with nothing anywhere saying it had changed.
+    """
+    return timedelta(hours = settings.AI_GLOBAL_WINDOW_HOURS)
+
+
 def site_spent():
-    """What everyone together has used inside the window."""
-    rows = TokenSpend.objects.filter(**{WITHIN: _since()})
+    """What everyone together has used inside the site's own day."""
+    rows = TokenSpend.objects.filter(**{WITHIN: timezone.now() - site_window()})
 
     return sum(units(row.input_tokens, row.output_tokens,
                      row.cache_write_tokens, row.cache_read_tokens) for row in rows)
@@ -267,6 +298,6 @@ def exhausted_message(user):
     full = fully_renewed_at(user)
 
     if full:
-        return f"הגעת למכסת השימוש להיום. {soon}, והיא מלאה שוב ב-{_wall_clock(full)}."
+        return f"הגעת למכסת השימוש להיום. {soon}, והיא מלאה שוב {_wall_clock(full)}."
 
     return f"הגעת למכסת השימוש להיום. {soon}."
