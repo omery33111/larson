@@ -22,7 +22,7 @@ from .interpret import (MAX_RULE_LENGTH, coverage, interpret, per_term, read_bac
                         validate_his_own, vocabulary)
 from .models import DismissedSuggestion, TraderRule
 from .rules import declared_rules
-from .suggestions import propose
+from .suggestions import asked_for_one, propose
 from .serializers import TraderRuleSerializer
 
 from .context import (GREETING, baseline_set, mentor_messages, mentor_system, receipt,
@@ -279,6 +279,18 @@ def stream(request):
         # a half-read question would compete with it.
         retrieval.attach(messages, retrieval.block_for(request.user, text,
                                                        billed_to = request.user))
+
+        # **And if he asked for a rule in words, that is the moment.** The card normally
+        # waits for a debrief where he has just repeated the pattern, because that is when
+        # it is most likely to be accepted - but a trader who types "suggest me a rule" and
+        # gets nothing back has been told the feature does not exist.
+        if asked_for_one(text):
+            try:
+                own = list(Trade.objects.filter(user = request.user))
+                suggestion = propose(request.user, [], compute_statistics(own),
+                                     _currency(own), _timezone(own), asked = True)
+            except Exception:
+                log.exception("Could not compose a suggestion on request")
 
     return _sse(_answer(row, question, system, messages, prelude, verdict,
                         budget_kind = "mentor", suggestion = suggestion))

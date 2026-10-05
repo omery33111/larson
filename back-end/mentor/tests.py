@@ -18,7 +18,7 @@ from . import interpret as interpret_module
 from .compliance import build_rules, check_plan
 from .models import DismissedSuggestion, TraderRule
 from . import rules as rules_module
-from .suggestions import _as_declarable, _clean_edge, propose
+from .suggestions import _as_declarable, _clean_edge, asked_for_one, propose
 from .rules import declared_rules
 from .context import baseline_set, receipt
 from .deviation import MIN_BASELINE_TRADES, MIN_RECENT_TRADES, build_deviation
@@ -1902,6 +1902,39 @@ class SuggestionTests(APITestCase):
 
         again = propose(self.user, rows[-6:], statistics)
         self.assertNotEqual((again or {}).get("key"), first["key"])
+
+
+    def test_asking_for_one_in_words_is_itself_the_moment(self):
+        """
+        **A trader who types "suggest me a rule" and gets nothing has been told the feature
+        does not exist.** The card normally waits for a debrief where he has just repeated
+        the pattern, because that is when it is most likely to be accepted - but the whole
+        purpose of that test is to decide whether this is a moment, and asking settles it.
+        """
+        rows = self.oversized_losses()
+        statistics = compute_statistics(rows)
+
+        # Nothing uploaded, so the usual path offers nothing at all.
+        self.assertIsNone(propose(self.user, [], statistics))
+
+        asked = propose(self.user, [], statistics, asked = True)
+
+        self.assertIsNotNone(asked)
+        self.assertEqual(asked["action"], "add")
+        # And it does not claim it just happened, because it did not.
+        self.assertNotIn("עכשיו", asked["detail"])
+
+    def test_what_counts_as_asking(self):
+        """Deterministic, like the retrieval prefilter - no model call to decide whether to
+        make a model call."""
+        for question in ("תציע לי כלל להוסיף", "איזה כלל כדאי לי להוסיף?",
+                         "תמליץ לי על כלל"):
+            with self.subTest(question = question):
+                self.assertTrue(asked_for_one(question))
+
+        for question in ("מה הדליפה שלי?", "מה קרה ב-18/8?", "תמליץ לי על ספר"):
+            with self.subTest(question = question):
+                self.assertFalse(asked_for_one(question))
 
 
     # ------------- AND THE HALF THAT IS ACTUALLY THE MENTOR:

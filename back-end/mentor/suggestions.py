@@ -42,17 +42,52 @@ NEVER_KEPT_AFTER = 10
 MIN_WORTH_A_RULE = 150.0
 
 
-def propose(user, recent, statistics, currency = "USD", timezone_name = "Asia/Jerusalem"):
-    """
-    The one card to put under this debrief, or `None` - which is the usual answer.
+# ------------- WHEN HE ASKS FOR ONE IN SO MANY WORDS:
+#
+# **A trader who types "suggest me a rule" and gets nothing has been told the feature does
+# not exist.** The card was built to arrive at the one moment it is most likely to be
+# accepted - under a debrief where he has just repeated the pattern - and that is still the
+# right default. But asking for it *is* the moment, and the "did it happen again just now"
+# test exists only to decide whether this is a moment. When he asks, that question is
+# already answered.
+#
+# Deterministic, like `looks_specific` in the retrieval path: a phrase match in python, no
+# model call to decide whether the model should be asked something.
 
-    `recent` is what he just uploaded; `statistics` is the resume it landed on.
+_ASKING = (
+    "תציע", "הצע", "המלץ", "תמליץ", "המלצה", "איזה כלל", "כלל חדש",
+    "להוסיף כלל", "כלל להוסיף", "כללים להוסיף", "תוסיף כלל",
+    "suggest a rule", "recommend a rule",
+)
+
+_ABOUT_RULES = ("כלל", "כללים", "rule")
+
+
+def asked_for_one(text):
+    """Whether this message is a request for a rule rather than a question about trading."""
+    if not text:
+        return False
+
+    lowered = text.lower()
+
+    return (any(phrase in lowered for phrase in _ASKING)
+            and any(word in lowered for word in _ABOUT_RULES))
+
+
+def propose(user, recent, statistics, currency = "USD", timezone_name = "Asia/Jerusalem",
+            asked = False):
+    """
+    The one card to put under this answer, or `None` - which is the usual answer.
+
+    `recent` is what he just uploaded; `statistics` is the resume it landed on. `asked` is
+    true when he said so in words, and it lifts the "did he just do it again" requirement:
+    that test exists to decide whether this is a moment, and asking settles it.
     """
     declined = set(DismissedSuggestion.objects.filter(user = user)
                    .values_list("key", flat = True))
 
     return (_retire(user, currency, timezone_name, declined)
-            or _add(user, recent, statistics, currency, timezone_name, declined))
+            or _add(user, recent, statistics, currency, timezone_name, declined, asked))
 
 
 
@@ -143,7 +178,7 @@ def _retire(user, currency, timezone_name, declined):
 
 # ------------------------- "SHOULD I HOLD YOU TO THIS?" ------------------------- #
 
-def _add(user, recent, statistics, currency, timezone_name, declined):
+def _add(user, recent, statistics, currency, timezone_name, declined, asked = False):
     """
     A losing pattern with money behind it **that he just did again.**
 
@@ -152,7 +187,7 @@ def _add(user, recent, statistics, currency, timezone_name, declined):
     debrief where he has only now repeated it, carrying what it would have cost, is the one
     time the answer might be yes.
     """
-    if not recent:
+    if not recent and not asked:
         return None
 
     inferred = [rule for rule in build_rules(statistics, currency)
@@ -177,17 +212,18 @@ def _add(user, recent, statistics, currency, timezone_name, declined):
 
         # It has to have happened in what he just uploaded, or this is a report and not a
         # moment. `check_plan` already knows how to ask that question of these exact rules.
-        plan = check_plan(statistics, [], recent, currency, timezone_name)
-        hit = next((e for e in plan["broken"] if e["rule"] == rule["rule"]), None)
+        # **Unless he asked**, in which case the moment is the asking.
+        if not asked:
+            plan = check_plan(statistics, [], recent, currency, timezone_name)
 
-        if not hit:
-            continue
+            if not any(e["rule"] == rule["rule"] for e in plan["broken"]):
+                continue
 
         return {
             "action": "add",
             "key": key,
             "title": offer["title"],
-            "detail": f"{rule['why']} — וזה קרה שוב עכשיו.",
+            "detail": rule["why"] + ("" if asked else " — וזה קרה שוב עכשיו."),
             "rule_kind": offer["kind"],
             "rule_number": offer.get("number"),
             "rule_text": offer.get("text"),
