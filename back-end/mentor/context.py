@@ -160,6 +160,37 @@ def _has_declared(plan):
                for entry in plan.get(side, []) or [])
 
 
+# ------------------------- WHEN HE ASKS FOR A RULE ------------------------- #
+#
+# **The words and the button have to say the same thing.** He asked for a rule, Larson
+# proposed one in prose about long-versus-short sizing, and no button appeared - because
+# that is not a shape the checker can judge. From the outside that reads as broken, and it
+# teaches him the suggestion is decorative.
+#
+# So when he asks, the server tells the model exactly what it is about to offer him, or
+# that there is nothing to offer. The card is still composed in python and the model still
+# writes nothing; this only stops the two from contradicting each other.
+
+def suggestion_brief(card):
+    """What to tell the model about the card it is about to be shown underneath."""
+    if card:
+        return (f"**הסוחר ביקש כלל, ומתחת לתשובה שלך יופיע כפתור שמציע לו בדיוק את זה:**"
+                + chr(10) + card["title"] + chr(10) + card["detail"] + chr(10) * 2
+                + "**הצג את ההצעה הזו ולא אחרת, ואל תמציא כלל משלך במקומה.** "
+                + "הסבר בקצרה למה היא שווה, ואמור לו שהכפתור מתחת מוסיף אותה.")
+
+    return """**הסוחר ביקש כלל, ואין כרגע דפוס מפסיד שאפשר להפוך לכלל שנבדק אוטומטית.**
+
+תגיד לו את זה ישירות, ותגיד למה — אם השעות שלו רווחיות, אם הסטאפים שלו רווחיים, אם אין
+דליפה מובהקת. **זו בשורה טובה ולא חוסר.**
+
+**ואל תמציא כלל במילים כאילו המערכת יכולה לאכוף אותו.** מה שהיא יודעת לבדוק הוא: שעת כניסה,
+מספר חוזים, כניסה חוזרת אחרי הפסד, מספר עסקאות ביום, הפסד יומי, ותנאי חופשי שנבדק מול
+**התגיות ושמות הסטאפים** שהוא רושם. אם יש לך רעיון שנשען על תגית שהוא כבר משתמש בה — הצע
+לו לכתוב אותו בעצמו ב"הכללים שלי", וזה אפשרי. **אם הרעיון נשען על משהו שלא נרשם על העסקה,
+אמור שזה לא ניתן לבדיקה אוטומטית עדיין.**"""
+
+
 def update_prompt(deviation, plan, total_trades, new_trades, file_name, is_first = False,
                   note = ""):
     """

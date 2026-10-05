@@ -26,7 +26,7 @@ from .suggestions import asked_for_one, propose
 from .serializers import TraderRuleSerializer
 
 from .context import (GREETING, baseline_set, mentor_messages, mentor_system, receipt,
-                      update_prompt)
+                      suggestion_brief, update_prompt)
 from .deviation import build_deviation
 
 
@@ -291,6 +291,13 @@ def stream(request):
                                      _currency(own), _timezone(own), asked = True)
             except Exception:
                 log.exception("Could not compose a suggestion on request")
+
+            # **And the words are told what the button is about to say.** He asked, Larson
+            # proposed something in prose the checker cannot judge, and no button appeared -
+            # from the outside that reads as broken. The card is still composed in python
+            # and the model still writes nothing; this only stops the two contradicting.
+            if messages:
+                messages[-1]["content"] += chr(10) * 2 + suggestion_brief(suggestion)
 
     return _sse(_answer(row, question, system, messages, prelude, verdict,
                         budget_kind = "mentor", suggestion = suggestion))

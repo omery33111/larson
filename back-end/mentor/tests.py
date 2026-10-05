@@ -20,7 +20,7 @@ from .models import DismissedSuggestion, TraderRule
 from . import rules as rules_module
 from .suggestions import _as_declarable, _clean_edge, asked_for_one, propose
 from .rules import declared_rules
-from .context import baseline_set, receipt
+from .context import baseline_set, receipt, suggestion_brief
 from .deviation import MIN_BASELINE_TRADES, MIN_RECENT_TRADES, build_deviation
 
 
@@ -1935,6 +1935,26 @@ class SuggestionTests(APITestCase):
         for question in ("מה הדליפה שלי?", "מה קרה ב-18/8?", "תמליץ לי על ספר"):
             with self.subTest(question = question):
                 self.assertFalse(asked_for_one(question))
+
+
+    def test_the_words_are_told_what_the_button_will_say(self):
+        """
+        **He asked for a rule, Larson proposed one in prose the checker cannot judge, and no
+        button appeared.** From the outside that reads as broken and it teaches him the
+        suggestion is decorative. The card is still composed in python and the model still
+        writes nothing - this only stops the two from contradicting each other.
+        """
+        offered = suggestion_brief({"title": "כותרת", "detail": "פירוט"})
+
+        self.assertIn("כותרת", offered)
+        self.assertIn("אל תמציא כלל משלך", offered)
+
+        nothing = suggestion_brief(None)
+
+        self.assertIn("אין כרגע דפוס מפסיד", nothing)
+        # And it is told which shapes exist, so it does not promise enforcement of one
+        # that does not.
+        self.assertIn("תגיות", nothing)
 
 
     # ------------- AND THE HALF THAT IS ACTUALLY THE MENTOR:
