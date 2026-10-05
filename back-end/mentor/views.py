@@ -16,7 +16,7 @@ from analytics.statistics import clean_label, compute_statistics
 from chat import retrieval
 
 from .compliance import check_plan
-from .interpret import MAX_RULE_LENGTH, coverage, interpret
+from .interpret import MAX_RULE_LENGTH, coverage, interpret, read_back
 from .models import TraderRule
 from .rules import declared_rules
 from .serializers import TraderRuleSerializer
@@ -361,7 +361,8 @@ def save_rule(request):
         # **How many of his trades can answer it at all.** Without this he reads "kept" over a
         # year of trades that recorded nothing, and believes he followed a plan he never did.
         return Response({**TraderRuleSerializer(row).data,
-                         "coverage": coverage(Trade.objects.filter(user = request.user), terms)},
+                         "coverage": coverage(Trade.objects.filter(user = request.user), terms),
+                         "looking_for": read_back(terms)},
                         status = status.HTTP_201_CREATED)
 
     if kind == TraderRule.ONLY_SETUPS:

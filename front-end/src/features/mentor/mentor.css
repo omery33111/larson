@@ -561,6 +561,24 @@
   border-style: solid;
 }
 
+.rules-looking {
+  margin: 0.5rem 0 0;
+  font-size: 0.79rem;
+  color: #8b909c;
+}
+
+.rules-looking code {
+  padding: 0.1rem 0.4rem;
+  border-radius: 5px;
+  background: #0f1115;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+  color: #f0b90b;
+  /* The terms are latin inside a Hebrew sentence; without this the browser reorders them. */
+  direction: ltr;
+  display: inline-block;
+}
+
 /* **The line that stops the feature from lying.** Quiet, because it is information and not
    an error - unless there is nothing to check at all, which he does need to notice. */
 .rules-coverage {

@@ -190,6 +190,34 @@ def _terms(values):
 
 
 
+
+def read_back(terms):
+    """
+    What it will look for, in a line he can check at a glance.
+
+    **The raw `terms` deliberately never reaches the screen** - showing him our structure
+    would have him editing our paraphrase instead of his plan. But he does need to be able
+    to tell whether "IFVG **or** CISD" was read as one condition or two, because that
+    inversion is the difference between a rule almost every trade keeps and one almost
+    every trade breaks, **and nothing else on the screen would reveal it.**
+
+    So: one short read-only line, in his own vocabulary, and no way to edit it. If it is
+    wrong, the fix is to reword the sentence - which is the thing that should be edited.
+    """
+    if not isinstance(terms, dict):
+        return ""
+
+    parts = [" או ".join(group) for group in terms.get("require", []) if group]
+
+    line = " וגם ".join(parts)
+
+    forbidden = terms.get("forbid", [])
+    if forbidden:
+        line += (" וגם " if line else "") + "בלי " + " ובלי ".join(forbidden)
+
+    return line
+
+
 # ------------------------- CAN HIS TRADES EVEN ANSWER IT ------------------------- #
 
 def trade_text(trade):

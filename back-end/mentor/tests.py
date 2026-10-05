@@ -1325,6 +1325,40 @@ class CustomRuleTests(APITestCase):
 
         self.assertEqual(self.verdict(rows)["broken"], [])
 
+    def test_the_save_shows_him_what_it_will_look_for(self):
+        """
+        **The one thing he could not otherwise check.** "IFVG or CISD" read as two separate
+        requirements instead of one is the difference between a rule almost every trade
+        keeps and one almost every trade breaks - and the raw terms never reach the screen,
+        so without this line nothing would reveal the inversion.
+        """
+        with patch("mentor.views.interpret",
+                   return_value = {"require": [["ifvg", "cisd"]], "forbid": []}):
+            either = self.client.post("/mentor/rules/save/",
+                                      {"kind": "custom", "text": "רק IFVG או CISD"},
+                                      format = "json")
+
+        with patch("mentor.views.interpret",
+                   return_value = {"require": [["ifvg"], ["delta"]], "forbid": []}):
+            both = self.client.post("/mentor/rules/save/",
+                                    {"kind": "custom", "text": "IFVG וגם דלתא"},
+                                    format = "json")
+
+        self.assertEqual(either.data["looking_for"], "ifvg או cisd")
+        self.assertEqual(both.data["looking_for"], "ifvg וגם delta")
+
+    def test_the_structure_itself_still_never_reaches_the_screen(self):
+        """He reads a sentence; editing our paraphrase instead of his plan is the failure
+        the read-back must not reintroduce."""
+        with patch("mentor.views.interpret",
+                   return_value = {"require": [["ifvg"]], "forbid": ["news"]}):
+            response = self.client.post("/mentor/rules/save/",
+                                        {"kind": "custom", "text": "רק עם IFVG"},
+                                        format = "json")
+
+        self.assertNotIn("terms", response.data)
+        self.assertIsInstance(response.data["looking_for"], str)
+
     def test_a_sentence_that_cannot_be_interpreted_is_refused_and_nothing_is_saved(self):
         with patch("mentor.views.interpret", return_value = None):
             response = self.client.post("/mentor/rules/save/",

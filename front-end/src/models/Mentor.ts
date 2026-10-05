@@ -66,7 +66,7 @@ export interface MentorState {
     // Set once, by the save that produced it, and cleared when the panel closes: it answers
     // "can my trades even answer this", which is a question about the rule he just wrote and
     // not a standing property of the screen.
-    ruleCoverage: (RuleCoverage & { id: number }) | null;
+    ruleCoverage: (RuleCoverage & { id: number; lookingFor: string }) | null;
     ruleKinds: RuleKind[];
     isRulesOpen: boolean;
     isRulesLoading: boolean;

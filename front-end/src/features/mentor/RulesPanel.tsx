@@ -254,6 +254,18 @@ const RulesPanel = () => {
                         words appear in none of his trades is almost always a rule about
                         something the engine cannot see, and left alone it would report
                         every tagged trade as a breach. */}
+                    {/* **What it will actually look for, read-only.** The structure itself
+                        never reaches the screen - he would edit our paraphrase instead of
+                        his plan - but he does need to see whether "IFVG or CISD" was read
+                        as one condition or two. That inversion is the difference between a
+                        rule almost every trade keeps and one almost every trade breaks, and
+                        nothing else here would reveal it. If it reads wrong, the fix is to
+                        reword the sentence, which is the thing that should be edited. */}
+                    {coverage?.id === rule.id && coverage.lookingFor &&
+                      <p className="rules-looking">
+                        מחפש על העסקה: <code>{coverage.lookingFor}</code>
+                      </p>}
+
                     {coverage?.id === rule.id &&
                       <p className={`rules-coverage ${coverage.matched ? '' : 'rules-coverage-none'}`}>
                         {!coverage.answerable

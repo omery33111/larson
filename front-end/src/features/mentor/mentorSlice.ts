@@ -378,7 +378,7 @@ export const mentorSlice = createSlice({
 
             // How many of his trades can answer it, shown once beside the rule he just wrote.
             state.ruleCoverage = saved.coverage
-                ? { id: saved.id, ...saved.coverage }
+                ? { id: saved.id, lookingFor: saved.looking_for || "", ...saved.coverage }
                 : null;
         })
         .addCase(saveRuleAsync.rejected, (state, action) =>
