@@ -203,6 +203,21 @@ def validate_his_own(body):
     return _validate(body, known_labels = None)
 
 
+def validate_a_reading(body, known_labels):
+    """
+    Terms some call to the model produced, wherever it came from.
+
+    **The pair exists because the call sites cannot tell on their own.** Accepting one of
+    Larson's cards runs through an endpoint named for the trader's yes, so it reached for
+    `validate_his_own` - and quietly gave the model's own spellings the authority that
+    belongs to words he typed, with no two-letter gate and a self-contradiction left
+    standing. His yes is to the idea; the words are still a reading, and naming the two
+    entries after *who wrote them* rather than *who clicked* is what makes that visible at
+    the call site.
+    """
+    return _validate(body, known_labels = known_labels)
+
+
 def _validate(body, known_labels = ()):
     """
     Nothing the model returned survives this that was not asked for.
@@ -234,6 +249,23 @@ def _validate(body, known_labels = ()):
             require.append(spellings)
 
     forbid = _terms(_as_list(body.get("forbid")), labels, trusted)[:MAX_FORBIDDEN]
+
+    # **A term on both sides contradicts itself, and no trade can ever satisfy it.**
+    #
+    # The conflict check written for two rules compares a new rule against the others and
+    # never against itself, so this walked straight past it onto the live site - and the
+    # model does produce it: asked for "only IFVG and nothing else", it returned `ifvg` as
+    # required and the IFVG variants as forbidden, the second list swallowing the first.
+    #
+    # **Cleaned here only when the model wrote it, and refused upstream when he did.** The
+    # required side wins over a reading of his sentence, because he asked for something and
+    # a rule banning the very thing it asks for is the reading being wrong, not his plan -
+    # and an error about a word he never typed is a fault he cannot act on. Terms he picked
+    # himself are left exactly as he set them, so `conflicts_with` can say what is wrong
+    # while his chips are still on screen.
+    if not trusted:
+        forbid = [term for term in forbid
+                  if not any(term in group for group in require)]
 
     # **A rule with neither side is not a strict rule, it is a rule that cannot be broken.**
     if not require and not forbid:

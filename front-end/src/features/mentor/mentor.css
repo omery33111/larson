@@ -874,6 +874,46 @@
   color: #c98f3f;
 }
 
+/* ------------- WHY THE SAVE WAS REFUSED:
+ *
+ * **A tinted strip under the field, not a toast.** The refusal names a word that is on
+ * screen - one he required and banned in the same rule, or one colliding with a rule he
+ * already has - so it has to sit beside the words rather than in a corner, and the editor
+ * has to still be open for it to point at anything.
+ *
+ * Tinted and not plain red text: a bare red sentence under an input reads as validation of
+ * the field directly above it, and this is about the rule as a whole.
+ */
+.rules-problem {
+  display: flex;
+  gap: 0.45rem;
+  margin: 0.55rem 0 0;
+  padding: 0.5rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid rgba(209, 73, 78, 0.35);
+  /* The product's loss red, at the weight a surface can carry. */
+  background: rgba(209, 73, 78, 0.1);
+  color: #e58b8e;
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
+/* The product writes rule terms in latin inside Hebrew sentences, and a quoted term at the
+   end of an RTL line lands on the wrong side without this. */
+.rules-problem code,
+.rules-problem b {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* **A row of its own, by leaning on the wrap the row already has.** `.rules-row` is a
+   wrapping flex row, so a full-basis child drops below the field instead of squeezing in
+   beside it - no wrapper element, and the label keeps the width it had. */
+.rules-row > .rules-problem {
+  flex: 0 0 100%;
+  margin-top: 0;
+}
+
 @media (max-width: 768px) {
   .terms-row-label {
     min-width: 100%;

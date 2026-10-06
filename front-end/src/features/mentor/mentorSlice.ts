@@ -459,10 +459,11 @@ export const mentorSlice = createSlice({
                 ? { id: saved.id, lookingFor: saved.looking_for || "", ...saved.coverage }
                 : null;
         })
-        .addCase(saveRuleAsync.rejected, (state, action) =>
-        {
-            state.message = action.payload as string;
-        })
+        // **A refused rule is not toasted.** The refusal is about the words still in the
+        // box - a corner popup both lands away from them and, because the editor closed on
+        // dispatch, arrives after the thing it is about has left the screen. The editors
+        // unwrap this themselves and render it where he is looking.
+        .addCase(saveRuleAsync.rejected, () => { })
 
         .addCase(deleteRuleAsync.fulfilled, (state, action) =>
         {

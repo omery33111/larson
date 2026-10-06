@@ -73,3 +73,34 @@ def minutes(value, decimals = 1):
     return f"{round(float(value), decimals):g} דק'"
 
 # ------------------------- NUMBER FORMATTING END ------------------------- #
+
+
+
+# ------------------------- QUOTING A TRADER'S OWN WORD ------------------------- #
+
+def quoted(value):
+    """
+    A tag or a rule of his, placed inside a Hebrew sentence without the sentence falling
+    apart around it.
+
+    **Measured on the live site, in a refusal he sent back.** The server wrote
+
+        התנאי הזה סותר כלל ... "להיכנס רק בלי fvg, ifvg ולא cisd". שניהם מדברים על "ifvg" ...
+
+    and what rendered read `ולא "ifvg" שניהם מדברים על "cisd"` - the two terms swapped
+    places. **A sentence that names the wrong tag is worse than no sentence**, and he read
+    it as the software being confused rather than as his rule being refused.
+
+    The cause is the bidirectional algorithm, not the text: quotes, commas and the full
+    stop around a latin run are neutral characters, so they take their direction from
+    whichever side wins, and a latin run at the end of an RTL clause drags them with it.
+
+    **U+2068 and U+2069 are the characters the standard provides for exactly this** - the
+    run inside is laid out on its own and cannot reorder anything around it. They are
+    invisible, they need no markup, and they therefore work the same in the browser, in an
+    email body and in a plain-text log, which is more than a `<span dir>` can say.
+    """
+    return f"⁨\"{value}\"⁩"
+
+
+# ------------------------- QUOTING END ------------------------- #

@@ -47,10 +47,15 @@ const RuleTerms = ({ rule }: { rule: TraderRule }) => {
   const [preview, setPreview] = useState<RulePreview | null>(null);
   const [adding, setAdding] = useState<string>('');
   const [target, setTarget] = useState<number | 'forbid' | null>(null);
+  const [problem, setProblem] = useState<string>('');
 
   // The preview is a round trip per keystroke otherwise, and the counts are feedback rather
   // than something he is waiting on.
   const timer = useRef<number | undefined>(undefined);
+
+  // The reason belongs to the draft that was refused. The moment he changes a term it is
+  // describing something that is no longer there.
+  useEffect(() => { setProblem(''); }, [draft]);
 
   useEffect(() => {
     if (!open) return;
@@ -105,10 +110,25 @@ const RuleTerms = ({ rule }: { rule: TraderRule }) => {
     setAdding('');
   };
 
+  /**
+   * **Closed only once it was taken.** A refusal names a term that is on screen right now -
+   * a word he required and banned in the same rule, or one that collides with a rule he
+   * already has - and closing the editor to toast it in the corner removes the chips the
+   * sentence is pointing at. It stays open with the reason under the terms.
+   *
+   * An empty message is the 401 convention: the session ended, and there is nothing here
+   * for him to fix.
+   */
   const save = () => {
-    dispatch(saveRuleAsync({ kind: 'custom', id: rule.id, text: rule.text, terms: draft }));
-    setOpen(false);
-    setPreview(null);
+    setProblem('');
+
+    dispatch(saveRuleAsync({ kind: 'custom', id: rule.id, text: rule.text, terms: draft }))
+      .unwrap()
+      .then(() => { setOpen(false); setPreview(null); })
+      .catch((reason: string) => {
+        if (reason) setProblem(reason);
+        else { setOpen(false); setPreview(null); }
+      });
   };
 
   const total = draft.require.reduce((n, g) => n + g.length, 0) + draft.forbid.length;
@@ -307,6 +327,8 @@ const RuleTerms = ({ rule }: { rule: TraderRule }) => {
           + ולא לסחור עם תגית מסוימת
         </button>}
 
+      {problem && <p className="rules-problem">{problem}</p>}
+
       <div className="terms-actions">
         <button type="button" className="app-btn app-btn-primary" onClick={save}
                 disabled={!total}>
@@ -314,7 +336,7 @@ const RuleTerms = ({ rule }: { rule: TraderRule }) => {
         </button>
 
         <button type="button" className="rules-cancel"
-                onClick={() => { setOpen(false); setPreview(null); }}>
+                onClick={() => { setOpen(false); setPreview(null); setProblem(''); }}>
           ביטול
         </button>
 

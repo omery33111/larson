@@ -164,6 +164,13 @@ def conflicts_with(user, kind, terms = None, number = None, ignore_id = None):
         mine_required = {t for group in terms.get("require", []) for t in group}
         mine_forbidden = set(terms.get("forbid", []))
 
+        # **Against itself first**, which the first version never did: it compared the new
+        # rule to the others and walked straight past a rule that bans what it demands.
+        against_itself = mine_required & mine_forbidden
+
+        if against_itself:
+            return None, sorted(against_itself)[0]
+
         for row in rows.filter(kind = TraderRule.CUSTOM):
             theirs = row.terms if isinstance(row.terms, dict) else {}
             required = {t for group in theirs.get("require", []) for t in group}

@@ -3,6 +3,7 @@ import logging
 from django.conf import settings
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from analytics.formatting import quoted
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import IsAuthenticated
@@ -20,7 +21,7 @@ from chat import retrieval
 
 from .compliance import check_plan
 from .interpret import (MAX_RULE_LENGTH, coverage, interpret, per_term, read_back,
-                        validate_his_own, vocabulary)
+                        validate_a_reading, validate_his_own, vocabulary)
 from .models import DismissedSuggestion, TraderRule
 from .rules import conflicts_with, declared_rules
 from .suggestions import asked_for_one, propose, standings
@@ -453,9 +454,19 @@ def save_rule(request):
 
         if clash:
             other, word = clash
+
+            if other is None:
+                return Response({"error": f"התנאי הזה דורש {quoted(word)} ואוסר אותו באותה "
+                                          f"נשימה — אין עסקה שיכולה לקיים אותו."},
+                                status = status.HTTP_400_BAD_REQUEST)
+
+            # **Every term he wrote goes through `quoted`**, which keeps a latin run from
+            # dragging the punctuation around it and swapping two tags in the sentence.
+            # See `analytics.formatting.quoted` - it was measured on exactly this message.
             return Response({"error": f"התנאי הזה סותר כלל שכבר יש לך — "
-                                      f"\"{clean_label(other.text, MAX_RULE_LENGTH)}\". "
-                                      f"שניהם מדברים על \"{word}\" ולא ייתכן ששניהם יתקיימו."},
+                                      f"{quoted(clean_label(other.text, MAX_RULE_LENGTH))}. "
+                                      f"שניהם מדברים על {quoted(word)}, "
+                                      f"ולא ייתכן ששניהם יתקיימו."},
                             status = status.HTTP_400_BAD_REQUEST)
 
         if rule_id:
@@ -506,7 +517,7 @@ def save_rule(request):
     if clash:
         _, word = clash
         return Response({"error": f"זה סותר את הכלל שכבר יש לך — לא היית יכול לסחור "
-                                  f"בשום שעה. הכלל האחר אומר {word}."},
+                                  f"בשום שעה. הכלל האחר אומר {quoted(word)}."},
                         status = status.HTTP_400_BAD_REQUEST)
 
     row, _ = TraderRule.objects.update_or_create(
@@ -601,12 +612,33 @@ def accept_suggestion(request):
             return Response({"error": "סוג כלל לא מוכר."},
                             status = status.HTTP_400_BAD_REQUEST)
 
+        known = vocabulary(request.user)
+
+        # **The card's terms are the model's words, not his.** They went through
+        # `validate_his_own` - the trusted path, which lifts the short-term gate and leaves
+        # a self-contradiction standing - purely because the endpoint reads as "his yes".
+        # His yes is to the *idea*; the spellings were still written by a reading, and a
+        # reading gets the same checking here as it gets anywhere else.
+        terms = (validate_a_reading(card.get("rule_terms") or {}, known_labels = known)
+                 if kind == TraderRule.CUSTOM else None)
+
+        # **And nothing checked this against the rules he already has.** Accepting a card
+        # could plant a rule contradicting one of his, which then breaks on every trade and
+        # is reported forever without anything saying the two are arguing - the exact
+        # failure the check was written for, reached through the one door it did not cover.
+        clash = conflicts_with(request.user, kind, terms = terms,
+                               number = card.get("rule_number"))
+
+        if clash:
+            return Response({"error": "ההצעה מתנגשת עם כלל שכבר יש לך, ולא היה אפשר "
+                                      "לקיים את שניהם. אפשר לדחות אותה."},
+                            status = status.HTTP_400_BAD_REQUEST)
+
         if kind == TraderRule.CUSTOM:
             TraderRule.objects.create(
                 user = request.user, kind = kind,
                 text = clean_label(card.get("rule_text", ""), MAX_RULE_LENGTH),
-                terms = validate_his_own(card.get("rule_terms") or {}),
-                known_labels = vocabulary(request.user))
+                terms = terms, known_labels = known)
         else:
             TraderRule.objects.update_or_create(
                 user = request.user, kind = kind,

@@ -1,3 +1,4 @@
+import re
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from unittest.mock import patch
@@ -2429,6 +2430,53 @@ class SuggestionTests(APITestCase):
         return Message.objects.create(conversation = conversation, role = ASSISTANT,
                                       content = "תחקיר", suggestion = card)
 
+    def test_a_card_cannot_plant_a_rule_that_fights_one_he_has(self):
+        """
+        **The same hole, through the one door it did not cover.** Accepting a card ran no
+        conflict check at all, so Larson could install a rule contradicting one of his -
+        which then breaks on every trade and is reported forever without anything saying
+        the two are arguing.
+        """
+        TraderRule.objects.create(user = self.user, kind = TraderRule.NO_AFTER,
+                                  number = 10 * 60)
+
+        row = self.answered_debrief({"action": "add", "key": "add:hour",
+                                     "rule_kind": "no_before", "rule_number": 14 * 60})
+
+        response = self.client.post("/mentor/suggestion/accept/", {"message_id": row.id},
+                                    format = "json")
+
+        row.refresh_from_db()
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(TraderRule.objects.filter(kind = "no_before").exists())
+        # **The card survives a refusal**, so he can still dismiss it rather than being left
+        # with something that answers neither way.
+        self.assertIsNotNone(row.suggestion)
+
+    def test_a_card_s_terms_are_checked_like_any_other_reading(self):
+        """
+        **The card's words are the model's, and they went through the trusted path.** That
+        path lifts the short-term gate and leaves a term that is required and banned at
+        once standing, purely because the endpoint reads as "his yes" - but his yes is to
+        the idea, and the spellings were still written by a reading.
+        """
+        make_trades(self.user, 20, setups = "ifvg")
+
+        row = self.answered_debrief({
+            "action": "add", "key": "add:custom", "rule_kind": "custom",
+            "rule_text": "רק עם ifvg",
+            "rule_terms": {"require": [["ifvg"]], "forbid": ["ifvg", "1m ifvg"]}})
+
+        response = self.client.post("/mentor/suggestion/accept/", {"message_id": row.id},
+                                    format = "json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        saved = TraderRule.objects.get(kind = "custom")
+        self.assertEqual(saved.terms["require"], [["ifvg"]])
+        self.assertEqual(saved.terms["forbid"], ["1m ifvg"])
+
     def test_yes_creates_the_rule_and_clears_the_card(self):
         row = self.answered_debrief({"action": "add", "key": "add:size",
                                      "rule_kind": "max_size", "rule_number": 3.0})
@@ -3166,6 +3214,104 @@ class ConflictTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
+    def test_a_rule_cannot_require_and_forbid_the_same_term(self):
+        """
+        **Found on the live site, by him, after I had called this closed.** The check I wrote
+        compares a new rule against the *other* rules and never against itself - so one rule
+        demanding `ifvg` and banning `ifvg` walked straight through it, and then broke on
+        every single trade forever.
+        """
+        response = self.save_custom("רק עם ifvg ובלי ifvg",
+                                    {"require": [["ifvg"]], "forbid": ["ifvg"]})
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("ifvg", response.data["error"])
+        self.assertEqual(TraderRule.objects.count(), 0)
+
+    def test_a_term_inside_an_or_group_counts_as_required(self):
+        """One spelling out of three is still something the rule asks for, and banning it
+        is still asking for a trade that cannot exist."""
+        response = self.save_custom("fvg או ifvg, בלי ifvg",
+                                    {"require": [["fvg", "ifvg"]], "forbid": ["ifvg"]})
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_the_model_s_reading_is_cleaned_rather_than_refused(self):
+        """
+        **The shape the model actually produced, and the one on his live account.** Asked
+        for "only IFVG and nothing else" it returned `ifvg` as required and the IFVG
+        variants as forbidden, the second list swallowing the first.
+
+        **Cleaned and not refused, because he never typed it.** The required side wins: he
+        asked for something, and an error naming a word he did not write is a fault he has
+        no way to act on.
+        """
+        from mentor.interpret import validate_a_reading
+
+        kept = validate_a_reading({"require": [["ifvg"]],
+                                   "forbid": ["ifvg", "1m ifvg", "smt + ifvg"]},
+                                  known_labels = ["ifvg", "1m ifvg", "smt + ifvg"])
+
+        self.assertEqual(kept["require"], [["ifvg"]])
+        self.assertEqual(kept["forbid"], ["1m ifvg", "smt + ifvg"])
+
+    def test_terms_he_picked_himself_are_left_for_the_refusal(self):
+        """**The other half of the split.** His own chips are not quietly rewritten behind
+        his back - they reach the endpoint as he set them so it can say what is wrong while
+        they are still on screen."""
+        from mentor.interpret import validate_his_own
+
+        kept = validate_his_own({"require": [["ifvg"]], "forbid": ["ifvg"]})
+
+        self.assertEqual(kept["forbid"], ["ifvg"])
+
+    def test_a_narrower_term_survives_both_paths(self):
+        """**Not the same word.** "Any IFVG except the one-minute one" is coherent, and
+        dropping `1m ifvg` because `ifvg` is required would delete what he asked for."""
+        from mentor.interpret import validate_a_reading, validate_his_own
+
+        self.assertEqual(validate_his_own(
+            {"require": [["ifvg"]], "forbid": ["1m ifvg"]})["forbid"], ["1m ifvg"])
+
+        self.assertEqual(validate_a_reading(
+            {"require": [["ifvg"]], "forbid": ["1m ifvg"]},
+            known_labels = ["ifvg", "1m ifvg"])["forbid"], ["1m ifvg"])
+
+    def test_a_refusal_cannot_scramble_the_terms_it_names(self):
+        """
+        **Measured on the live site, from a refusal he sent back.** A latin tag at the end
+        of a Hebrew clause drags the quotes and the full stop with it, and the rendered
+        sentence named the two tags the other way round - "שניהם מדברים על" pointing at the
+        wrong one.
+
+        **A message naming the wrong tag is worse than no message**, because it reads as
+        the software being confused rather than as the rule being refused. Every term in
+        these sentences is wrapped in the isolate characters the standard provides.
+        """
+        self.custom("בלי cisd", {"require": [], "forbid": ["cisd"]})
+
+        response = self.save_custom("רק עם cisd", {"require": [["cisd"]], "forbid": []})
+        message = response.data["error"]
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # Nothing latin is left bare: every run sits between FIRST STRONG ISOLATE and POP.
+        for run in re.findall(r"[A-Za-z][A-Za-z0-9 ,.+-]*", message):
+            start = message.index(run)
+            before = message.rfind("⁨", 0, start)
+            closed = message.rfind("⁩", 0, start)
+            self.assertGreater(before, closed,
+                               f"'{run}' is outside an isolate and can reorder the sentence")
+
+    def test_an_hour_refusal_isolates_the_rule_it_names(self):
+        TraderRule.objects.create(user = self.user, kind = TraderRule.NO_AFTER,
+                                  number = 10 * 60)
+
+        response = self.client.post("/mentor/rules/save/",
+                                    {"kind": "no_before", "number": 14 * 60}, format = "json")
+
+        self.assertIn("⁨", response.data["error"])
+
     def test_another_trader_s_rules_cannot_block_his(self):
         other = User.objects.create_user(username = "zoe", password = "Tr4de-Pl4n!x")
         TraderRule.objects.create(user = other, kind = TraderRule.CUSTOM,
@@ -3344,3 +3490,53 @@ class NoDoubleReportingTests(APITestCase):
         self.assertTrue(plan["broken"] or plan["kept"])
 
 
+
+
+# ------------------------- THE ROWS WRITTEN BEFORE THE FIX ------------------------- #
+
+class UntangleMigrationTests(APITestCase):
+    """
+    **A migration that repairs data has to be tested like code, because it runs once.** If
+    it is wrong there is no second chance to notice - it has already run on his account.
+    """
+
+    def test_the_repair_keeps_the_required_side(self):
+        from importlib import import_module
+
+        user = User.objects.create_user(username = "omer", password = "Tr4de-Pl4n!x")
+
+        row = TraderRule.objects.create(
+            user = user, kind = TraderRule.CUSTOM, text = "רק עם ifvg",
+            terms = {"require": [["ifvg"]], "forbid": ["ifvg", "1m ifvg", "smt + ifvg"]})
+
+        module = import_module("mentor.migrations.0006_no_rule_argues_with_itself")
+
+        class Apps:
+            def get_model(self, app, model):
+                return TraderRule
+
+        module.untangle(Apps(), None)
+        row.refresh_from_db()
+
+        self.assertEqual(row.terms["require"], [["ifvg"]])
+        self.assertEqual(row.terms["forbid"], ["1m ifvg", "smt + ifvg"])
+
+    def test_a_coherent_rule_is_not_touched(self):
+        from importlib import import_module
+
+        user = User.objects.create_user(username = "zoe", password = "Tr4de-Pl4n!x")
+
+        row = TraderRule.objects.create(
+            user = user, kind = TraderRule.CUSTOM, text = "ifvg בלי 1m",
+            terms = {"require": [["ifvg"]], "forbid": ["1m ifvg"]})
+
+        module = import_module("mentor.migrations.0006_no_rule_argues_with_itself")
+
+        class Apps:
+            def get_model(self, app, model):
+                return TraderRule
+
+        module.untangle(Apps(), None)
+        row.refresh_from_db()
+
+        self.assertEqual(row.terms["forbid"], ["1m ifvg"])

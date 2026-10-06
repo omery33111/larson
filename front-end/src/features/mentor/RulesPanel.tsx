@@ -108,7 +108,18 @@ const RulesPanel = () => {
   const [editing, setEditing] = useState<string>('');
   const [value, setValue] = useState<string>('');
 
+  // Why the last save was refused, for the box that was refused. Thrown away the moment he
+  // tries again, because a reason sitting beside words he has since changed is a lie.
+  const [problem, setProblem] = useState<string>('');
+
   useEffect(() => { if (isOpen) dispatch(getRulesAsync()); }, [dispatch, isOpen]);
+
+  // **The reason belongs to one open editor, and five places swap which one that is.**
+  // Clearing it at each of them is five chances to miss one - and a refusal left sitting
+  // under a different rule's field is worse than one that never appeared. Tied to the
+  // editor itself instead, so there is nowhere to forget. `commit` sets it after this has
+  // run and `editing` has not moved, so a real refusal survives.
+  useEffect(() => { setProblem(''); }, [editing]);
 
   const mine = rules.filter((rule) => rule.kind === CUSTOM_KIND);
   const byKind = Object.fromEntries(
@@ -126,6 +137,26 @@ const RulesPanel = () => {
       : CLOCK_KINDS.includes(kind) ? toClock(existing.number) : String(existing.number));
   };
 
+  /**
+   * **Closed only once the server took it.** Both editors used to clear on dispatch and let
+   * a toast carry the refusal, which put the complaint in the corner seconds after the
+   * sentence it complains about had gone. The rejection is handed back here instead, the
+   * box stays open with his words in it, and the reason sits under them.
+   *
+   * An empty message is the 401 convention - the session ended, the app is already heading
+   * for the login screen, and there is nothing here to correct.
+   */
+  const commit = (payload: Record<string, unknown>) => {
+    setProblem('');
+
+    dispatch(saveRuleAsync(payload)).unwrap()
+      .then(() => { setEditing(''); setValue(''); })
+      .catch((reason: string) => {
+        if (reason) setProblem(reason);
+        else { setEditing(''); setValue(''); }
+      });
+  };
+
   const save = (kind: string) => {
     const trimmed = value.trim();
     if (!trimmed) return;
@@ -133,10 +164,7 @@ const RulesPanel = () => {
     const number = CLOCK_KINDS.includes(kind) ? fromClock(trimmed) : Number(trimmed);
     if (!Number.isFinite(number)) return;
 
-    dispatch(saveRuleAsync({ kind, number }));
-
-    setEditing('');
-    setValue('');
+    commit({ kind, number });
   };
 
   /** His own sentence. `id` present means he is rewording one he already has. */
@@ -144,11 +172,8 @@ const RulesPanel = () => {
     const trimmed = value.trim();
     if (!trimmed) return;
 
-    dispatch(saveRuleAsync(id ? { kind: CUSTOM_KIND, text: trimmed, id }
-                              : { kind: CUSTOM_KIND, text: trimmed }));
-
-    setEditing('');
-    setValue('');
+    commit(id ? { kind: CUSTOM_KIND, text: trimmed, id }
+              : { kind: CUSTOM_KIND, text: trimmed });
   };
 
   const writing = editing === CUSTOM_KIND || editing.startsWith('custom:');
@@ -158,7 +183,7 @@ const RulesPanel = () => {
       <textarea
         className="app-input rules-textarea"
         value={value}
-        onChange={(event) => setValue(event.target.value)}
+        onChange={(event) => { setValue(event.target.value); setProblem(''); }}
         placeholder={EXAMPLES[0]}
         rows={2}
         maxLength={200}
@@ -169,6 +194,8 @@ const RulesPanel = () => {
           if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); saveMine(id); }
         }}
       />
+
+      {problem && <p className="rules-problem">{problem}</p>}
 
       <div className="rules-write-actions">
         <button type="button" className="app-btn app-btn-primary rules-save"
@@ -336,27 +363,35 @@ const RulesPanel = () => {
 
                         {isEditing
                           ? (
-                            <div className="rules-edit">
-                              <input
-                                className="app-input rules-input"
-                                type={CLOCK_KINDS.includes(kind) ? 'time' : 'number'}
-                                value={value}
-                                onChange={(event) => setValue(event.target.value)}
-                                placeholder={UNITS[kind]}
-                                autoFocus
-                                onKeyDown={(event) => { if (event.key === 'Enter') save(kind); }}
-                              />
+                            <>
+                              <div className="rules-edit">
+                                <input
+                                  className="app-input rules-input"
+                                  type={CLOCK_KINDS.includes(kind) ? 'time' : 'number'}
+                                  value={value}
+                                  onChange={(event) => { setValue(event.target.value); setProblem(''); }}
+                                  placeholder={UNITS[kind]}
+                                  autoFocus
+                                  onKeyDown={(event) => { if (event.key === 'Enter') save(kind); }}
+                                />
 
-                              <button type="button" className="app-btn app-btn-primary rules-save"
-                                      onClick={() => save(kind)}>
-                                <FiCheck /> שמירה
-                              </button>
+                                <button type="button" className="app-btn app-btn-primary rules-save"
+                                        onClick={() => save(kind)}>
+                                  <FiCheck /> שמירה
+                                </button>
 
-                              <button type="button" className="rules-cancel"
-                                      onClick={() => { setEditing(''); setValue(''); }}>
-                                ביטול
-                              </button>
-                            </div>
+                                <button type="button" className="rules-cancel"
+                                        onClick={() => { setEditing(''); setValue(''); }}>
+                                  ביטול
+                                </button>
+                              </div>
+
+                              {/* **Under the field it is about.** An hour window with no hour
+                                  left in it is refused, and the refusal names the rule it
+                                  collides with - which is only useful while the number he
+                                  just typed is still in front of him. */}
+                              {problem && <p className="rules-problem">{problem}</p>}
+                            </>
                           )
                           : (
                             <div className="rules-actions">
