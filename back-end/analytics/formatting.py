@@ -83,22 +83,28 @@ def quoted(value):
     A tag or a rule of his, placed inside a Hebrew sentence without the sentence falling
     apart around it.
 
-    **Measured on the live site, in a refusal he sent back.** The server wrote
+    **Measured in a browser on nine of the tags this product actually sees, and two of them
+    need it:**
 
-        התנאי הזה סותר כלל ... "להיכנס רק בלי fvg, ifvg ולא cisd". שניהם מדברים על "ifvg" ...
+    | the tag | bare | isolated |
+    |---|---|---|
+    | `TL נזילות` | renders `נזילות TL` - the two words swap | as written |
+    | `1m ifvg.` | the full stop jumps to the other side | as written |
 
-    and what rendered read `ולא "ifvg" שניהם מדברים על "cisd"` - the two terms swapped
-    places. **A sentence that names the wrong tag is worse than no sentence**, and he read
-    it as the software being confused rather than as his rule being refused.
+    A tag that is itself mixed-direction, or that ends in punctuation, carries no strong
+    direction of its own at its edges - so the bidirectional algorithm resolves those edges
+    from whatever surrounds them, and the label is rendered as something the trader did not
+    type. **A sentence that misquotes his own tag reads as confused software rather than as
+    a refused rule**, which is the one thing an error message cannot afford.
 
-    The cause is the bidirectional algorithm, not the text: quotes, commas and the full
-    stop around a latin run are neutral characters, so they take their direction from
-    whichever side wins, and a latin run at the end of an RTL clause drags them with it.
+    A plain latin tag between Hebrew words is laid out correctly either way - measured, the
+    other seven were byte-identical. The wrapper costs nothing there and removes the question
+    of which kind of tag this is.
 
-    **U+2068 and U+2069 are the characters the standard provides for exactly this** - the
-    run inside is laid out on its own and cannot reorder anything around it. They are
-    invisible, they need no markup, and they therefore work the same in the browser, in an
-    email body and in a plain-text log, which is more than a `<span dir>` can say.
+    **U+2068 and U+2069 are the characters the standard provides for exactly this.** The run
+    inside is laid out on its own and cannot reorder anything around it. They are invisible,
+    they need no markup, and they therefore work the same in a browser, in an email body and
+    in a plain-text log, which is more than a `<span dir>` can say.
     """
     return f"⁨\"{value}\"⁩"
 

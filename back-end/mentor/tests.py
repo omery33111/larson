@@ -3279,14 +3279,14 @@ class ConflictTests(APITestCase):
 
     def test_a_refusal_cannot_scramble_the_terms_it_names(self):
         """
-        **Measured on the live site, from a refusal he sent back.** A latin tag at the end
-        of a Hebrew clause drags the quotes and the full stop with it, and the rendered
-        sentence named the two tags the other way round - "שניהם מדברים על" pointing at the
-        wrong one.
+        **Measured in a browser, on the tags this product actually sees.** A tag that is
+        itself mixed-direction (`TL נזילות` renders `נזילות TL`) or that ends in
+        punctuation (`1m ifvg.` moves the stop to the other side) is laid out as something
+        the trader never typed, because its edges carry no strong direction of their own.
 
-        **A message naming the wrong tag is worse than no message**, because it reads as
-        the software being confused rather than as the rule being refused. Every term in
-        these sentences is wrapped in the isolate characters the standard provides.
+        **A sentence that misquotes his own tag reads as confused software rather than as
+        a refused rule**, so every term is wrapped in the isolate characters the standard
+        provides for this.
         """
         self.custom("בלי cisd", {"require": [], "forbid": ["cisd"]})
 
