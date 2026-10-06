@@ -417,10 +417,9 @@ export const mentorSlice = createSlice({
             state.messages = state.messages.map((message) =>
                 message.id === action.payload ? { ...message, suggestion: null } : message);
         })
-        .addCase(acceptSuggestionAsync.rejected, (state, action) =>
-        {
-            state.message = action.payload as string;
-        })
+        // Not toasted either. A refused card names the rule it collides with, and that
+        // sentence only means something beside the question that produced it.
+        .addCase(acceptSuggestionAsync.rejected, () => { })
 
         .addCase(getRulesAsync.pending, (state) =>
         {

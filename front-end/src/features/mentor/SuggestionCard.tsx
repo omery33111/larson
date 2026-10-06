@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { FiCheck, FiX } from 'react-icons/fi'
 import { useAppDispatch, useAppSelector } from '../../app/hooks'
 import { RuleSuggestion } from '../../models/Rule'
@@ -31,6 +32,19 @@ const SuggestionCard = ({ messageId, card }: { messageId: number, card: RuleSugg
 
   const retiring = card.action === 'retire';
 
+  // **The refusal belongs on the card, not in a corner.** A card can be refused - it may
+  // propose a rule that contradicts one he already has - and the reason names that rule,
+  // which is only useful beside the question that produced it. Same shape as the rule
+  // editors: unwrap the rejection here instead of letting a toast carry it.
+  const [problem, setProblem] = useState<string>('');
+
+  const accept = () => {
+    setProblem('');
+
+    dispatch(acceptSuggestionAsync(messageId)).unwrap()
+      .catch((reason: string) => { if (reason) setProblem(reason); });
+  };
+
   return (
     // **Inside a `chat-turn`, with an empty avatar slot.** Measured on the live page, the
     // card was 328px wider than the answer above it and three pixels below it - a panel
@@ -48,7 +62,7 @@ const SuggestionCard = ({ messageId, card }: { messageId: number, card: RuleSugg
         <div className="suggestion-actions">
           <button type="button" className="app-btn app-btn-primary suggestion-yes"
                   disabled={isStreaming}
-                  onClick={() => dispatch(acceptSuggestionAsync(messageId))}>
+                  onClick={accept}>
             <FiCheck /> {card.accept}
           </button>
 
@@ -62,6 +76,8 @@ const SuggestionCard = ({ messageId, card }: { messageId: number, card: RuleSugg
             <FiX /> {card.decline}
           </button>
         </div>
+
+        {problem && <p className="rules-problem">{problem}</p>}
 
       </div>
     </div>
