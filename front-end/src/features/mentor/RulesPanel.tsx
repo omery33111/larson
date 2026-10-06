@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import Problem from '../base/Problem'
 import Dialog from '@mui/material/Dialog'
 import { FiCheck, FiEdit3, FiPlus, FiTrash2, FiX } from 'react-icons/fi'
 import { useAppDispatch, useAppSelector } from '../../app/hooks'
@@ -195,7 +196,7 @@ const RulesPanel = () => {
         }}
       />
 
-      {problem && <p className="rules-problem">{problem}</p>}
+      {problem && <Problem>{problem}</Problem>}
 
       <div className="rules-write-actions">
         <button type="button" className="app-btn app-btn-primary rules-save"
@@ -390,7 +391,7 @@ const RulesPanel = () => {
                                   left in it is refused, and the refusal names the rule it
                                   collides with - which is only useful while the number he
                                   just typed is still in front of him. */}
-                              {problem && <p className="rules-problem">{problem}</p>}
+                              {problem && <Problem>{problem}</Problem>}
                             </>
                           )
                           : (

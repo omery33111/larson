@@ -1,7 +1,7 @@
 import { useState } from 'react'
+import Problem from '../base/Problem'
 import { FiKey } from 'react-icons/fi'
 import { useNavigate, useParams } from 'react-router-dom'
-import { toast } from 'react-toastify'
 import { useAppDispatch, useAppSelector } from '../../app/hooks'
 import { resetPasswordAsync, selectIsLoading } from './authenticationSlice'
 import './authentication.css'
@@ -27,11 +27,17 @@ const ResetPassword = () => {
   const [confirm, setConfirm] = useState('');
   const [done, setDone] = useState(false);
 
+  // Under the note that states the rules, which is exactly what the server's refusal is
+  // usually about - a common password, or all digits.
+  const [problem, setProblem] = useState('');
+
   const onSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
+    setProblem('');
+
     if (password !== confirm) {
-      toast.error('שתי הסיסמאות אינן זהות.');
+      setProblem('שתי הסיסמאות אינן זהות.');
       return;
     }
 
@@ -42,7 +48,7 @@ const ResetPassword = () => {
       return;
     }
 
-    toast.error(result.payload as string);
+    setProblem((result.payload as string) || 'לא הצלחנו להחליף את הסיסמה. נסה שוב.');
   };
 
   return (
@@ -83,7 +89,7 @@ const ResetPassword = () => {
                 name="password"
                 value={password}
                 placeholder="סיסמה חדשה"
-                onChange={(event) => setPassword(event.target.value)}
+                onChange={(event) => { setPassword(event.target.value); setProblem(''); }}
               />
             </div>
 
@@ -94,13 +100,15 @@ const ResetPassword = () => {
                 name="confirm"
                 value={confirm}
                 placeholder="וידוא סיסמה"
-                onChange={(event) => setConfirm(event.target.value)}
+                onChange={(event) => { setConfirm(event.target.value); setProblem(''); }}
               />
             </div>
 
             <p className="auth-note">
               לפחות 8 תווים, ולא סיסמה נפוצה או כולה ספרות.
             </p>
+
+            {problem && <Problem>{problem}</Problem>}
 
             <div className="auth-actions">
               <button type="submit" className="app-btn app-btn-primary" disabled={isLoading}>

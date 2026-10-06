@@ -1,7 +1,8 @@
 import { FiAlertCircle } from 'react-icons/fi'
+import Problem from '../base/Problem'
 import { useAppDispatch, useAppSelector } from '../../app/hooks'
 import {
-  confirmTradesAsync, resetIngestion, selectIsConfirming,
+  confirmTradesAsync, resetIngestion, selectIsConfirming, selectTradesMessage,
   selectIsConfirmOpen, selectPreview
 } from './tradesSlice'
 import './trades.css'
@@ -46,6 +47,7 @@ const IngestionConfirm = () => {
   const isConfirmOpen = useAppSelector(selectIsConfirmOpen);
   const preview = useAppSelector(selectPreview);
   const isConfirming = useAppSelector(selectIsConfirming);
+  const message = useAppSelector(selectTradesMessage);
 
   if (!isConfirmOpen || !preview) return null;
 
@@ -190,6 +192,12 @@ const IngestionConfirm = () => {
             </ul>
           </>
         )}
+
+        {/* A confirm can fail too - the file is re-read from the original at this point, so
+            this is where a storage fault or a parser change shows up. It was written into
+            the slice and displayed nowhere, which left the gate looking like it had simply
+            ignored the press. */}
+        {message && <Problem>{message}</Problem>}
 
         <div className="confirm-actions">
           <button className="app-btn app-btn-primary" onClick={onConfirm} disabled={isConfirming}>

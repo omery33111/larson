@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { FiAlertTriangle, FiDownload, FiKey, FiLogOut, FiMail, FiUser } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
+import Problem from '../base/Problem'
 import { useAppDispatch, useAppSelector } from '../../app/hooks'
 import {
   changePasswordAsync, deleteAccountAsync, emailPrefsAsync, endSessionsAsync, exportDataAsync,
@@ -60,11 +61,30 @@ const AccountPage = () => {
   // version of two whole cards is drawn.
   useEffect(() => { dispatch(getIndexAsync()); dispatch(emailPrefsAsync()); }, [dispatch]);
 
+  /**
+   * **Keyed by card, not one string for the page.** Four unrelated actions live here -
+   * download, end other sessions, change password, delete the account - and a reason from
+   * one of them rendered under another is worse than no reason at all. The key is the card
+   * it belongs to, so only that card can show it.
+   *
+   * Successes stay as toasts: "the file downloaded" is a passing confirmation with nothing
+   * to act on, and pinning it to a card would leave it sitting there afterwards.
+   */
+  const [problem, setProblem] = useState<{ where: string, text: string } | null>(null);
+
+  const failed = (where: string, text: string) =>
+    setProblem({ where, text: text || 'הפעולה לא הצליחה. נסה שוב.' });
+
+  const reason = (where: string) => problem?.where === where
+    ? <Problem>{problem.text}</Problem>
+    : null;
+
   const download = async () => {
+    setProblem(null);
     const result = await dispatch(exportDataAsync());
 
     if (exportDataAsync.rejected.match(result)) {
-      toast.error(result.payload as string);
+      failed('export', result.payload as string);
       return;
     }
 
@@ -72,15 +92,17 @@ const AccountPage = () => {
   };
 
   const changePassword = async () => {
+    setProblem(null);
+
     if (next !== confirm) {
-      toast.error('שתי הסיסמאות אינן זהות.');
+      failed('password', 'שתי הסיסמאות אינן זהות.');
       return;
     }
 
     const result = await dispatch(changePasswordAsync({ currentPassword: current, password: next }));
 
     if (changePasswordAsync.rejected.match(result)) {
-      toast.error(result.payload as string);
+      failed('password', result.payload as string);
       return;
     }
 
@@ -89,10 +111,11 @@ const AccountPage = () => {
   };
 
   const endEverywhereElse = async () => {
+    setProblem(null);
     const result = await dispatch(endSessionsAsync());
 
     if (endSessionsAsync.rejected.match(result)) {
-      toast.error(result.payload as string);
+      failed('sessions', result.payload as string);
       return;
     }
 
@@ -100,12 +123,13 @@ const AccountPage = () => {
   };
 
   const erase = async (googleCredential = '') => {
+    setProblem(null);
     deleting.current = true;
     const result = await dispatch(deleteAccountAsync({ password, googleCredential }));
 
     if (deleteAccountAsync.rejected.match(result)) {
       deleting.current = false;
-      toast.error(result.payload as string);
+      failed('delete', result.payload as string);
       return;
     }
 
@@ -135,6 +159,8 @@ const AccountPage = () => {
         <button className="app-btn app-btn-dark" onClick={download} disabled={isLoading}>
           הורדת הכל
         </button>
+
+        {reason('export')}
       </section>
 
 
@@ -192,6 +218,8 @@ const AccountPage = () => {
         <button className="app-btn app-btn-dark" onClick={endEverywhereElse} disabled={isLoading}>
           לנתק את כל השאר
         </button>
+
+        {reason('sessions')}
       </section>
 
 
@@ -227,17 +255,19 @@ const AccountPage = () => {
         <label className="account-label" htmlFor="account-current">הסיסמה הנוכחית</label>
         <input id="account-current" type="password" className="app-input" value={current}
           placeholder="סיסמה נוכחית"
-          onChange={(event) => setCurrent(event.target.value)} />
+          onChange={(event) => { setCurrent(event.target.value); if (problem?.where === 'password') setProblem(null); }} />
 
         <label className="account-label" htmlFor="account-next">סיסמה חדשה</label>
         <input id="account-next" type="password" className="app-input" value={next}
           placeholder="לפחות 8 תווים"
-          onChange={(event) => setNext(event.target.value)} />
+          onChange={(event) => { setNext(event.target.value); if (problem?.where === 'password') setProblem(null); }} />
 
         <label className="account-label" htmlFor="account-confirm-new">וידוא הסיסמה החדשה</label>
         <input id="account-confirm-new" type="password" className="app-input" value={confirm}
           placeholder="שוב, לוודא"
-          onChange={(event) => setConfirm(event.target.value)} />
+          onChange={(event) => { setConfirm(event.target.value); if (problem?.where === 'password') setProblem(null); }} />
+
+        {reason('password')}
 
         <div className="account-danger-actions">
           <button className="app-btn app-btn-primary"
@@ -315,9 +345,11 @@ const AccountPage = () => {
               </p>
             )}
 
+            {reason('delete')}
+
             <div className="account-danger-actions">
               <button className="app-btn app-btn-dark"
-                onClick={() => { setIsArmed(false); setTyped(''); setPassword(''); }}>
+                onClick={() => { setIsArmed(false); setTyped(''); setPassword(''); setProblem(null); }}>
                 ביטול
               </button>
 

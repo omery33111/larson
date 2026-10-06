@@ -2,11 +2,11 @@ import { useEffect } from 'react'
 import Dialog from '@mui/material/Dialog'
 import { FiAlertTriangle, FiMenu, FiUploadCloud } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
-import { toast } from 'react-toastify'
 import { useAppDispatch, useAppSelector } from '../../app/hooks'
 import { selectIsLogged } from '../authentication/authenticationSlice'
 import LarsonPresence, { presenceState } from '../larson/LarsonPresence'
 import { getUsageAsync } from '../usage/usageSlice'
+import Problem from '../base/Problem'
 import ChatComposer from './ChatComposer'
 import ChatSidebar from './ChatSidebar'
 import ChatThread from './ChatThread'
@@ -60,12 +60,11 @@ const ChatPage = () => {
     dispatch(getUsageAsync());
   }, [isLogged, dispatch]);
 
-  useEffect(() => {
-    if (message) {
-      toast.error(message);
-      dispatch(resetChatMessage());
-    }
-  }, [message, dispatch]);
+  // **Not cleared on arrival.** It used to be read, toasted and wiped in the same breath,
+  // which is why it had to be a toast: nothing held it. It stays in the store until he
+  // closes it or sends again, and renders above the composer - next to the thing that
+  // failed rather than in a corner.
+  const dismiss = () => dispatch(resetChatMessage());
 
   // Dropping a file anywhere over the conversation attaches it, the same gesture the upload
   // screen already teaches. It only stages the file - nothing is sent until the trader says
@@ -152,6 +151,8 @@ const ChatPage = () => {
           </div>
 
           <ChatThread />
+
+          {message && <Problem onClose={dismiss}>{message}</Problem>}
 
           <ChatComposer />
 

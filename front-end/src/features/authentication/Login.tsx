@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import Problem from '../base/Problem'
 import { FaSignInAlt } from 'react-icons/fa'
 import { useAppSelector, useAppDispatch } from "../../app/hooks";
 import { useNavigate } from 'react-router-dom';
@@ -7,7 +8,6 @@ import {
   selectIsError, selectIsSuccess, selectNeedsVerification, selectUnverifiedEmail
 } from "./authenticationSlice"
 import GoogleSignIn, { GOOGLE_ENABLED } from './GoogleSignIn';
-import { toast } from 'react-toastify';
 import './authentication.css';
 
 
@@ -30,6 +30,10 @@ const Login = () => {
 
   const [resent, setResent] = useState(false);
 
+  // **Under the two fields it is about.** A wrong password belongs beside the password, not
+  // in a corner that times out while he is still looking at the form.
+  const [problem, setProblem] = useState<string>('');
+
   // **Off by default, and that is the decision.** Ticking it keeps the session after the
   // browser closes; leaving it means the session dies with the tab. On a borrowed machine the
   // safe answer has to be the one that happens when nobody touches anything.
@@ -46,16 +50,18 @@ const Login = () => {
   }, [isSuccess, navigate, dispatch])
 
   useEffect(() => {
-    // An unconfirmed address is not a wrong password, and a red toast saying it is would
-    // send the trader off to check a password that was right all along. It gets the panel
-    // below instead, which carries the one thing he can actually do about it.
+    // An unconfirmed address is not a wrong password, and saying it is would send the trader
+    // off to check a password that was right all along. It gets the panel below instead,
+    // which carries the one thing he can actually do about it.
     if (isError && !needsVerification) {
-      toast.error('הפרטים שגויים. נסה שוב.');
+      setProblem('הפרטים שגויים. נסה שוב.');
     }
   }, [isError, needsVerification]);
 
   const onChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
+    // The reason described what was typed a moment ago; once he edits, it describes nothing.
+    setProblem('');
     setFormData((prevState) => ({
       ...prevState,
       [name]: value,
@@ -68,7 +74,7 @@ const Login = () => {
     const passwordRegex = /^[^\s]+$/;
 
     if (!passwordRegex.test(password)) {
-        toast.error("הסיסמה לא יכולה להכיל רווחים.");
+        setProblem("הסיסמה לא יכולה להכיל רווחים.");
         return;
     }
 
@@ -78,6 +84,7 @@ const Login = () => {
 
     dispatch(clearVerificationPrompt());
     setResent(false);
+    setProblem('');
     dispatch(loginAsync(userData));
   };
 
@@ -148,6 +155,8 @@ const Login = () => {
           />
           <span>להישאר מחובר בדפדפן הזה</span>
         </label>
+
+        {problem && !needsVerification && <Problem>{problem}</Problem>}
 
         <div className="auth-actions">
           <button type="submit" className="app-btn app-btn-primary">

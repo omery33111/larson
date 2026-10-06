@@ -9,7 +9,6 @@ import {
 } from "../../app/session";
 import { forgetGoogleSession } from "./GoogleSignIn";
 import { Login, Register } from "../../models/Authentication";
-import { toast } from 'react-toastify';
 
 
 
@@ -24,30 +23,21 @@ export function getIndex() {
 
 
 
+/**
+ * **It throws, and says nothing.**
+ *
+ * It used to raise three different toasts itself and then return `{ error }` instead of
+ * failing - so the thunk's `catch` never ran, `registerAsync` resolved as a success, and the
+ * screen had no idea anything had gone wrong. The message reached the trader only because
+ * this layer put it in a corner on its own initiative.
+ *
+ * **An API module has no business knowing where an error is displayed.** It reports failure
+ * the way every other one here does, the thunk turns it into a string, and the form renders
+ * it under the fields it is about.
+ */
 const register = async (userData: Register) => {
-  try {
-      const response = await axios.post(registerURL, userData);
-      return response.data;
-  } catch (error: any) {
-      if (error.response) {
-          if (error.response.status === 400) {
-              toast.error(error.response.data.error, {
-                  position: toast.POSITION.TOP_RIGHT,
-              });
-              return { error: error.response.data.error };
-          } else {
-              toast.error("שגיאה בהרשמה.", {
-                  position: toast.POSITION.TOP_RIGHT,
-              });
-              return { error: "שגיאה בהרשמה." };
-          }
-      } else {
-          toast.error("שגיאת רשת או במהלך הבקשה.", {
-              position: toast.POSITION.TOP_RIGHT,
-          });
-          return { error: "שגיאת רשת או במהלך הבקשה." };
-      }
-  }
+  const response = await axios.post(registerURL, userData);
+  return response.data;
 };
 
 

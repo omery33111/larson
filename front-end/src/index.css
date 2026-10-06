@@ -186,6 +186,76 @@ a {
   white-space: nowrap;
 }
 
+/* ------------------------- WHAT WENT WRONG, WHERE IT WENT WRONG -------------------------
+ *
+ * **Every error in the product renders here, and none of them is a toast any more.**
+ *
+ * A toast fails an error message in three ways at once, and the trader hit all three on the
+ * same sentence four times running. It lands in a corner, far from the field it is about.
+ * It arrives after the screen has already moved on - both rule editors used to clear on
+ * dispatch, so the complaint showed up seconds after the words it complains about had gone.
+ * And it leaves after a few seconds, which is exactly wrong for a sentence naming a tag he
+ * now has to go and change.
+ *
+ * Tinted rather than bare red text: a red line directly under an input reads as a verdict on
+ * that one field, and most of these are about the form or the request as a whole.
+ *
+ * `role="alert"` is on the element, not here, so a screen reader hears it the moment it
+ * appears - which is the one thing the toast did do correctly.
+ */
+.app-problem {
+  display: flex;
+  gap: 0.45rem;
+  margin: 0.55rem 0 0;
+  padding: 0.5rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid rgba(209, 73, 78, 0.35);
+  /* The product's loss red, at the weight a surface can carry. */
+  background: rgba(209, 73, 78, 0.1);
+  color: #e58b8e;
+  font-size: 0.78rem;
+  line-height: 1.55;
+  text-align: start;
+}
+
+/* The product writes latin terms, tags and addresses inside Hebrew sentences, and one at the
+   end of an RTL line lands on the wrong side without this. */
+.app-problem code,
+.app-problem b {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* **The page-level ones need dismissing, the field-level ones do not.** A reason under an
+   input is answered by editing the input; a stream that failed has nothing to edit, so
+   without a way to close it the strip would sit above the composer for the rest of the
+   session. It is not on a timer either - that is the toast's mistake, and the trader may
+   well be reading it when the timer fires. */
+.app-problem-wide {
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0 0 0.5rem;
+}
+
+.app-problem-close {
+  flex: none;
+  min-width: 28px;
+  min-height: 28px;
+  margin: -0.25rem -0.3rem -0.25rem 0;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.75;
+}
+
+.app-problem-close:hover { opacity: 1; background: rgba(209, 73, 78, 0.14); }
+
 
 
 

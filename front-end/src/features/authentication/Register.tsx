@@ -1,8 +1,8 @@
 import { useState } from 'react';
+import Problem from '../base/Problem'
 import { AiOutlineUser } from 'react-icons/ai';
 import { FiMail } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'react-toastify';
 import { Link } from 'react-router-dom';
 import { useAppDispatch } from "../../app/hooks";
 import { googleLoginAsync, registerAsync, resendVerificationAsync, reset } from "./authenticationSlice";
@@ -34,12 +34,20 @@ const Register = () => {
     // record is sent to a third party to answer him.
     const [accepted, setAccepted] = useState(false)
 
+    // **Under the tick box and the buttons, which is where all four of these are about.**
+    // Cleared on the next edit, because a reason describing what was typed a moment ago
+    // describes nothing once he changes it.
+    const [problem, setProblem] = useState<string>('')
+
     const navigate = useNavigate()
     const dispatch = useAppDispatch()
 
 
 
-    const onChange = (event: any) => {setFormData((PreviousState) => ({ ...PreviousState, [event.target.name]: event.target.value}))}
+    const onChange = (event: any) => {
+      setProblem('')
+      setFormData((PreviousState) => ({ ...PreviousState, [event.target.name]: event.target.value}))
+    }
 
     const onSubmit = (event: any) => {
       event.preventDefault();
@@ -50,12 +58,14 @@ const Register = () => {
       // rule used to be stricter here than in Django, so a perfectly good passphrase with no
       // capital letter was refused by the browser and never reached the validators that
       // would have accepted it.
+      setProblem('');
+
       if (!accepted) {
-        toast.error("צריך לאשר את תנאי השימוש ומדיניות הפרטיות.");
+        setProblem("צריך לאשר את תנאי השימוש ומדיניות הפרטיות.");
       } else if (password.length < 8) {
-        toast.error("הסיסמה צריכה להיות באורך 8 תווים לפחות.");
+        setProblem("הסיסמה צריכה להיות באורך 8 תווים לפחות.");
       } else if (password !== password2) {
-        toast.error("הסיסמאות לא זהות");
+        setProblem("הסיסמאות לא זהות.");
       } else {
         const userData = {
           username,
@@ -64,17 +74,19 @@ const Register = () => {
           accepted_terms: accepted
         };
 
+        // **The server's own sentence, under the form.** It is the one that names which
+        // field it objected to - a password on Django's common list, an address that cannot
+        // receive mail, a username already taken - and none of that is knowable here.
         dispatch(registerAsync(userData))
-          .then((action) => {
-            if (action.meta.requestStatus === "fulfilled") {
-              // "isSuccess" is shared with the login flow, so it is cleared before the
-              // screen changes - otherwise the login page would see it and jump home.
-              dispatch(reset())
-              setSent(true)
-            }
+          .unwrap()
+          .then(() => {
+            // "isSuccess" is shared with the login flow, so it is cleared before the
+            // screen changes - otherwise the login page would see it and jump home.
+            dispatch(reset())
+            setSent(true)
           })
-          .catch((error) => {
-            toast.error(error.message);
+          .catch((reason: string) => {
+            setProblem(reason || "לא הצלחנו ליצור את החשבון. נסה שוב.")
           });
       }
     }
@@ -184,6 +196,8 @@ const Register = () => {
               </span>
             </label>
 
+            {problem && <Problem>{problem}</Problem>}
+
             <div className="auth-actions">
               <button type="submit" className="app-btn app-btn-primary">
                 הירשמות
@@ -205,7 +219,7 @@ const Register = () => {
                   text="signup_with"
                   onCredential={(credential) => {
                     if (!accepted) {
-                      toast.error("צריך לאשר את תנאי השימוש ומדיניות הפרטיות.");
+                      setProblem("צריך לאשר את תנאי השימוש ומדיניות הפרטיות.");
                       return;
                     }
 

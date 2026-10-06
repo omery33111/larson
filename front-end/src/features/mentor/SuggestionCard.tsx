@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import Problem from '../base/Problem'
 import { FiCheck, FiX } from 'react-icons/fi'
 import { useAppDispatch, useAppSelector } from '../../app/hooks'
 import { RuleSuggestion } from '../../models/Rule'
@@ -77,7 +78,7 @@ const SuggestionCard = ({ messageId, card }: { messageId: number, card: RuleSugg
           </button>
         </div>
 
-        {problem && <p className="rules-problem">{problem}</p>}
+        {problem && <Problem>{problem}</Problem>}
 
       </div>
     </div>

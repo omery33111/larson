@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import Dialog from '@mui/material/Dialog'
 import { FiAlertTriangle, FiTrash2, FiUploadCloud, FiX } from 'react-icons/fi'
+import Problem from '../base/Problem'
 import { useAppDispatch, useAppSelector } from '../../app/hooks'
 import {
   armDeletion, closeResume, deleteResumeAsync, disarmDeletion, getSummaryAsync,
   resetIngestion, selectConfirmResult, selectIsArmed, selectIsConfirmOpen, selectIsDeleting,
-  selectIsResumeOpen, selectIsUploading, selectSummary, uploadTradesAsync
+  selectIsResumeOpen, selectIsUploading, selectSummary, selectTradesMessage, uploadTradesAsync
 } from './tradesSlice'
 import './trades.css'
 
@@ -38,6 +39,7 @@ const ResumeDialog = () => {
   const isDeleting = useAppSelector(selectIsDeleting);
   const isUploading = useAppSelector(selectIsUploading);
   const summary = useAppSelector(selectSummary);
+  const message = useAppSelector(selectTradesMessage);
   const confirmResult = useAppSelector(selectConfirmResult);
 
   const picker = useRef<HTMLInputElement>(null);
@@ -62,6 +64,7 @@ const ResumeDialog = () => {
   const handleFile = (file: File | undefined) => {
     if (!file) return;
 
+    // `resetIngestion` also clears the message, so a second attempt starts clean.
     dispatch(resetIngestion());
     dispatch(uploadTradesAsync(file));
   };
@@ -179,6 +182,15 @@ const ResumeDialog = () => {
               accept=".csv,.tsv,.txt,.xlsx,.xlsm,.xls,.html,.htm"
               onChange={(event) => { handleFile(event.target.files?.[0]); event.target.value = ''; }}
             />
+            {/* **This had nowhere to go at all, which is worse than a toast.** `uploadTrades`,
+                `confirmTrades` and `deleteResume` all write a sentence into the slice and
+                nothing read it - so a file in a format we cannot read, a file missing a
+                required column, or an export of individual fills was refused in complete
+                silence. **And that refusal is the most useful thing this engine says**: it
+                names what is missing and how to export it correctly, which is the whole
+                reason the parser writes an explanation instead of an error. It belongs
+                under the drop zone, where the file was handed over. */}
+            {message && <Problem onClose={() => dispatch(resetIngestion())}>{message}</Problem>}
           </div>
 
           {hasResume && (

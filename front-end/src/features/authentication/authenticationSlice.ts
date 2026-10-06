@@ -77,10 +77,14 @@ export const getIndexAsync = createAsyncThunk(
 
 export const registerAsync = createAsyncThunk("authentication/register", async (user: Register, thunkAPI) => {
     try {
-        const response = await authenticationService.register(user);
-        return response.data;
+        // `register` already returns the body, so reading `.data` off it a second time - as
+        // this did - hands the reducer `undefined`.
+        return await authenticationService.register(user);
     } catch (error: any) {
-        return thunkAPI.rejectWithValue(error.response.data);
+        // The same shape as every other thunk here: a sentence, never the response object,
+        // because the reducer stores it as a string and the form renders it as one.
+        return thunkAPI.rejectWithValue(
+            error.response?.data?.error || "לא הצלחנו ליצור את החשבון. נסה שוב.");
     }
 });
 

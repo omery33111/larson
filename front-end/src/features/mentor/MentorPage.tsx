@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { FiPaperclip, FiSend, FiSquare, FiTarget, FiUploadCloud, FiX } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
-import { toast } from 'react-toastify'
+import Problem from '../base/Problem'
 import { useAppDispatch, useAppSelector } from '../../app/hooks'
 import { selectIsLogged } from '../authentication/authenticationSlice'
 import ChatMessage from '../chat/ChatMessage'
@@ -14,7 +14,8 @@ import RulesPanel from './RulesPanel'
 import UsageNotice from '../usage/UsageNotice'
 import { getUsageAsync } from '../usage/usageSlice'
 import {
-  resetIngestion, selectIsUploading, selectResumeVersion, uploadTradesAsync
+  resetIngestion, selectIsUploading, selectResumeVersion, selectTradesMessage,
+  uploadTradesAsync
 } from '../trades/tradesSlice'
 import {
   dismissPendingAsync, expectIngestion, getMentorAsync, getRulesAsync, resetMentorMessage, selectPendingFile,
@@ -92,12 +93,10 @@ const MentorPage = () => {
     // confirmed file onto the composer, without this screen having to know who confirmed it.
   }, [isLogged, resumeVersion, dispatch]);
 
-  useEffect(() => {
-    if (message) {
-      toast.error(message);
-      dispatch(resetMentorMessage());
-    }
-  }, [message, dispatch]);
+  // Held until he closes it, and shown on the composer - see the same note in ChatPage.
+  const dismiss = () => dispatch(resetMentorMessage());
+
+  const fileProblem = useAppSelector(selectTradesMessage);
 
   useEffect(() => {
     const field = box.current;
@@ -300,6 +299,14 @@ const MentorPage = () => {
           </div>
 
           <div className="chat-composer mentor-composer">
+
+            {/* Two different failures land on this composer: an answer that could not be
+                produced (the mentor's own), and a file this engine refused to read. The
+                second used to be written into the trades slice and shown nowhere at all,
+                so dropping an unreadable export here did visibly nothing. */}
+            {message && <Problem onClose={dismiss}>{message}</Problem>}
+            {fileProblem &&
+              <Problem onClose={() => dispatch(resetIngestion())}>{fileProblem}</Problem>}
 
             {/* Nothing at all until there is a reason - see UsageNotice.tsx. */}
             <UsageNotice />

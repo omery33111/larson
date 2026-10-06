@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import Problem from '../base/Problem'
 import { FiCheck, FiEdit2, FiPlus, FiX } from 'react-icons/fi'
 import { useAppDispatch } from '../../app/hooks'
 import { RulePreview, RuleTerms as Terms, TraderRule } from '../../models/Rule'
@@ -327,7 +328,7 @@ const RuleTerms = ({ rule }: { rule: TraderRule }) => {
           + ולא לסחור עם תגית מסוימת
         </button>}
 
-      {problem && <p className="rules-problem">{problem}</p>}
+      {problem && <Problem>{problem}</Problem>}
 
       <div className="terms-actions">
         <button type="button" className="app-btn app-btn-primary" onClick={save}

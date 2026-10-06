@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { toast } from 'react-toastify'
+import Problem from '../base/Problem'
 import { useAppDispatch, useAppSelector } from '../../app/hooks'
 import {
   generateProfileAsync, resetAnalyticsMessage, selectAnalyticsMessage,
@@ -30,12 +30,9 @@ const WrittenProfile = () => {
   const overview = useAppSelector(selectOverview);
   const selectedAccounts = useAppSelector(selectSelectedAccounts);
 
-  useEffect(() => {
-    if (message) {
-      toast.error(message);
-      dispatch(resetAnalyticsMessage());
-    }
-  }, [message, dispatch]);
+  // Shown inside the card it failed to fill, and kept until he closes it: generating the
+  // profile is a long call, and a notice that times out is one he can miss entirely.
+  const dismiss = () => dispatch(resetAnalyticsMessage());
 
   // Two different kinds of stale. More trades since it was written is a nudge; written
   // about a different set of accounts than the ones ticked right now is a correctness
@@ -162,6 +159,10 @@ const WrittenProfile = () => {
             </button>
           </>
         )}
+
+        {/* Below whichever half of the card is drawn, because generating is the action both
+            halves offer and the failure is always about that call. */}
+        {message && <Problem onClose={dismiss}>{message}</Problem>}
 
       </div>
 
