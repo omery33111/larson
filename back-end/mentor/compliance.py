@@ -165,6 +165,38 @@ def build_rules(statistics, currency):
 
 # ------------- THE CHECK, ONE TRADE AT A TIME:
 
+def _re_entry(rule, trade, previous):
+    """
+    Whether this trade is a re-entry inside the window after a losing one.
+
+    **Both the revenge rules run through here, and both need two things the record does not
+    always carry.** Measured, each missing piece produced a wrong answer rather than silence:
+
+    - **No outcome on the trade before it.** `_is_loss` answers False for a row with no P&L
+      and no status, so the window simply never opened and the trade was credited as kept -
+      praise for a rule nothing tested.
+    - **No entry time on this one.** Falling back to the close made the gap the distance
+      between two closes, and in an export with date-only stamps that distance is zero for
+      every consecutive pair. **A journal without intraday times would have reported a
+      revenge breach on every trade after a loss** - a wall of accusations, all invented.
+
+    The rule is about the moment he clicked, exactly like the two hour rules, and the close
+    cannot stand in for it in either direction.
+    """
+    if previous is None:
+        return None
+
+    if previous.pnl is None and not previous.outcome:
+        return None
+
+    if trade.opened_at is None:
+        return None
+
+    gap = (trade.opened_at - previous.executed_at).total_seconds() / 60
+
+    return _is_loss(previous) and 0 <= gap <= rule["value"]
+
+
 def _breaks(rule, trade, tz, previous):
     """Whether this one trade broke this one rule. None when the rule cannot be judged."""
     kind = rule["kind"]
@@ -185,13 +217,7 @@ def _breaks(rule, trade, tz, previous):
         return None if not found else found == rule["value"]
 
     if kind == "revenge":
-        if previous is None:
-            return None
-
-        opened = trade.opened_at or trade.executed_at
-        gap = (opened - previous.executed_at).total_seconds() / 60
-
-        return _is_loss(previous) and 0 <= gap <= rule["value"]
+        return _re_entry(rule, trade, previous)
 
     if kind == "size":
         return None if not trade.quantity else trade.quantity > rule["value"]
@@ -204,24 +230,33 @@ def _breaks(rule, trade, tz, previous):
     # about the moment he clicked, and judging him on the close would mark a 09:50 entry that
     # ran until 10:30 as obedient.
     if kind in ("no_before", "no_after"):
-        entry = (trade.opened_at or trade.executed_at).astimezone(tz)
+        stamp = (trade.opened_at or trade.executed_at).astimezone(tz)
         # Minutes from midnight, so 09:30 is a threshold a trader can actually set.
-        edge = entry.replace(hour = int(rule["value"]) // 60, minute = int(rule["value"]) % 60,
+        edge = stamp.replace(hour = int(rule["value"]) // 60, minute = int(rule["value"]) % 60,
                              second = 0, microsecond = 0)
 
-        return entry < edge if kind == "no_before" else entry > edge
+        before = stamp < edge
+
+        if trade.opened_at:
+            return before if kind == "no_before" else not before and stamp > edge
+
+        # **No entry time, so the close is all there is - and it only answers one of the two
+        # directions.** A trade is opened before it is closed, so a close before the cutoff
+        # proves the entry was too, and a close inside the window proves the entry was not
+        # after it. The other way round the close says nothing: an exit at 18:00 against
+        # "not after 16:00" is equally consistent with a 15:00 entry he was entitled to take.
+        #
+        # Both halves used to guess, in opposite directions - one accusing and one praising.
+        if kind == "no_before":
+            return True if before else None
+
+        return False if not stamp > edge else None
 
     if kind == "max_size":
         return None if not trade.quantity else trade.quantity > rule["value"]
 
     if kind == "no_revenge_within":
-        if previous is None:
-            return None
-
-        opened = trade.opened_at or trade.executed_at
-        gap = (opened - previous.executed_at).total_seconds() / 60
-
-        return _is_loss(previous) and 0 <= gap <= rule["value"]
+        return _re_entry(rule, trade, previous)
 
     # ------------- THE ONE HE WROTE IN HIS OWN WORDS:
     #
@@ -242,6 +277,12 @@ def _breaks(rule, trade, tz, previous):
             return None
 
         terms = rule["value"]
+
+        # **Nothing left to look for means nothing was tested.** Falling through would reach
+        # the `return False` at the bottom - "kept" - on every single trade, which is the
+        # exact false comfort the trimming upstream exists to remove.
+        if not terms.get("require") and not terms.get("forbid"):
+            return None
 
         # Tokenised once per trade rather than once per term - a short term is matched as a
         # whole word, because `tl` inside `settled` is the kind of false positive that tells
@@ -357,6 +398,8 @@ def check_plan(baseline_statistics, baseline, recent, currency = "USD",
     for trade in recent:
         by_day[trade.executed_at.astimezone(tz).date()].append(trade)
 
+    unjudged = []
+
     for rule in rules:
         offenders, judged = [], 0
 
@@ -381,6 +424,9 @@ def check_plan(baseline_statistics, baseline, recent, currency = "USD",
             if rule.get("declared"):
                 entry["declared"] = True
 
+            if not judged and rule.get("declared"):
+                unjudged.append({"rule": rule["rule"], "why": rule["why"]})
+
             if judged:
                 if offenders:
                     entry["broke"] = len(offenders)
@@ -402,9 +448,20 @@ def check_plan(baseline_statistics, baseline, recent, currency = "USD",
                 offenders.append(trade)
 
         if not judged:
-            # The trade carried nothing to judge this rule by - no duration, no setup tag.
-            # Silence is the honest answer; a "kept" here would be a rule that was never
-            # actually tested.
+            # **Silence per trade, but not silence forever.**
+            #
+            # "Kept" here would be a rule that was never tested, so it cannot go in that
+            # bucket - that part was always right. What was wrong is that it went nowhere:
+            # a rule he wrote, sitting in his panel, that the debrief **never mentions
+            # again in either direction.** From where he sits that is indistinguishable
+            # from the mentor not noticing it, and the one thing this feature cannot look
+            # like is broken software.
+            #
+            # His own rules only. An inferred one he never set is not his to wonder about,
+            # and naming every bucket the record could not answer would bury the verdict.
+            if rule.get("declared"):
+                unjudged.append({"rule": rule["rule"], "why": rule["why"]})
+
             continue
 
         entry = {
@@ -431,6 +488,11 @@ def check_plan(baseline_statistics, baseline, recent, currency = "USD",
         # leaves, exactly like `impact` and `magnitude`.
         "broken": broken,
         "kept": kept,
+        # **The third state, and it is the one that stops this reading as a bug.** A rule
+        # whose words appear in nothing he records, or a session that carried none of what
+        # it asks about, can be neither broken nor kept - and saying nothing about it in
+        # every debrief forever looks exactly like the mentor having missed it.
+        "unjudged": unjudged,
     }
 
 # ------------------------- THE PLAN CHECK END ------------------------- #

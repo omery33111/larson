@@ -186,15 +186,36 @@ DECLARED_BRIEF = """**בתוך `בדיקת_הכללים`, כל שורה שנוש
 
 **`checked` אומר על כמה עסקאות הכלל בכלל נבדק, והמספר הזה שווה אמירה כשהוא קטן.** כלל שנבדק
 על שתיים מתוך עשרים עסקאות אינו "נשמר" — הוא לא נבדק. אם זה המצב, אמור את זה במשפט אחד:
-שהעסקאות האחרות לא נשאו תגית או הערה, ולכן הן לא נספרו לכאן ולא לכאן."""
+שהעסקאות האחרות לא נשאו תגית או הערה, ולכן הן לא נספרו לכאן ולא לכאן.
+
+**ו-`unjudged` הוא כלל שהוא קבע ושאי אפשר היה לשפוט אותו כאן בכלל** — לא נשבר ולא נשמר.
+אמור את זה **במשפט אחד בסוף, ולא כממצא**: שהתנאי הזה לא נבדק הפעם, ושזה בגלל שמה שהוא מחפש
+לא מופיע על העסקאות האלה. **אל תתנצל ואל תסביר את המנגנון.**
+
+**הסיבה שזה חייב להיאמר ולא להישמט:** זה כלל שהוא כתב והוא רואה אותו ברשימה שלו. תחקיר
+שלא מזכיר אותו באף כיוון נקרא כמנטור שלא שם לב אליו, **וזו התרשמות גרועה יותר מכל פסיקה**
+— היא גורמת לו להפסיק לסמוך גם על מה שכן נאמר."""
 
 
 def _has_declared(plan):
     if not isinstance(plan, dict):
         return False
-    return any(entry.get("declared")
-               for side in ("broken", "kept")
-               for entry in plan.get(side, []) or [])
+    # **`unjudged` counts, and only his rules ever land there** - the engine appends to it
+    # behind `rule.get("declared")`, so the entries carry no flag of their own and need
+    # none. A rule of his that could not be judged is exactly the case the brief has to
+    # cover, and leaving the bucket out meant the instruction never arrived in the one
+    # debrief where the silence would be noticed.
+    #
+    # **`broken` and `kept` still have to be asked**, because an inferred rule sits in them
+    # too and carries no flag when it is not his. Defaulting those to true - which I did
+    # for one commit - attaches the declared brief to a debrief with no declared rule in
+    # it, and the model is then told to distinguish a tone it has nothing to apply it to.
+    if any(entry.get("declared")
+           for side in ("broken", "kept")
+           for entry in plan.get(side, []) or []):
+        return True
+
+    return bool(plan.get("unjudged"))
 
 
 # ------------------------- WHEN HE ASKS FOR A RULE ------------------------- #

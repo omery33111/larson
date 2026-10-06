@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import Problem from '../base/Problem'
 import Dialog from '@mui/material/Dialog'
-import { FiCheck, FiEdit3, FiPlus, FiTrash2, FiX } from 'react-icons/fi'
+import { FiAlertTriangle, FiCheck, FiEdit3, FiPlus, FiTrash2, FiX } from 'react-icons/fi'
 import { useAppDispatch, useAppSelector } from '../../app/hooks'
 import {
   closeRules, deleteRuleAsync, getRulesAsync, saveRuleAsync, selectIsRulesLoading,
-  selectHasLabels, selectIsRulesOpen, selectRuleKinds, selectRules
+  selectHasLabels, selectIsRulesOpen, selectRuleCoverage, selectRuleKinds, selectRules
 } from './mentorSlice'
 import RuleTerms from './RuleTerms'
 import './mentor.css'
@@ -102,6 +102,7 @@ const RulesPanel = () => {
   const rules = useAppSelector(selectRules);
   const kinds = useAppSelector(selectRuleKinds);
   const hasLabels = useAppSelector(selectHasLabels);
+  const coverage = useAppSelector(selectRuleCoverage);
 
   // The only local state in here, and it is the one case the convention allows: the half-typed
   // contents of the open field. It belongs to nothing but this render and is thrown away on
@@ -266,10 +267,18 @@ const RulesPanel = () => {
                   תכתוב תנאי בשפה שלך — לארסון יבדוק אותו <b>מול התגיות שסימנת</b>, בכל עסקה.
                 </p>
 
+                {/* **Not every journal is tagged, and this is the honest answer to that.**
+                    A condition in his own words is matched against the labels he writes on
+                    the trade; with none anywhere, such a rule can never fire. It used to
+                    say so and still let him save one - a commitment sitting in the panel
+                    doing nothing. Now the field is closed and the line carries the two
+                    things he can act on: which column unlocks it, and what works today.
+                    The server refuses it as well, because a screen is a courtesy. */}
                 {!hasLabels &&
                   <p className="rules-needs-tags">
-                    עוד לא תייגת עסקאות, אז תנאי כזה עדיין לא ייבדק.
-                    <b> התבניות המוכנות עובדות.</b>
+                    אין אף תגית על העסקאות שלך, ותנאי בניסוח חופשי נבדק מולן.
+                    מלא בייצוא הבא עמודת <b>סטאפ</b>, <b>תגיות</b> או <b>טעויות</b>.
+                    <b> התבניות המוכנות עובדות גם בלי.</b>
                   </p>}
 
                 {mine.map((rule) => (
@@ -303,18 +312,40 @@ const RulesPanel = () => {
                         trades are tagged `5m fvg retracement`. Only he knows that, so the
                         line that shows the mismatch is also the one that fixes it. */}
                     {editing !== `custom:${rule.id}` && <RuleTerms rule={rule} />}
+
+                    {/* **The warning the server has always computed and nobody rendered.**
+                        `coverage` came back on every save, landed in the slice, and no
+                        component read it - `.rules-coverage` sat in the stylesheet as dead
+                        CSS. That mattered more than a missing line: the verdict reports a
+                        required term nothing carries as a breach on every trade, and the
+                        reason it is allowed to is that this sentence was supposed to have
+                        told him first. The suggestion engine also stays deliberately quiet
+                        about a rule that never matched, on the written grounds that "he was
+                        already warned about that when he saved it" - so with this missing,
+                        **nothing in the product said it at all.**
+
+                        Only when a rule matches nothing while his trades do carry text: a
+                        resume with no labels is a different problem with its own line. */}
+                    {coverage?.id === rule.id && coverage.matched === 0 && coverage.answerable > 0 &&
+                      <p className="rules-coverage rules-coverage-none">
+                        <FiAlertTriangle />
+                        <span>
+                          אף עסקה לא נושאת את מה שהתנאי הזה מחפש.
+                          ייתכן שאתה מתייג את זה אחרת — <b>לדייק</b> ובחר מהתגיות שלך.
+                        </span>
+                      </p>}
                   </div>
                 ))}
 
                 {editing === CUSTOM_KIND
                   ? field()
-                  : mine.length < MAX_CUSTOM &&
+                  : hasLabels && mine.length < MAX_CUSTOM &&
                     <button type="button" className="app-btn app-btn-primary rules-add"
                             onClick={() => { setEditing(CUSTOM_KIND); setValue(''); }}>
                       <FiPlus /> {mine.length ? 'תנאי נוסף' : 'לכתוב תנאי'}
                     </button>}
 
-                {!mine.length && !writing &&
+                {hasLabels && !mine.length && !writing &&
                   <ul className="rules-examples">
                     {EXAMPLES.map((example) => (
                       <li key={example}>

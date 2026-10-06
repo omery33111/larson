@@ -1,7 +1,7 @@
 from analytics.formatting import minutes, money, ratio, trades as trade_count
 from analytics.statistics import _split_tags, clean_label
 
-from .interpret import interpret, vocabulary
+from .interpret import _tokens, interpret, matches, vocabulary
 from .models import TraderRule
 
 
@@ -28,11 +28,105 @@ def clock(minutes):
     return f"{total // 60:02d}:{total % 60:02d}"
 
 
-def declared_rules(user, currency = "USD"):
-    """Every active commitment, in the checker's shape. Empty when he has set none."""
-    rows = TraderRule.objects.filter(user = user, is_active = True)
+def declared_rules(user, currency = "USD", for_judging = False):
+    """
+    Every active commitment, in the checker's shape. Empty when he has set none.
 
-    return [translated for translated in (_translate(row, currency) for row in rows) if translated]
+    **`for_judging` is the whole distinction, and putting it in one function rather than
+    two is deliberate**: the list he reads and the list the loop judges have to come from
+    the same place, or they drift and nobody notices which one is stale.
+
+    Off - the default - this is **what he has committed to**, and it is what goes into the
+    prompt. A rule must never fall out of that list: Larson telling him he has one rule when
+    he has two is the same failure as Larson inventing a rule he never set, and the fix for
+    that one was to say the list is complete.
+
+    On, it is **what this record can actually answer**, which is a smaller thing. A ban on a
+    word no trade carries is dropped, because the loop would otherwise count it as kept on
+    every trade - praise for something never tested. A second rule that asks exactly what
+    the first asks is dropped, because the loop would otherwise report the same trade twice.
+    Neither is a judgement about whether he should hold the rule; both are about what the
+    verdict is entitled to say.
+    """
+    rows = TraderRule.objects.filter(user = user, is_active = True).order_by("id")
+
+    known = vocabulary(user) if for_judging else ()
+    out, seen = [], set()
+
+    for row in rows:
+        translated = _translate(row, currency)
+
+        if not translated:
+            continue
+
+        if for_judging and translated["kind"] == TraderRule.CUSTOM:
+            translated = _judgeable(translated, known)
+
+            if not translated:
+                continue
+
+            # **Two rules that look for exactly the same words are one rule**, and the
+            # debrief used to report the same trade under both - the double-reporting
+            # problem wearing a different hat. The unique constraint deliberately exempts
+            # the free-text kind, because "only with IFVG" and "not during news" are both
+            # true at once; it cannot tell that two of them are the same test. Oldest wins,
+            # because that is the one he has been living with.
+            fingerprint = _fingerprint(translated["value"])
+
+            if fingerprint in seen:
+                continue
+
+            seen.add(fingerprint)
+
+        out.append(translated)
+
+    return out
+
+
+def _fingerprint(terms):
+    """Two term sets that ask the same question, regardless of how they were written."""
+    require = tuple(sorted(tuple(sorted(set(group))) for group in terms.get("require", [])))
+    return require, tuple(sorted(set(terms.get("forbid", []))))
+
+
+def _judgeable(rule, known):
+    """
+    The rule with the half the record cannot answer removed, or `None` if nothing is left.
+
+    **The two sides are not symmetric, and getting that wrong was my first attempt.** I made
+    both of them drop out when no label in his record matches, and a locked test caught it:
+    a trade tagged `breakout` against "only with IFVG" went from a named breach to silence.
+
+    From the data those two cases are **identical** - a required term matching nothing is
+    either a plan he has never once followed or a condition the record cannot express, and
+    no vocabulary can separate them. So a `require` side is judged as written: the decision
+    was already made, and it is the save screen's to make. `coverage` tells him `0` before
+    the rule is stored, and a rule he keeps after being told that is his.
+
+    **A `forbid` side is different, and this is the half that was genuinely wrong.** A ban
+    that can never fire is not satisfied, it is **untested** - and the engine counted it as
+    kept on every trade. That is praise nobody earned, and the product's own rule says a
+    rule that could not be judged is never counted as kept. Measured: "no trading during
+    news" came back `kept` on a record with no news column anywhere.
+    """
+    terms = rule["value"]
+
+    def expressible(term):
+        return any(matches(term, label, _tokens(label)) for label in known)
+
+    # A group with nothing in it is satisfied by nothing, so it would break every trade -
+    # a rule no trade can keep, which is the one shape that is wrong no matter who wrote it.
+    require = [group for group in terms.get("require", []) if group]
+
+    forbid = [term for term in terms.get("forbid", []) if expressible(term)]
+
+    # **Trimmed, never dropped - and that correction mattered.** The first version returned
+    # `None` when nothing judgeable was left, which removed the rule from the loop entirely
+    # and so from the one bucket that exists to tell him about it. The rule he most needs a
+    # word about became the rule the debrief could not mention. It travels with both sides
+    # empty instead; `_breaks` answers "cannot judge" for that shape, which is the honest
+    # verdict and lands it under `unjudged`.
+    return {**rule, "value": {"require": require, "forbid": forbid}}
 
 
 def _translate(row, currency):
@@ -126,6 +220,13 @@ def day_verdict(rule, day_rows):
 
     if rule["kind"] == TraderRule.MAX_DAILY_LOSS:
         limit = abs(rule["value"])
+
+        # **A day with no P&L on it cannot answer a daily stop.** It used to return "kept",
+        # which is praise for a rule that was never tested - the same false comfort as a
+        # ban on a word the record does not carry.
+        if all(trade.pnl is None for trade in rows):
+            return None, None
+
         running = 0.0
         for trade in rows:
             if trade.pnl is None:
@@ -170,6 +271,20 @@ def conflicts_with(user, kind, terms = None, number = None, ignore_id = None):
 
         if against_itself:
             return None, sorted(against_itself)[0]
+
+        # **And a rule that asks exactly what another one asks is the same rule.** The
+        # unique constraint exempts the free-text kind on purpose - two different conditions
+        # are both true at once - but it cannot see that two of them are the same test, and
+        # the debrief reported the same trade under both. Judging drops the duplicate as a
+        # second line of defence; this is the one that tells him, while he can still change
+        # what he meant.
+        mine_print = _fingerprint(terms)
+
+        for row in rows.filter(kind = TraderRule.CUSTOM):
+            theirs = row.terms if isinstance(row.terms, dict) else {}
+
+            if theirs and _fingerprint(theirs) == mine_print:
+                return row, None
 
         for row in rows.filter(kind = TraderRule.CUSTOM):
             theirs = row.terms if isinstance(row.terms, dict) else {}

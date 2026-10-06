@@ -184,7 +184,13 @@ const RuleTerms = ({ rule }: { rule: TraderRule }) => {
             editor - which is where somebody who wants the detail is already going. */}
         {typeof rule.matched === 'number' &&
           <span className={`rules-hits ${rule.matched ? '' : 'rules-hits-none'}`}>
-            {rule.matched} עסקאות
+            {/* **Zero says it in words, every other number stays a number.** The count is
+                the right shape for "23 trades" - it teaches faster than a sentence. But a
+                bare `0` reads as data, and this one is a state: the rule is not being
+                checked at all. The save-time warning covers the moment he writes it; this
+                is what he sees on every visit afterwards, and without it the only evidence
+                that a rule is inert is a digit he has to interpret. */}
+            {rule.matched ? `${rule.matched} עסקאות` : 'לא נמצא באף עסקה'}
           </span>}
 
         <button type="button" className="rules-edit-terms" onClick={start}>

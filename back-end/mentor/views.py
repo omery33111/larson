@@ -1,5 +1,6 @@
 import logging
 
+from collections import Counter
 from django.conf import settings
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -225,7 +226,8 @@ def stream(request):
         # them the same shape, so the checker needs no special case and the offending trade
         # is named the same way either way.
         plan = check_plan(compute_statistics(baseline), baseline, recent, currency, zone,
-                          declared = declared_rules(request.user, currency))
+                          declared = declared_rules(request.user, currency,
+                                                    for_judging = True))
 
         # The plan check already decided this; reading it is free. Broken rules outrank kept
         # ones - a debrief that found a repeat offence is not a green day whatever else went
@@ -324,10 +326,31 @@ def _currency(trades):
 
 
 def _timezone(trades):
-    for trade in trades:
-        if trade.source_timezone:
-            return trade.source_timezone
-    return "Asia/Jerusalem"
+    """
+    The one clock the whole debrief is judged in.
+
+    **It is the trader's wall clock, not the file's** - "I do not enter before ten" is about
+    the moment he clicked, wherever the export happened to be stamped. There is no field for
+    where he sits, so the zone his files carry is the best evidence of it, and every rule
+    about an hour uses this one answer rather than each trade's own.
+
+    **Judging each trade in its own `source_timezone` was considered and is wrong**: a US
+    broker exporting New York time does not move the trader to New York, and it would have
+    compared his 10:00 against two different tens in the same debrief.
+
+    What changed is only how the one zone is picked. It used to be whichever row came out of
+    the database first - correct whenever his files agree, and an arbitrary coin toss when
+    they do not. The commonest one is the same answer in the ordinary case and a defensible
+    one in the rare case, for three lines.
+    """
+    counted = Counter(trade.source_timezone for trade in trades if trade.source_timezone)
+
+    if not counted:
+        return "Asia/Jerusalem"
+
+    # `most_common` breaks ties by insertion order, so an even split still lands on the
+    # zone that appears first - deterministic rather than whichever row the query returned.
+    return counted.most_common(1)[0][0]
 
 # ------------------------- THE DEBRIEF END ------------------------- #
 
@@ -427,6 +450,36 @@ def save_rule(request):
         # `5m fvg retracement`.
         supplied = request.data.get("terms")
 
+        # **A trader who tags nothing cannot have a rule in his own words, and he is told
+        # why rather than left to find out.**
+        #
+        # Not every journal is tagged - plenty export a date, a symbol and a P&L and nothing
+        # else - and a condition in his own words is matched against the labels he writes on
+        # the trade. With no labels anywhere, every such rule is unjudgeable from the moment
+        # it is saved: it would sit in the panel looking like a commitment and never once
+        # fire. **A feature that quietly does nothing is worse than one that says it cannot
+        # help**, and the gate is here and not only on the screen for the same reason the
+        # empty-resume gate is: a screen is a courtesy, a condition in code is the rule.
+        #
+        # The sentence names the three columns that unlock it, because that is a thing he
+        # can actually do before his next export - and says the templates still work, since
+        # they read numbers his record already carries.
+        if not vocabulary(request.user):
+            # **Two different empties, and one message for both would be wrong for one of
+            # them.** A trader with no trades at all has not failed to tag anything; he
+            # simply has not started. Telling him to fill a column he has never exported
+            # reads as the product misunderstanding him.
+            seen_any = Trade.objects.filter(user = request.user).exists()
+
+            return Response({
+                "error": ("תנאי בניסוח שלך נבדק מול התגיות שאתה רושם על העסקאות, "
+                          "ובעסקאות שלך אין אף תגית. מלא בייצוא הבא עמודת סטאפ, תגיות "
+                          "או טעויות — והתנאים ייפתחו. התבניות המוכנות עובדות גם בלי."
+                          if seen_any else
+                          "לארסון עוד לא ראה אף עסקה שלך. העלה קובץ, ואז אפשר לכתוב תנאי "
+                          "במילים שלך — הוא ייבדק מול התגיות שבקובץ."),
+            }, status = status.HTTP_400_BAD_REQUEST)
+
         if supplied:
             terms = validate_his_own(supplied)
 
@@ -458,6 +511,14 @@ def save_rule(request):
             if other is None:
                 return Response({"error": f"התנאי הזה דורש {quoted(word)} ואוסר אותו באותה "
                                           f"נשימה — אין עסקה שיכולה לקיים אותו."},
+                                status = status.HTTP_400_BAD_REQUEST)
+
+            # `word` is None when the collision is that the two look for exactly the same
+            # thing - nothing contradicts, so there is no term to name.
+            if word is None:
+                return Response({"error": f"זה בודק בדיוק את מה שכלל קיים כבר בודק — "
+                                          f"{quoted(clean_label(other.text, MAX_RULE_LENGTH))}. "
+                                          f"ערוך אותו במקום להוסיף עוד אחד."},
                                 status = status.HTTP_400_BAD_REQUEST)
 
             # **Every term he wrote goes through `quoted`**, which keeps a latin run from

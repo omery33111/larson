@@ -614,11 +614,22 @@
 
 /* **The line that stops the feature from lying.** Quiet, because it is information and not
    an error - unless there is nothing to check at all, which he does need to notice. */
+/* **Rendered at last.** The server computed this on every save, the slice stored it, and
+   no component read it - the class sat here as dead CSS while the one sentence that was
+   supposed to warn him never appeared. See the note in RulesPanel. */
 .rules-coverage {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
   margin: 0.55rem 0 0;
   font-size: 0.79rem;
   line-height: 1.65;
   color: #8b909c;
+}
+
+.rules-coverage svg {
+  flex: none;
+  margin-top: 0.22rem;
 }
 
 .rules-coverage b { color: #c9ccd3; }
