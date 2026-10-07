@@ -18,6 +18,12 @@ export interface UsageState {
     fullyRenewsAt: string | null;
     windowHours: number;
 
+    // The three the screen says a sentence out of. A percentage is a fraction of a number
+    // he has never seen; **an answer count and one moment are the only units he can act on.**
+    answersLeft: number;
+    nextAnswerAt: string | null;
+    scope: 'day' | 'week';
+
     isLoaded: boolean;
 }
 
@@ -30,6 +36,9 @@ const initialState: UsageState = {
     renewsAt: null,
     fullyRenewsAt: null,
     windowHours: 24,
+    answersLeft: 0,
+    nextAnswerAt: null,
+    scope: 'day',
     isLoaded: false,
 };
 
@@ -43,7 +52,31 @@ export interface UsagePayload {
     renews_at: string | null;
     fully_renews_at?: string | null;
     window_hours: number;
+    answers_left?: number;
+    next_answer_at?: string | null;
+    scope?: 'day' | 'week';
 }
+
+
+/**
+ * **One place that absorbs the payload, because there are two callers and they drifted.**
+ * The endpoint and the `done` event carry the same body, and each had its own copy of this
+ * assignment - so a field added to one reached the screen only on some of the paths that
+ * set it, which is the kind of gap nothing reports.
+ */
+const absorb = (state: UsageState, body: UsagePayload) => {
+    state.usedPercent = body.used_percent;
+    state.remainingPercent = body.remaining_percent;
+    state.shouldWarn = body.should_warn;
+    state.exhausted = body.exhausted;
+    state.renewsAt = body.renews_at;
+    state.fullyRenewsAt = body.fully_renews_at ?? null;
+    state.windowHours = body.window_hours;
+    state.answersLeft = body.answers_left ?? 0;
+    state.nextAnswerAt = body.next_answer_at ?? null;
+    state.scope = body.scope ?? 'day';
+    state.isLoaded = true;
+};
 
 
 export const getUsageAsync = createAsyncThunk("usage/get", async () => {
@@ -68,29 +101,13 @@ export const usageSlice = createSlice({
             const body = action.payload;
             if (!body) return;
 
-            state.usedPercent = body.used_percent;
-            state.remainingPercent = body.remaining_percent;
-            state.shouldWarn = body.should_warn;
-            state.exhausted = body.exhausted;
-            state.renewsAt = body.renews_at;
-            state.fullyRenewsAt = body.fully_renews_at ?? null;
-            state.windowHours = body.window_hours;
-            state.isLoaded = true;
+            absorb(state, body);
         },
     },
 
     extraReducers: (builder) => {
         builder.addCase(getUsageAsync.fulfilled, (state, action) => {
-            const body = action.payload as UsagePayload;
-
-            state.usedPercent = body.used_percent;
-            state.remainingPercent = body.remaining_percent;
-            state.shouldWarn = body.should_warn;
-            state.exhausted = body.exhausted;
-            state.renewsAt = body.renews_at;
-            state.fullyRenewsAt = body.fully_renews_at ?? null;
-            state.windowHours = body.window_hours;
-            state.isLoaded = true;
+            absorb(state, action.payload as UsagePayload);
         });
     },
 })
@@ -103,6 +120,9 @@ export const selectIsExhausted = (state: RootState) => state.usage.exhausted;
 export const selectRenewsAt = (state: RootState) => state.usage.renewsAt;
 
 export const selectFullyRenewsAt = (state: RootState) => state.usage.fullyRenewsAt;
+export const selectAnswersLeft = (state: RootState) => state.usage.answersLeft;
+export const selectNextAnswerAt = (state: RootState) => state.usage.nextAnswerAt;
+export const selectScope = (state: RootState) => state.usage.scope;
 
 export const { usageReported } = usageSlice.actions;
 

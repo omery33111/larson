@@ -62,6 +62,26 @@ OUTPUT_WEIGHT = 5
 CACHE_WRITE_WEIGHT = 2.0
 CACHE_READ_WEIGHT = 0.1
 
+# What one ordinary answer costs, measured in October 2026 against a 233-trade resume: a
+# cached turn at `effort: medium`. **It exists so the trader is never shown a bare
+# percentage.** "10% left" is a fraction of a number he has never seen and cannot act on;
+# "about 12 more answers" is the only unit he thinks in.
+#
+# **Deliberately the medium figure and not the cheaper one.** Past the warning line Larson
+# drops to `low`, which costs 4,747 - so the count quoted here is the floor and he gets at
+# least that many. A promise that runs out early is the one direction this must not fail in.
+TYPICAL_ANSWER = 5_937
+
+# **How few answers have to be left before anything is said at all**, and it is a count and
+# not a percentage because a percentage of a week means something different from a percentage
+# of a day. Ten per cent of the week is twenty-five answers - a notice there would be
+# arriving two full sessions early and teaching exactly the rationing the panel exists to
+# avoid. Ten per cent of the day is five, which is a real warning.
+#
+# Ten is about two sessions of notice: enough that the ceiling is never a surprise, not so
+# much that a line hovers over the chat for days.
+WARN_BELOW_ANSWERS = 10
+
 
 def warn_at():
     """
@@ -213,9 +233,87 @@ def _wall_clock(moment):
     if days == 1:
         return f"מחר ב-{clock}"
 
-    # The window is capped at a day, so this cannot happen today - but a config change
-    # should not quietly turn the sentence back into a lie.
+    # **A weekday, because the window is a week now and a date is something he has to
+    # decode.** "ביום שלישי" lands immediately; "ב-13/10" makes him look at a calendar to
+    # find out whether that is soon. Monday is 0 in Python and Sunday starts the week here.
+    if days <= 6:
+        names = ["שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת", "ראשון"]
+        return f"ביום {names[local.weekday()]} ב-{clock}"
+
+    # Seven days out a weekday name stops being unambiguous - "Tuesday" could be either one.
     return local.strftime("ב-%d/%m בשעה ") + clock
+
+
+def near_ceiling(user):
+    """
+    Whether he is into the last tenth of whichever budget binds.
+
+    **Separate from `should_warn`, and the split is the point.** The panel asks "is this
+    worth his attention yet", which is a question about how many answers are left. This asks
+    "should Larson start spending less per answer", which is a question about how much money
+    is left - and tying the second to the first would mean every time the notice got quieter
+    the budget stretched less, for no reason anybody intended.
+    """
+    return binding(user)[0] >= warn_at()
+
+
+def answers_left(user):
+    """
+    Roughly how many more ordinary answers the remaining budget buys, on whichever ceiling
+    is nearer. Floored, so it is never an over-promise.
+    """
+    share, span = binding(user)
+    total = burst_allowance() if span == burst_window() else allowance()
+
+    return max(int(total * (1 - min(share, 1.0))) // TYPICAL_ANSWER, 0)
+
+
+def _frees_at(user, span, total, needed):
+    """
+    When enough of a rolling window has aged out to pay for `needed` units.
+
+    **A rolling window gives budget back a little at a time, and that is exactly what makes
+    it hard to describe.** "Some of it in about forty minutes" is true and answers nothing -
+    he cannot tell whether that buys one question or none. So instead of narrating the
+    mechanism, the spends are walked oldest-first and the moment the freed total covers one
+    answer is returned. That moment is the only thing he wants to know.
+    """
+    room = total - spent(user, span)
+
+    if room >= needed:
+        return None                       # he can ask right now; nothing to wait for
+
+    rows = (TokenSpend.objects
+            .filter(user = user, **{WITHIN: _since(span)})
+            .order_by("created_at"))
+
+    freed = 0
+    for row in rows:
+        freed += units(row.input_tokens, row.output_tokens,
+                       row.cache_write_tokens, row.cache_read_tokens)
+
+        if room + freed >= needed:
+            return row.created_at + span
+
+    # Everything in the window ages out and it is still not enough - which can only happen
+    # if one answer costs more than the whole allowance. Say when the window empties.
+    return fully_renewed_at(user, span)
+
+
+def next_answer_at(user):
+    """
+    When he can ask his next question. **Both ceilings have to clear, so it is the later
+    of the two** - telling him the day has freed up while the week still refuses him is the
+    same broken promise in a smaller package.
+    """
+    moments = [_frees_at(user, window(), allowance(), TYPICAL_ANSWER)]
+
+    if burst_allowance():
+        moments.append(_frees_at(user, burst_window(), burst_allowance(), TYPICAL_ANSWER))
+
+    waits = [m for m in moments if m]
+
+    return max(waits) if waits else None
 
 
 def binding(user):
@@ -244,17 +342,29 @@ def state(user):
 
     when = renews_at(user, span)
 
+    nxt = next_answer_at(user)
+
     return {
         "used_percent": round(share * 100),
         "remaining_percent": round(max(1 - share, 0) * 100),
         "exhausted": not has_room(user),
-        "should_warn": share >= warn_at(),
+        # **Both, and they answer different halves of the same question.** The share says
+        # he is near a ceiling; the count says whether that is worth his attention yet.
+        "should_warn": share >= warn_at() and answers_left(user) <= WARN_BELOW_ANSWERS,
         "renews_at": when.isoformat() if when else None,
         # **The panel above the chat is the one he reads**, and it only had the partial
         # time - the half that is a countdown rather than something he can plan around.
         "fully_renews_at": (lambda f: f.isoformat() if f else None)(
             fully_renewed_at(user, span)),
         "window_hours": int(span.total_seconds() // 3600),
+
+        # **The three the screen actually says a sentence out of**, and all three exist
+        # because a percentage of an unseen number is not something anybody can act on.
+        "answers_left": answers_left(user),
+        "next_answer_at": nxt.isoformat() if nxt else None,
+        # Which ceiling stopped him. "today" and "this week" recover on completely
+        # different scales, and promising the wrong one is the whole failure.
+        "scope": "day" if span == burst_window() else "week",
     }
 
 
@@ -327,45 +437,48 @@ def site_exhausted():
     return bool(ceiling) and site_spent() >= ceiling
 
 
+def when_phrase(moment):
+    """
+    One time, said the way a person would say it.
+
+    Under two hours a countdown is what he wants - "in about forty minutes" is something he
+    can wait out. Past that a countdown is useless and a clock time is something he can plan
+    around, which is the whole reason `_wall_clock` carries the day with it.
+    """
+    minutes = max(round((moment - timezone.now()).total_seconds() / 60), 1)
+
+    if minutes < 60:
+        return f"בעוד כ-{minutes} דקות"
+    if minutes < 120:
+        return "בעוד כשעה" if minutes < 90 else "בעוד כשעה וחצי"
+
+    return _wall_clock(moment)
+
+
 def exhausted_message(user):
     """
-    Said in the product's voice rather than as an error code, and it says when.
+    What he reads the moment Larson refuses him, and it has to answer the only question he
+    has: **when can I ask again.**
 
-    A limit with no horizon reads as a fault; the same limit with "in about two hours" reads
-    as a queue.
+    Three things this replaced got wrong, and each produced a question rather than closing
+    one. It said "today's quota" **whichever ceiling had stopped him** - so a trader held by
+    the week was sent away until tomorrow and found the same wall. It said "some of it frees
+    up in about forty minutes", and *some* is unanswerable: he cannot tell whether that buys
+    a question or none of one. And it then gave a **second** time for when the allowance is
+    whole, leaving him to work out which of the two he was supposed to plan around.
+
+    So: the ceiling named correctly, one moment, and that moment is the next time an answer
+    actually fits - not the next time anything at all frees up.
     """
     # The site ceiling is not this trader's fault and must not be described as his doing.
     if site_exhausted() and spent(user) < allowance():
-        return ("המערכת הגיעה לתקרת השימוש היומית הכוללת שלה. "
-                "זה לא קשור למכסה שלך — נסה שוב עוד זמן קצר.")
+        return ("לארסון הגיע לתקרת השימוש היומית של כל המערכת. "
+                "זה לא קשור למכסה שלך — נסה שוב בעוד זמן קצר.")
 
-    # **Stopped by the day is a different sentence from stopped by the week**, and saying the
-    # wrong one costs trust in opposite directions: "come back in a few hours" to somebody
-    # who has days to wait is a lie, and "come back in a few days" to somebody with hours
-    # sends him away for nothing.
-    _, span = binding(user)
-    when = renews_at(user, span)
+    period = "של היום" if binding(user)[1] == burst_window() else "השבועית"
+    when = next_answer_at(user)
 
     if not when:
-        return "הגעת למכסת השימוש. היא מתחדשת בהמשך היום."
+        return f"הגעת למכסת השימוש {period}. נסה שוב בעוד זמן קצר."
 
-    # Rounded rather than floored: an hour away is 3,599.9 seconds by the time this runs,
-    # and flooring turns "about an hour" into "about 59 minutes" - which is true, and reads
-    # like the number was measured rather than estimated.
-    minutes = max(round((when - timezone.now()).total_seconds() / 60), 1)
-
-    if minutes < 60:
-        soon = f"חלק ממנה מתפנה בעוד כ-{minutes} דקות"
-    else:
-        hours = minutes // 60
-        soon = "חלק ממנה מתפנה בעוד " + ("כשעה" if hours == 1 else f"כ-{hours} שעות")
-
-    # **And the hour it is whole again, because "some of it, in about four hours" is a
-    # countdown he has to keep re-reading.** A clock time is something he can plan around -
-    # and it is the question he actually asked when he saw the first half of this sentence.
-    full = fully_renewed_at(user, span)
-
-    if full:
-        return f"הגעת למכסת השימוש להיום. {soon}, והיא מלאה שוב {_wall_clock(full)}."
-
-    return f"הגעת למכסת השימוש להיום. {soon}."
+    return f"הגעת למכסת השימוש {period}. תוכל לשאול שוב {when_phrase(when)}."

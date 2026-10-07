@@ -10,6 +10,7 @@ from django.test import override_settings
 from django.utils import timezone
 
 import json
+import re
 
 from chat.context import (EFFORT, NEAR_THE_CEILING_EFFORT, build_messages,
                           build_system, effort_for)
@@ -296,9 +297,12 @@ class WindowTests(APITestCase):
         self.spend(20000, 0, hours_ago = 23)
         self.assertIn("כשעה", budget.exhausted_message(self.user))
 
+        # **Past two hours a countdown stops being useful and a clock time starts**, because
+        # "in about four hours" is something he has to keep re-reading and "at 06:36" is
+        # something he can plan around.
         TokenSpend.objects.all().delete()
         self.spend(20000, 0, hours_ago = 20)
-        self.assertIn("כ-4 שעות", budget.exhausted_message(self.user))
+        self.assertRegex(budget.exhausted_message(self.user), "[0-9]{2}:[0-9]{2}")
 
 
     # ------------- WHAT THE CLIENT IS TOLD:
@@ -586,7 +590,11 @@ class ReportTests(APITestCase):
 
 # Six hours because these test the *clock*, not the policy - the arithmetic below is written
 # against a window short enough to state in a sentence, and it holds for any length.
-@override_settings(AI_USER_WINDOW_HOURS = 6, AI_BURST_UNITS = 0)
+# **10,000 because a row here is 6,000 units** (`input + 5 x output` on 1,000 each), so two
+# of them clear the ceiling and one leaves less than a single answer's worth behind. The
+# class spent 6,000 against the real 1,450,000 default and was never over anything - the
+# message only looked right because the version it replaced computed a wait either way.
+@override_settings(AI_USER_WINDOW_HOURS = 6, AI_BURST_UNITS = 0, AI_USER_UNITS = 10_000)
 class RenewalClockTests(APITestCase):
     """
     **"Some of it, in about four hours" is a countdown he has to keep re-reading.**
@@ -619,14 +627,20 @@ class RenewalClockTests(APITestCase):
         self.assertLess(first, whole)
         self.assertAlmostEqual((whole - timezone.now()).total_seconds() / 3600, 5, delta = 0.1)
 
-    def test_the_message_names_the_hour(self):
+    def test_the_message_names_one_moment_and_what_it_is_for(self):
+        """
+        **It used to name two**, and leave him to work out which to plan around: when some
+        of the allowance frees up, and when it is whole again. Now there is one, and it is
+        the moment an answer actually fits.
+        """
         self.spend(ago_hours = 5)
         self.spend(ago_hours = 1)
 
         message = budget.exhausted_message(self.user)
 
-        self.assertIn("מלאה שוב", message)
+        self.assertIn("תוכל לשאול שוב", message)
         self.assertRegex(message, "[0-9]{2}:[0-9]{2}")
+        self.assertNotIn("חלק ממנה", message)
 
     def test_the_hour_is_his_clock_and_not_the_server_s(self):
         """
@@ -888,3 +902,163 @@ class WeeklyBudgetTests(APITestCase):
         days_to_empty_the_week = budget.allowance() / budget.burst_allowance()
 
         self.assertGreater(days_to_empty_the_week, 4)
+
+
+# ------------------------- WHAT HE READS WHEN HE RUNS OUT ------------------------- #
+
+@override_settings(AI_USER_UNITS = 1_450_000, AI_USER_WINDOW_HOURS = 168,
+                   AI_BURST_UNITS = 350_000, AI_BURST_WINDOW_HOURS = 24,
+                   AI_GLOBAL_DAILY_UNITS = 0, AI_WARN_AT = 0.90)
+class UsageWordingTests(APITestCase):
+    """
+    **The copy is the feature here, and the version this replaced produced a question for
+    every one it closed.**
+
+    It said "today's quota" whichever ceiling had stopped him - so a trader held by the week
+    was sent away until tomorrow and met the same wall. It said "some of it frees up in
+    about forty minutes", and *some* is unanswerable: he cannot tell whether that buys a
+    question or none of one. It then gave a **second** time, for when the allowance is whole,
+    leaving him to decide which of the two to plan around. And the figure above all of it was
+    a percentage of a number he has never been shown.
+
+    So these lock four things: the ceiling named correctly, one moment, that moment being
+    when an answer actually fits, and a count instead of a fraction.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username = "omer", password = "Tr4de-Pl4n!x")
+
+    def spend(self, units_wanted, ago_hours = 0):
+        row = TokenSpend.objects.create(user = self.user, kind = "chat",
+                                        input_tokens = units_wanted, output_tokens = 0)
+        if ago_hours:
+            TokenSpend.objects.filter(id = row.id).update(
+                created_at = timezone.now() - timedelta(hours = ago_hours))
+
+    def empty_the_week(self):
+        for days in (2, 3, 4, 5):
+            self.spend(400_000, ago_hours = days * 24)
+
+    # ------------- THE CEILING IT NAMES:
+
+    def test_the_day_is_called_the_day(self):
+        self.spend(400_000)
+
+        self.assertIn("של היום", budget.exhausted_message(self.user))
+        self.assertEqual(budget.state(self.user)["scope"], "day")
+
+    def test_the_week_is_never_called_today(self):
+        """
+        **The lie that cost the most.** Held by the week and told "today", he comes back
+        tomorrow, meets the same wall, and from then on reads every limit as a fault.
+        """
+        self.empty_the_week()
+
+        message = budget.exhausted_message(self.user)
+
+        self.assertIn("השבועית", message)
+        self.assertNotIn("היום", message)
+        self.assertEqual(budget.state(self.user)["scope"], "week")
+
+    # ------------- ONE MOMENT, AND WHAT IT IS FOR:
+
+    def test_it_names_one_time_and_not_two(self):
+        self.spend(400_000)
+
+        message = budget.exhausted_message(self.user)
+
+        self.assertEqual(len(re.findall(r"[0-9]{1,2}:[0-9]{2}", message)), 1, message)
+        self.assertNotIn("חלק ממנה", message)
+        self.assertNotIn("מלאה שוב", message)
+
+    def test_the_moment_is_when_an_answer_fits_and_not_when_anything_frees(self):
+        """
+        **A rolling window hands budget back a crumb at a time**, so "when something frees
+        up" is almost always sooner than "when you can ask again" - and quoting the first
+        sends him back to a wall he was just told he had cleared.
+        """
+        self.spend(1_000, ago_hours = 23)         # ages out first, and buys nothing at all
+        self.spend(360_000, ago_hours = 10)       # this is the one that has to fall out
+
+        first_crumb = budget.renews_at(self.user, budget.burst_window())
+        usable = budget.next_answer_at(self.user)
+
+        self.assertFalse(budget.has_room(self.user))
+        self.assertGreater(usable, first_crumb)
+
+    def test_nothing_to_wait_for_is_said_as_nothing_to_wait_for(self):
+        """An answer already fits, so the sentence must not invent a wait."""
+        self.spend(10_000)
+
+        self.assertIsNone(budget.next_answer_at(self.user))
+
+    # ------------- A COUNT, NOT A FRACTION:
+
+    def test_he_is_told_in_answers(self):
+        self.spend(350_000 - 6 * budget.TYPICAL_ANSWER)
+
+        self.assertEqual(budget.state(self.user)["answers_left"], 6)
+
+    def test_the_count_never_promises_more_than_it_buys(self):
+        """Floored, and priced at `medium` - past the warning line Larson answers at `low`,
+        which is cheaper, so the figure quoted is the floor and never the hope."""
+        self.spend(350_000 - int(budget.TYPICAL_ANSWER * 3.9))
+
+        self.assertEqual(budget.state(self.user)["answers_left"], 3)
+
+    # ------------- WHEN IT APPEARS AT ALL:
+
+    def test_a_tenth_of_a_week_is_not_worth_saying(self):
+        """
+        **Ten per cent of a week is twenty-five answers**, and a notice there arrives two
+        sessions early and teaches the rationing the panel exists to prevent. Ten per cent
+        of a day is five, which is a real warning. The count is what separates them.
+        """
+        for days in (2, 3, 4, 5):
+            self.spend(335_000, ago_hours = days * 24)     # 1,340,000 = 92% of the week
+
+        state = budget.state(self.user)
+
+        self.assertGreaterEqual(state["used_percent"], 90)
+        self.assertGreater(state["answers_left"], budget.WARN_BELOW_ANSWERS)
+        self.assertFalse(state["should_warn"])
+
+    def test_a_tenth_of_a_day_is(self):
+        self.spend(320_000)
+
+        self.assertTrue(budget.state(self.user)["should_warn"])
+
+    def test_the_soft_landing_does_not_follow_the_notice(self):
+        """
+        **They were one line until the notice was gated on the count, and they answer
+        different questions.** The panel asks whether this is worth his attention; the
+        effort switch asks whether there is little money left. Tying the second to the first
+        would mean a quieter notice silently buying him less budget.
+        """
+        for days in (2, 3, 4, 5):
+            self.spend(335_000, ago_hours = days * 24)
+
+        self.assertFalse(budget.state(self.user)["should_warn"])
+        self.assertTrue(budget.near_ceiling(self.user))
+        self.assertEqual(effort_for(self.user), NEAR_THE_CEILING_EFFORT)
+
+    # ------------- AND THE DAY IT LANDS ON:
+
+    def test_a_week_away_is_a_weekday_and_not_tomorrow(self):
+        """
+        **The formatter only knew today and tomorrow**, so once the budget became a week
+        anything further out printed as "tomorrow" - a wrong answer to the single question
+        this sentence exists to answer.
+        """
+        said = budget._wall_clock(timezone.now() + timedelta(days = 3))
+
+        self.assertIn("ביום", said)
+        self.assertNotIn("מחר", said)
+
+    def test_the_site_ceiling_is_not_described_as_his_doing(self):
+        with override_settings(AI_GLOBAL_DAILY_UNITS = 1):
+            self.spend(1_000)
+
+            message = budget.exhausted_message(self.user)
+
+        self.assertIn("לא קשור למכסה שלך", message)

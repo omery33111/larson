@@ -1,65 +1,77 @@
 import { FiClock } from 'react-icons/fi'
 import { useAppSelector } from '../../app/hooks'
 import {
-  selectFullyRenewsAt, selectIsExhausted, selectRemainingPercent, selectRenewsAt,
-  selectShouldWarn
+  selectAnswersLeft, selectIsExhausted, selectNextAnswerAt, selectScope, selectShouldWarn
 } from './usageSlice'
 import './usage.css'
 
 
 
 /**
- * How much of today's quota is left - shown only once that is worth knowing.
+ * How much of his allowance is left - shown only once that is worth knowing, and said in
+ * the only unit he can act on.
  *
- * **The judgement call here is when NOT to show it, and it is the whole design.** A meter
+ * **The judgement call is when NOT to show it, and that half has not changed.** A meter
  * that is always on screen teaches people to ration themselves: they ask the shorter
  * question, they skip the follow-up, they stop before the thing they actually came to find
- * out. That is the precise opposite of what this product is asking of a trader - the mentor
- * only works if he tells it everything.
+ * out. That is the precise opposite of what this product asks of a trader - the mentor only
+ * works if he tells it everything. But a wall hit with no warning is worse than a meter, so
+ * nothing under 90%, one quiet line above it, and a clear panel at the ceiling.
  *
- * But a wall you hit with no warning is worse than a meter. So:
+ * **What changed is what the line says.** It used to read "about 10% left, some of it frees
+ * up in about 40 minutes", and every part of that produced a question instead of closing
+ * one: ten percent of a number he has never seen, *some* of it which might or might not buy
+ * a question, and - at the ceiling - a second time for when the allowance was whole, leaving
+ * him to work out which of the two he was supposed to plan around.
  *
- *   under 75%   nothing at all
- *   over 75%    one quiet line, no bar, no colour
- *   at 100%     a clear panel that says when it comes back
- *
- * Which is also how the products that get this right behave. Nobody shows you a fuel gauge
- * until there is a reason to look at one.
+ * Now: how many more answers, and the one moment he can ask again.
  */
 
-const partial = (iso: string | null) => {
-  if (!iso) return '';
-
-  const minutes = Math.max(Math.round((new Date(iso).getTime() - Date.now()) / 60000), 1);
-
-  if (minutes < 60) return `חלק ממנה בעוד כ-${minutes} דקות`;
-
-  const hours = Math.round(minutes / 60);
-  return hours === 1 ? 'חלק ממנה בעוד כשעה' : `חלק ממנה בעוד כ-${hours} שעות`;
+/** 0 and 1 and 2 each need their own Hebrew, and "about 0 answers" needs it most. */
+const counted = (n: number) => {
+  if (n < 1) return 'נותרה לך פחות מתשובה אחת';
+  if (n === 1) return 'נותרה לך בערך תשובה אחת';
+  if (n === 2) return 'נותרו לך בערך שתי תשובות';
+  return `נותרו לך בערך ${n} תשובות`;
 };
 
 
 /**
- * When the whole allowance is his again, **with the day on it.**
- *
- * "Some of it in about three hours" is a countdown he has to keep re-reading, so the hour
- * it is whole again was added - and printed bare it then read as this evening for something
- * twenty-three hours away. **The time was right and the sentence was still misleading**,
- * which is the harder of the two to catch.
- *
- * Rendered in his own browser's clock rather than a zone chosen here: this is the clock he
- * is looking at, and it is correct wherever he happens to be.
+ * One time, said the way a person says it - and computed here rather than sent as a
+ * finished sentence **because this panel sits on screen while the clock moves.** A relative
+ * phrase rendered by the server is already stale by the time he reads it; his own browser's
+ * clock is also the one he is looking at, so it is right wherever he happens to be.
  */
-const whole = (iso: string | null) => {
+const when = (iso: string | null) => {
   if (!iso) return '';
 
-  const when = new Date(iso);
-  const clock = when.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+  const moment = new Date(iso);
+  const minutes = Math.max(Math.round((moment.getTime() - Date.now()) / 60000), 1);
 
-  const midnight = new Date();
-  midnight.setHours(24, 0, 0, 0);
+  // Under two hours a countdown is something he can wait out; past that it is useless and
+  // a clock time is something he can plan around.
+  if (minutes < 60) return `בעוד כ-${minutes} דקות`;
+  if (minutes < 90) return 'בעוד כשעה';
+  if (minutes < 120) return 'בעוד כשעה וחצי';
 
-  return when < midnight ? `מלאה שוב ב-${clock}` : `מלאה שוב מחר ב-${clock}`;
+  const clock = moment.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+
+  const days = Math.round(
+    (new Date(moment).setHours(0, 0, 0, 0) - new Date().setHours(0, 0, 0, 0)) / 86400000);
+
+  if (days <= 0) return `ב-${clock}`;
+  if (days === 1) return `מחר ב-${clock}`;
+
+  // **A weekday, because the budget runs a week now.** The version this replaced only knew
+  // today and tomorrow, so anything further out rendered as "tomorrow" - a wrong answer to
+  // the one question this line exists to answer. Past six days a weekday name stops being
+  // unambiguous, so the date comes back.
+  if (days <= 6) {
+    return `ביום ${moment.toLocaleDateString('he-IL', { weekday: 'long' })
+      .replace('יום ', '')} ב-${clock}`;
+  }
+
+  return `ב-${moment.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' })} בשעה ${clock}`;
 };
 
 
@@ -67,11 +79,15 @@ const UsageNotice = () => {
 
   const shouldWarn = useAppSelector(selectShouldWarn);
   const exhausted = useAppSelector(selectIsExhausted);
-  const remaining = useAppSelector(selectRemainingPercent);
-  const renewsAt = useAppSelector(selectRenewsAt);
-  const fullyRenewsAt = useAppSelector(selectFullyRenewsAt);
+  const answersLeft = useAppSelector(selectAnswersLeft);
+  const nextAnswerAt = useAppSelector(selectNextAnswerAt);
+  const scope = useAppSelector(selectScope);
 
   if (!shouldWarn && !exhausted) return null;
+
+  // **Named correctly or not at all.** A trader held by the week who is told "today" comes
+  // back tomorrow and meets the same wall - the one failure that turns a limit into a fault.
+  const period = scope === 'day' ? 'להיום' : 'לשבוע הזה';
 
   if (exhausted) {
     return (
@@ -79,17 +95,12 @@ const UsageNotice = () => {
         <FiClock className="usage-notice-icon" aria-hidden="true" />
 
         <span className="usage-notice-text">
-          {/* **No period in the words, because there are two of them now.** A trader has a
-              rolling week that bounds the money and a rolling day that bounds the speed, and
-              either can be the one refusing him. Calling it "daily" while the week is what
-              stopped him promises tomorrow and means Thursday - and the time underneath is
-              already the honest answer, whichever ceiling produced it. */}
-          <b>נגמרה מכסת השימוש שלך.</b>
-          {/* Said plainly, because a limit with no horizon reads as a fault and the same
-              limit with a time on it reads as a queue. */}
+          <b>{`נגמרו התשובות שלך ${period}.`}</b>
+          {/* A limit with no horizon reads as a fault; the same limit with a time on it
+              reads as a queue. One time, and it is the moment an answer actually fits -
+              not the moment anything at all frees up. */}
           <span className="usage-notice-when">
-            {[partial(renewsAt), whole(fullyRenewsAt)].filter(Boolean).join(' · ')
-              || 'היא מתחדשת בהמשך.'}
+            {nextAnswerAt ? `תוכל לשאול שוב ${when(nextAnswerAt)}` : 'נסה שוב בעוד זמן קצר'}
           </span>
         </span>
       </div>
@@ -99,8 +110,7 @@ const UsageNotice = () => {
   return (
     <div className="usage-notice" role="status">
       <span className="usage-notice-text">
-        נותרו כ-<b>{remaining}%</b> ממכסת השימוש שלך
-        <span className="usage-notice-when">{partial(renewsAt)}</span>
+        {counted(answersLeft)} {period}
       </span>
     </div>
   );

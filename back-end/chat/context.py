@@ -56,14 +56,15 @@ def effort_for(user):
     """
     **The one place that decides how hard Larson thinks, so it cannot drift between callers.**
 
-    `budget.state` already knows which of the two ceilings is nearest and whether it has
-    crossed the warning line, and reusing that is the point: a second opinion about "nearly
-    out" would eventually disagree with the meter the trader is looking at.
+    **`near_ceiling` and not `should_warn`, which it used to read.** They were the same line
+    until the notice was gated on how many answers remain as well - and the moment they
+    parted, borrowing the panel's rule would have meant a quieter notice silently buying the
+    trader less budget. This one is about money; the panel's is about his attention.
     """
     from usage import budget
 
     try:
-        return NEAR_THE_CEILING_EFFORT if budget.state(user)["should_warn"] else EFFORT
+        return NEAR_THE_CEILING_EFFORT if budget.near_ceiling(user) else EFFORT
     except Exception:
         # **Never fail an answer over an optimisation.** If the ledger cannot be read the
         # trader still gets his reply, at the ordinary depth.
