@@ -494,9 +494,13 @@ def save_rule(request):
 
         if not terms:
             return Response({
+                # **Never the notes.** `trade_text` reads setups, tags and mistakes and
+                # deliberately leaves `notes` out, so sending him to write there hands him
+                # a rule that can never match - the exact failure this refusal exists to
+                # prevent, one step later and much harder for him to see.
                 "error": "לא הצלחנו לתרגם את התנאי הזה למשהו שאפשר לבדוק מול עסקה. "
-                         "נסה לנסח אותו במונחים שאתה רושם על העסקאות עצמן — תגית, שם סטאפ "
-                         "או מילה שאתה כותב בהערות.",
+                         "נסה לנסח אותו במונחים שאתה רושם על העסקאות עצמן — תגית, "
+                         "שם סטאפ או טעות שאתה מתייג.",
             }, status = status.HTTP_400_BAD_REQUEST)
 
         # **Refused rather than saved and reported later.** Two rules that cannot both hold

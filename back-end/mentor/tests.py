@@ -1297,6 +1297,32 @@ class CustomRuleTests(APITestCase):
                 self.assertTrue(interpret_module.trade_text(rows[0]))
                 self.assertIn("ifvg", interpret_module.trade_text(rows[0]))
 
+    def test_the_refusal_never_sends_him_to_write_in_the_notes(self):
+        """
+        **The refusal pointed him at the one field the matcher refuses to read.** `trade_text`
+        leaves `notes` out deliberately - the test below says why - and this message told him
+        to phrase the condition as "a word you write in the notes". Following it hands him a
+        rule that matches nothing, forever: **the exact failure the refusal exists to prevent,
+        one step later and far harder for him to see**, because by then the rule is saved and
+        looks like every other one.
+
+        Found on the live site and not here: a rule about the VIX was refused, and that
+        sentence was the only thing on screen telling him what to do instead.
+        """
+        self.tagged()
+
+        with patch("mentor.views.interpret", return_value = None):
+            response = self.client.post("/mentor/rules/save/",
+                                        {"kind": "custom",
+                                         "text": "להיכנס רק כשה-VIX מתחת ל-20"},
+                                        format = "json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertNotIn("הערות", response.data["error"])
+        # And it still has to name somewhere real to go instead, or it refuses with nothing.
+        self.assertIn("תגית", response.data["error"])
+        self.assertEqual(TraderRule.objects.count(), 0)
+
     def test_a_note_saying_he_did_not_do_it_cannot_satisfy_the_rule(self):
         """
         **The worst outcome this feature can produce, and it was live until a trader asked
