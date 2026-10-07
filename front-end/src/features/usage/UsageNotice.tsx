@@ -79,12 +79,17 @@ const UsageNotice = () => {
         <FiClock className="usage-notice-icon" aria-hidden="true" />
 
         <span className="usage-notice-text">
-          <b>נגמרה מכסת השימוש היומית שלך.</b>
+          {/* **No period in the words, because there are two of them now.** A trader has a
+              rolling week that bounds the money and a rolling day that bounds the speed, and
+              either can be the one refusing him. Calling it "daily" while the week is what
+              stopped him promises tomorrow and means Thursday - and the time underneath is
+              already the honest answer, whichever ceiling produced it. */}
+          <b>נגמרה מכסת השימוש שלך.</b>
           {/* Said plainly, because a limit with no horizon reads as a fault and the same
               limit with a time on it reads as a queue. */}
           <span className="usage-notice-when">
             {[partial(renewsAt), whole(fullyRenewsAt)].filter(Boolean).join(' · ')
-              || 'היא מתחדשת בהמשך היום.'}
+              || 'היא מתחדשת בהמשך.'}
           </span>
         </span>
       </div>
@@ -94,7 +99,7 @@ const UsageNotice = () => {
   return (
     <div className="usage-notice" role="status">
       <span className="usage-notice-text">
-        נותרו כ-<b>{remaining}%</b> ממכסת השימוש היומית שלך
+        נותרו כ-<b>{remaining}%</b> ממכסת השימוש שלך
         <span className="usage-notice-when">{partial(renewsAt)}</span>
       </span>
     </div>

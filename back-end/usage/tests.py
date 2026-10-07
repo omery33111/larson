@@ -11,7 +11,8 @@ from django.utils import timezone
 
 import json
 
-from chat.context import build_messages, build_system
+from chat.context import (EFFORT, NEAR_THE_CEILING_EFFORT, build_messages,
+                          build_system, effort_for)
 from chat.models import Conversation, Message as ChatMessage
 from chat.tests import FakeUsage, fake_client, make_trades, read_events
 from trades.models import Trade
@@ -21,7 +22,9 @@ from .models import TokenSpend
 
 
 # Small enough to reach in a test, and the shape of the real one.
-SMALL = dict(AI_DAILY_UNITS = 20000, AI_BUDGET_WINDOW_HOURS = 24,
+# `AI_BURST_UNITS = 0` lifts the day entirely, so these keep testing the one ceiling they
+# were written for. The day has a test class of its own.
+SMALL = dict(AI_USER_UNITS = 20000, AI_USER_WINDOW_HOURS = 24, AI_BURST_UNITS = 0,
              AI_GLOBAL_DAILY_UNITS = 0, AI_WARN_AT = 0.90)
 
 
@@ -162,8 +165,23 @@ class CacheTests(APITestCase):
         self.assertEqual(budget.units(0, 0, cache_read_tokens = 1000), 100)
 
 
-    def test_a_cache_write_is_a_quarter_more(self):
-        self.assertEqual(budget.units(0, 0, cache_write_tokens = 1000), 1250)
+    def test_a_cache_write_is_twice_input_because_the_prefix_lasts_an_hour(self):
+        """
+        **The one number that breaks the budget silently if it drifts.** `chat/context.py`
+        asks for an hour-long prefix, which Anthropic bills at twice input; the five-minute
+        prefix it replaced was 1.25. Nothing errors if this is left behind - the meter just
+        under-counts every write by 60%, the trader walks past the ceiling that is supposed
+        to guarantee a margin, and the first anyone hears of it is the invoice.
+        """
+        self.assertEqual(budget.units(0, 0, cache_write_tokens = 1000), 2000)
+
+    def test_the_weight_matches_the_ttl_that_is_actually_requested(self):
+        """Locks the two together, so changing one without the other fails here and not
+        in production three weeks later."""
+        from chat.context import CACHE
+
+        self.assertEqual(CACHE.get("ttl"), "1h")
+        self.assertEqual(budget.CACHE_WRITE_WEIGHT, 2.0)
 
 
     def test_the_ledger_stores_what_the_api_reported(self):
@@ -321,7 +339,7 @@ class WindowTests(APITestCase):
 
 # ------------------------- THE CEILING ON EVERYONE TESTS START ------------------------- #
 
-@override_settings(AI_DAILY_UNITS = 20000, AI_BUDGET_WINDOW_HOURS = 24,
+@override_settings(AI_USER_UNITS = 20000, AI_USER_WINDOW_HOURS = 24, AI_BURST_UNITS = 0,
                    AI_GLOBAL_DAILY_UNITS = 30000)
 class SiteCeilingTests(APITestCase):
     """
@@ -566,6 +584,9 @@ class ReportTests(APITestCase):
 # ------------------------- THE BETA REPORT TESTS END ------------------------- #
 
 
+# Six hours because these test the *clock*, not the policy - the arithmetic below is written
+# against a window short enough to state in a sentence, and it holds for any length.
+@override_settings(AI_USER_WINDOW_HOURS = 6, AI_BURST_UNITS = 0)
 class RenewalClockTests(APITestCase):
     """
     **"Some of it, in about four hours" is a countdown he has to keep re-reading.**
@@ -622,7 +643,7 @@ class RenewalClockTests(APITestCase):
         if timezone.localtime(moment, ZoneInfo("UTC")).strftime("%H:%M") != israeli:
             self.assertNotEqual(said, moment.strftime("%H:%M"))
 
-    @override_settings(AI_BUDGET_WINDOW_HOURS = 24)
+    @override_settings(AI_USER_WINDOW_HOURS = 24)
     def test_a_time_tomorrow_says_tomorrow(self):
         """
         **The hour was right and the sentence was still misleading**, which is the harder of
@@ -665,12 +686,19 @@ class TwoWindowsTests(APITestCase):
     **The trader's window and the site's are different numbers answering different
     questions**, and they shared one until his was shortened.
 
-    His decides how long a cap is allowed to punish him - six hours, so running out means
-    waiting for the next session rather than for tomorrow. The site's is the money, and it
-    is a day. Sharing a six-hour window would have turned "$20 a day" into "$20 every six
-    hours": the same configuration, four times the bill, and nothing anywhere saying it had
-    changed. **A budget exists to make the worst case sayable out loud, so a change that
-    quietly quadruples it is the one failure it cannot have.**
+    There are three of them now, and the relationship inverted when the trader's budget
+    became a **week**: his is the long one and the site's day is the short one.
+
+      his week   168h   the money. A week of units is a week of dollars, and thirty days of
+                        them is less than the subscription - which is what makes a loss
+                        arithmetically impossible rather than unlikely.
+      his day     24h   the speed. Without it the week can be emptied in an evening and he
+                        is walled out for the six days it takes to roll back, which is the
+                        one experience this whole design exists to prevent.
+      the site    24h   everybody together, so one trader's rate cannot become the bill.
+
+    **A budget exists to make the worst case sayable out loud, so a change that quietly
+    multiplies it is the one failure it cannot have.** These keep the three independent.
     """
 
     def setUp(self):
@@ -682,27 +710,181 @@ class TwoWindowsTests(APITestCase):
         TokenSpend.objects.filter(id = row.id).update(
             created_at = timezone.now() - timedelta(hours = ago_hours))
 
-    def test_the_site_counts_a_whole_day_whatever_his_window_is(self):
-        # Eight hours ago: outside his six-hour window, inside the site's day.
-        self.spend(ago_hours = 8)
+    def test_the_site_forgets_in_a_day_what_his_week_still_remembers(self):
+        """Three days ago: long gone from the site's day and from his own, still inside the
+        week that holds the money."""
+        self.spend(ago_hours = 72)
 
-        self.assertEqual(budget.spent(self.user), 0)
-        self.assertGreater(budget.site_spent(), 0)
+        self.assertGreater(budget.spent(self.user), 0)
+        self.assertEqual(budget.burst_spent(self.user), 0)
+        self.assertEqual(budget.site_spent(), 0)
 
     def test_shortening_his_window_cannot_raise_the_site_ceiling(self):
         """The regression this class exists for."""
-        with override_settings(AI_BUDGET_WINDOW_HOURS = 1):
+        with override_settings(AI_USER_WINDOW_HOURS = 1):
             self.spend(ago_hours = 8)
 
             # Still counted against the site, because the site has its own day.
             self.assertGreater(budget.site_spent(), 0)
 
-    def test_his_cap_frees_up_within_his_window_and_not_a_day_later(self):
-        """**Running out should cost him a session, not a day** - which was the complaint."""
-        self.spend(ago_hours = 5)
+    @override_settings(AI_BURST_UNITS = 150_000)
+    def test_hitting_the_day_is_answered_in_hours_and_not_in_days(self):
+        """
+        **The promise the short window exists to keep**, carried over from when his only
+        budget was six hours long: running out must not cost him the rest of the week.
 
-        when = budget.renews_at(self.user)
-        hours = (when - timezone.now()).total_seconds() / 3600
+        He is over the day here and nowhere near the week, so the ceiling that answers him
+        has to be the day's - and the time he is told has to be hours away.
+        """
+        self.spend(ago_hours = 20, tokens = 100_000)       # 600,000 units, over the day
 
-        self.assertLess(hours, 2)
+        self.assertFalse(budget.has_room(self.user))
+        self.assertLess(budget.spent(self.user), budget.allowance())
 
+        share, span = budget.binding(self.user)
+        self.assertEqual(span, budget.burst_window())
+
+        hours = (budget.renews_at(self.user, span) - timezone.now()).total_seconds() / 3600
+        self.assertLess(hours, 5)
+
+    def test_the_week_is_what_bounds_the_money(self):
+        """The number the price is derived from: a month of weeks has to cost less than the
+        subscription, or none of the rest of this means anything."""
+        monthly = budget.allowance() * 30 / 7 * 5 / 1_000_000
+
+        self.assertLess(monthly, 39)
+
+
+
+# ------------------------- THE WEEK, THE DAY, AND THE SOFT LANDING ------------------------- #
+
+@override_settings(AI_USER_UNITS = 1_450_000, AI_USER_WINDOW_HOURS = 168,
+                   AI_BURST_UNITS = 350_000, AI_BURST_WINDOW_HOURS = 24,
+                   AI_GLOBAL_DAILY_UNITS = 0, AI_WARN_AT = 0.90)
+class WeeklyBudgetTests(APITestCase):
+    """
+    **The ceiling stopped being "a generous day" and became the thing that makes a loss
+    impossible**, so it is now derived from the price rather than chosen to feel roomy.
+
+    A week is 1,450,000 units, a unit is an input token of money, and thirty days of weeks is
+    $31.07 against a $39 subscription. The worst user who can exist leaves $7.93. That is the
+    whole argument, and these tests are what keep it true.
+
+    The day inside the week is not a second budget - it is a speed limit on the first. Without
+    it the week can be emptied on Monday, and six days of wall is exactly the experience the
+    scheme exists to avoid.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username = "omer", password = "Tr4de-Pl4n!x")
+
+    def spend(self, units_wanted, ago_hours = 0):
+        """`units = input + 5 x output`, so input alone makes the arithmetic readable."""
+        row = TokenSpend.objects.create(user = self.user, kind = "chat",
+                                        input_tokens = units_wanted, output_tokens = 0)
+        if ago_hours:
+            TokenSpend.objects.filter(id = row.id).update(
+                created_at = timezone.now() - timedelta(hours = ago_hours))
+        return row
+
+    # ------------- WHICH CEILING STOPS HIM:
+
+    def test_the_day_stops_him_while_the_week_still_has_room(self):
+        self.spend(400_000)
+
+        self.assertFalse(budget.has_room(self.user))
+        self.assertLess(budget.spent(self.user), budget.allowance())
+
+    def test_the_week_stops_him_even_on_a_quiet_day(self):
+        """Spent days ago, so the day is empty and only the week has anything to say."""
+        for days in (2, 3, 4, 5):
+            self.spend(400_000, ago_hours = days * 24)
+
+        self.assertEqual(budget.burst_spent(self.user), 0)
+        self.assertFalse(budget.has_room(self.user))
+
+    def test_an_ordinary_trader_is_stopped_by_neither(self):
+        """19% of the week is what the typical trader was measured at. **A ceiling he can
+        feel is a ceiling that teaches him to ration himself**, which is the opposite of what
+        this product needs from him."""
+        self.spend(270_000)
+
+        self.assertTrue(budget.has_room(self.user))
+        self.assertFalse(budget.state(self.user)["should_warn"])
+
+    # ------------- WHAT THE METER SAYS:
+
+    def test_the_meter_shows_whichever_ceiling_is_nearest(self):
+        """
+        **One number reaches the screen and it has to be the one that will actually stop
+        him.** Showing the week at 21% while the day is at 86% would read as plenty left,
+        moments before he is refused - and a meter that disagrees with what happens next is
+        worse than none, because the next reading is not believed either.
+        """
+        self.spend(300_000)                       # 86% of the day, 21% of the week
+
+        share, span = budget.binding(self.user)
+
+        self.assertEqual(span, budget.burst_window())
+        self.assertEqual(budget.state(self.user)["used_percent"], 86)
+
+    def test_the_week_takes_over_once_it_is_the_nearer_one(self):
+        for days in (2, 3, 4):
+            self.spend(400_000, ago_hours = days * 24)
+
+        share, span = budget.binding(self.user)
+
+        self.assertEqual(span, budget.window())
+        self.assertEqual(budget.state(self.user)["window_hours"], 168)
+
+    # ------------- THE SOFT LANDING:
+
+    def test_larson_thinks_shorter_only_once_the_ceiling_is_near(self):
+        """
+        **The wall does not move in dollars; it moves 25% further out in answers.** The
+        budget is denominated in money, so a cheaper answer does not lower the ceiling - it
+        buys more answers underneath it. A cached turn is 5,937 units at `medium` and 4,747
+        at `low`, which turns the last tenth of a week from 24 answers into 30.
+
+        And it engages at the warning line and nowhere before it, so the answers on an
+        ordinary day - every day, for 97% of traders - are the full-depth ones.
+        """
+        self.assertEqual(effort_for(self.user), EFFORT)
+
+        self.spend(320_000)                       # 91% of the day: over the warning line
+
+        self.assertTrue(budget.state(self.user)["should_warn"])
+        self.assertEqual(effort_for(self.user), NEAR_THE_CEILING_EFFORT)
+
+    def test_the_cheaper_answer_buys_more_answers_and_not_fewer(self):
+        """The arithmetic the paragraph above rests on, so it cannot quietly stop being
+        true if either constant moves."""
+        left = int(budget.allowance() * 0.10)
+
+        self.assertGreater(left // 4_747, left // 5_937)
+
+    def test_an_unreadable_ledger_never_costs_him_his_answer(self):
+        """**An optimisation must not be able to fail a reply.** If the spend table cannot be
+        read, he gets the ordinary depth rather than an error."""
+        with patch("usage.budget.state", side_effect = RuntimeError("no ledger")):
+            self.assertEqual(effort_for(self.user), EFFORT)
+
+    # ------------- AND THE PROMISE THE PRICE IS BUILT ON:
+
+    def test_a_month_of_weeks_costs_less_than_the_subscription(self):
+        """
+        **The guarantee, stated as arithmetic rather than as a hope.** Whatever a trader
+        does - loops, scripts, three debriefs a day for thirty days - he cannot spend more
+        than a rolling week over and over, and that is $31.07 against $39.
+        """
+        worst = budget.allowance() * (30 / 7)
+        dollars = worst * 5 / 1_000_000
+
+        self.assertLess(dollars, 39)
+        self.assertGreater(39 - dollars, 5, "the margin on the worst possible user is thin")
+
+    def test_the_day_cannot_let_the_week_be_spent_in_one_sitting(self):
+        """Without this the week is a Monday and then six days of wall."""
+        days_to_empty_the_week = budget.allowance() / budget.burst_allowance()
+
+        self.assertGreater(days_to_empty_the_week, 4)

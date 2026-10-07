@@ -17,7 +17,8 @@ from trades.parsers import SUPPORTED_EXTENSIONS, parse_file
 
 from . import retrieval
 from .failures import CALL_FAILED, configuration_fault
-from .context import EFFORT, MAX_TOKENS, MODEL, build_messages, build_system, statistics_document
+from .context import (EFFORT, MAX_TOKENS, MODEL, build_messages, build_system,
+                      effort_for, statistics_document)
 from .models import ASSISTANT, DEFAULT_TITLE, USER, Conversation, Message
 from .serializers import ConversationSerializer, MessageSerializer, StarredMessageSerializer
 
@@ -315,7 +316,9 @@ def _answer(row, question, system, messages, prelude = "", verdict = "",
             with client.messages.stream(
                 model = MODEL,
                 max_tokens = MAX_TOKENS,
-                output_config = {"effort": EFFORT},
+                # Drops to a shorter deliberation only once he is near his ceiling, which
+                # buys him about 25% more answers out of the same money. See `effort_for`.
+                output_config = {"effort": effort_for(row.user)},
                 system = system,
                 messages = messages,
             ) as handle:

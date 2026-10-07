@@ -181,25 +181,39 @@ REST_FRAMEWORK = {
 # a keen user can reach is a budget that teaches him to hold back. That is the exact
 # behaviour this product cannot afford: the mentor only works if he is told everything.
 #
-# The ceiling that actually bounds the money is the site-wide one below, not this. This one
-# only decides how it is shared out.
-# **600,000 and not 400,000, because the first number was sized against the wrong prompt.**
-# It assumed around 56 answers a day; measured on a real 231-trade resume it bought 13 to 35,
-# and the difference is almost entirely thinking. Output is priced at five times input and
-# `effort: high` spends it before a word reaches the screen - so an answer that reads as 200
-# tokens can bill ten times that. 600,000 is roughly 35 turns in a window, which covers a
-# session with room to be curious in it.
-AI_DAILY_UNITS = int(os.environ.get('AI_DAILY_UNITS', '600000'))
-
-# Rolling, not a reset at midnight: a window with an edge can be spent twice across it, which
-# is exactly the shape a runaway loop produces.
+# **A WEEK, and the number is the subscription working backwards.** This stopped being "a
+# generous day" and became the thing that makes a loss arithmetically impossible, so it is
+# derived rather than chosen: 1,450,000 units is $7.25, a rolling week of them is at most
+# $31.07 in a month, and the plan is to charge $39. The worst user there can be leaves $7.93.
 #
-# **Six hours and not twenty-four.** A trader who runs out should wait for the next session,
-# not for tomorrow - and the per-trader budget was never what bounds the money anyway. Its
-# job is to stop one runaway loop, and a loop is stopped just as well by a six-hour ceiling
-# as by a daily one. **What a shorter window must not do is quietly multiply the site's
-# ceiling**, which is why that one now has a window of its own below.
-AI_BUDGET_WINDOW_HOURS = int(os.environ.get('AI_BUDGET_WINDOW_HOURS', '6'))
+# Everything under it was MEASURED in October 2026 against a 233-trade resume with the real
+# tokenizer, not estimated from character counts - which is how the previous figure here went
+# wrong by a factor of 1.8, because this prompt is mostly Hebrew and runs 1.70 chars/token
+# where English runs about 4.
+#
+#   system prompt         12,767 tokens, cached
+#   a cached answer         5,937 units      ($0.030)
+#   a full sitting         67,361 units      ($0.337)   debrief + 7 follow-ups
+#
+# So the week buys **21 full sittings**, and the heaviest trader modelled does ten. The
+# typical one uses 19% of it. **A ceiling nobody reaches is the entire design goal**: the
+# mentor only works if he is told everything, and a trader who can feel a meter starts
+# rationing himself out of the thing he is paying for.
+AI_USER_UNITS = int(os.environ.get('AI_USER_UNITS', '1450000'))
+
+# Rolling, not a reset on Sunday: a window with an edge can be spent twice across it, which
+# is exactly the shape a runaway loop produces. It also answers somebody who has just run out
+# far better - nothing has to "reset", it simply fills back in as the old spend ages out.
+AI_USER_WINDOW_HOURS = int(os.environ.get('AI_USER_WINDOW_HOURS', '168'))
+
+# **And a day inside the week, because a week-long budget can be emptied in an evening.**
+# That failure is the one this design cannot have: empty the week on Monday and the next six
+# days are a wall, which is precisely the "I hit a limit" experience the whole scheme exists
+# to avoid. The day does not ration anybody - 350,000 units is five full sittings and the
+# heaviest trader measured does one and a half - it only stops the week being spent before
+# the week is over. With it the worst lock-out is about three days instead of six.
+AI_BURST_UNITS = int(os.environ.get('AI_BURST_UNITS', '350000'))
+AI_BURST_WINDOW_HOURS = int(os.environ.get('AI_BURST_WINDOW_HOURS', '24'))
 
 # **And a ceiling on the whole site, because the per-trader budget does not bound anything by
 # itself.** One trader's dollar a day multiplied by however many people sign up tomorrow is a

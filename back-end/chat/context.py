@@ -36,6 +36,39 @@ MODEL = "claude-opus-5"
 # lever the spec picked over routing to a second model.
 EFFORT = "medium"
 
+# **What he gets instead of a wall, and it costs nothing to give.**
+#
+# The ceiling is denominated in money, not in answers - so a cheaper answer does not lower
+# it, it buys more answers underneath it. Measured: a cached turn is 5,937 units at `medium`
+# and 4,747 at `low`, so the last tenth of a budget stretches from 24 answers to 30.
+#
+# **The wall does not move in dollars. It moves 25% further out in the only unit he can
+# feel.** And it only engages at the warning line, so the answers he gets on an ordinary day
+# - which is every day, for 97% of traders - are untouched.
+#
+# Dropping to `low` was measured and read, not assumed: the answer stayed specific, kept its
+# figures and named the trade. It is the shorter deliberation before writing that goes, not
+# the substance. That is exactly the thing worth spending last and the thing worth spending.
+NEAR_THE_CEILING_EFFORT = "low"
+
+
+def effort_for(user):
+    """
+    **The one place that decides how hard Larson thinks, so it cannot drift between callers.**
+
+    `budget.state` already knows which of the two ceilings is nearest and whether it has
+    crossed the warning line, and reusing that is the point: a second opinion about "nearly
+    out" would eventually disagree with the meter the trader is looking at.
+    """
+    from usage import budget
+
+    try:
+        return NEAR_THE_CEILING_EFFORT if budget.state(user)["should_warn"] else EFFORT
+    except Exception:
+        # **Never fail an answer over an optimisation.** If the ledger cannot be read the
+        # trader still gets his reply, at the ordinary depth.
+        return EFFORT
+
 # **A single answer's ceiling, and it is a liability as much as a setting.** Everything the
 # model generates is billed at output rates, thinking included - so a call allowed to run to
 # 64,000 tokens is a call that can cost $1.60 on its own, forty times an ordinary answer.
@@ -226,12 +259,26 @@ def _as_json(payload):
 # The minimum cacheable prefix on `claude-opus-5` is 512 tokens, so this clears it eight
 # times over. Below that a marker is silently ignored - no error, just no cache.
 #
-# **5 minutes and not an hour.** A read refreshes the entry's timer for free, so inside a
-# working session - question, answer, follow-up - the entry never expires and the 5-minute
-# TTL is strictly cheaper. The 1-hour TTL costs double to write and would only pay off for
-# gaps of 5 to 60 minutes, which is not the shape of this product: a trader is either in a
-# session or he is gone for the day.
-CACHE = {"type": "ephemeral"}
+# **An hour, and the five-minute choice above it was wrong for a reason worth keeping.** It
+# argued that a trader is either mid-session or gone for the day, so gaps of 5 to 60 minutes
+# - the only range the longer TTL wins in - would not happen. That is true of his *day* and
+# false of his *session*: he reads a thousand-token answer, goes and looks at his chart, and
+# comes back. Every gap like that re-bought the whole prefix at 1.25x instead of reading it
+# at 0.1x.
+#
+# Measured over one realistic sitting:
+#
+#     5 questions, 2 long pauses    $0.385 -> $0.286   -26%
+#     5 questions, 4 long pauses    $0.531 -> $0.286   -46%
+#    12 questions, 9 long pauses    $1.129 -> $0.516   -54%
+#
+# **The trader cannot feel this.** The answers are identical; only the bill moves - which is
+# what makes it the first lever to pull and effort the last.
+#
+# **`usage/budget.py` must agree with this line.** The hour-long write is billed at twice
+# input where the five-minute one is 1.25x, and nothing errors if the two disagree: the meter
+# simply under-counts and the ceiling stops meaning what it says.
+CACHE = {"type": "ephemeral", "ttl": "1h"}
 
 
 def build_system(user, persona = None):

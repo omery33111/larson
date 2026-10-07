@@ -101,7 +101,7 @@ class Command(BaseCommand):
 
             peak = max(by_day.values()) if by_day else 0
             peaks.append(peak)
-            share = (100 * peak / settings.AI_DAILY_UNITS) if settings.AI_DAILY_UNITS else 0
+            share = (100 * peak / settings.AI_USER_UNITS) if settings.AI_USER_UNITS else 0
 
             self.stdout.write(
                 f"{person['user__username'][:17]:<18}"
@@ -156,7 +156,7 @@ class Command(BaseCommand):
         self.stdout.write("-" * 78)
 
         worst = max(peaks) if peaks else 0
-        budget = settings.AI_DAILY_UNITS
+        budget = settings.AI_USER_UNITS
 
         self.stdout.write(f"daily budget per trader : {budget:,} units "
                           f"(${budget * in_price:.2f})")
@@ -173,7 +173,7 @@ class Command(BaseCommand):
                 "changing."))
         else:
             self.stdout.write(self.style.ERROR(
-                "  -> somebody reached it. Raise AI_DAILY_UNITS, or the mentor is teaching "
+                "  -> somebody reached it. Raise AI_USER_UNITS, or the mentor is teaching "
                 "him to ask less."))
 
         site = settings.AI_GLOBAL_DAILY_UNITS
