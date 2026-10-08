@@ -1102,6 +1102,39 @@
 }
 
 
+/* ------------------------- THE DAY DIVIDER ------------------------- */
+/* **A hairline either side rather than a pill**, because a pill is a badge and a badge is
+   something you can act on. This is a label on the thread, and it has to read as quieter
+   than every message around it - which is also why the rule fades out towards the text
+   instead of running flat into it. */
+
+.chat-day {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 1.5rem 0 1rem;
+}
+
+.chat-day::before,
+.chat-day::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(to left, rgba(125, 130, 142, 0.26), rgba(125, 130, 142, 0));
+}
+
+.chat-day::after {
+  background: linear-gradient(to right, rgba(125, 130, 142, 0.26), rgba(125, 130, 142, 0));
+}
+
+.chat-day-label {
+  color: #7d828e;
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+
 /* ------------------------- LAPTOP RESPONSIVE STYLING ------------------------- */
 @media (min-width: 1025px) and (max-width: 1919px) {
   .chat-shell {
@@ -1128,6 +1161,17 @@
 
 /* ------------------------- MOBILE RESPONSIVE STYLING ------------------------- */
 @media (max-width: 768px) {
+  /* Narrower gutters and a smaller label: on a phone the thread is the whole screen and
+     this must not start competing with the messages for it. */
+  .chat-day {
+    gap: 0.6rem;
+    margin: 1.2rem 0 0.8rem;
+  }
+
+  .chat-day-label {
+    font-size: 0.72rem;
+  }
+
   /* One column. The list becomes a drawer over the conversation rather than a strip beside
      it - at this width a 200px column would leave the thread too narrow to read. */
   .chat-shell {

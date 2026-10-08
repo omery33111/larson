@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { useAppDispatch, useAppSelector } from '../../app/hooks'
 import LarsonMark from '../larson/LarsonMark'
 import ChatMessage from './ChatMessage'
+import DayDivider, { startsANewDay } from './DayDivider'
 import { useTypewriter } from './useTypewriter'
 import {
   clearJumpTarget, selectIsLoadingThread, selectIsStreaming, selectIsWaiting,
@@ -188,12 +189,15 @@ const ChatThread = () => {
         </div>
       )}
 
-      {messages.map((message) => (
-        <ChatMessage
-          key={`${message.role}-${message.id}-${message.created_at}`}
-          message={message}
-          isFound={message.id === jumpTargetId}
-        />
+      {messages.map((message, i) => (
+        <Fragment key={`${message.role}-${message.id}-${message.created_at}`}>
+          {/* Each time the day turns over, and above the first message as well - which is
+              what says when the conversation began. See DayDivider.tsx. */}
+          {startsANewDay(message.created_at, messages[i - 1]?.created_at) &&
+            <DayDivider at={message.created_at} />}
+
+          <ChatMessage message={message} isFound={message.id === jumpTargetId} />
+        </Fragment>
       ))}
 
       {isStreaming && (

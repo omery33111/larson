@@ -5,6 +5,7 @@ import Problem from '../base/Problem'
 import { useAppDispatch, useAppSelector } from '../../app/hooks'
 import { selectIsLogged } from '../authentication/authenticationSlice'
 import ChatMessage from '../chat/ChatMessage'
+import DayDivider, { startsANewDay } from '../chat/DayDivider'
 import SuggestionCard from './SuggestionCard'
 import { clearJumpTarget, selectJumpTargetId } from '../chat/chatSlice'
 import { useTypewriter } from '../chat/useTypewriter'
@@ -264,8 +265,14 @@ const MentorPage = () => {
                   קובץ ייצוא מיומן המסחר, מהברוקר או מהפלטפורמה · CSV · XLSX · דוח HTML של MT4/MT5
                 </p>
               </div>
-            ) : messages.map((row) => (
+            ) : messages.map((row, i) => (
               <div key={`${row.role}-${row.id}-${row.created_at}`}>
+                {/* **The thread that needs this most.** One conversation that never ends,
+                    so without a date it is a wall of answers with nothing saying which
+                    session was which. See DayDivider.tsx. */}
+                {startsANewDay(row.created_at, messages[i - 1]?.created_at) &&
+                  <DayDivider at={row.created_at} />}
+
                 <ChatMessage message={row} isFound={row.id === jumpTargetId} />
 
                 {/* **Under the finished answer, never beside a streaming one.** Asking him
