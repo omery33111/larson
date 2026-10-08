@@ -1062,3 +1062,103 @@ class UsageWordingTests(APITestCase):
             message = budget.exhausted_message(self.user)
 
         self.assertIn("לא קשור למכסה שלך", message)
+
+
+# ------------------------- THE CEILING ON EVERYBODY TOGETHER ------------------------- #
+
+@override_settings(AI_USER_UNITS = 1_450_000, AI_USER_WINDOW_HOURS = 168,
+                   AI_BURST_UNITS = 350_000, AI_BURST_WINDOW_HOURS = 24,
+                   AI_GLOBAL_DAILY_UNITS = 4_000_000, AI_GLOBAL_MAX_UNITS = 20_000_000)
+class SiteCeilingTests(APITestCase):
+    """
+    **A flat ceiling on the whole site was right when it was written and became wrong the
+    moment the per-trader budget started bounding the money.**
+
+    A trader is capped at $1.75 a day, so the site total is already `traders x their own
+    cap` without anybody adding a second rule. A flat bound on top of that cannot protect
+    anything the first one does not - **the only thing it can still do, once there are
+    customers, is refuse one of them.** Measured before this changed: 11.4 traders could max
+    their day against a $20 ceiling, and the beta is ten. One more sign-up and somebody who
+    had paid would have read that the system was out of money, which reads as the operator
+    being stingy rather than as a queue.
+
+    So it grows with the people paying for it, and stops at a maximum set deliberately.
+    """
+
+    def trader(self, name, with_trades = True):
+        user = User.objects.create_user(username = name, password = "Tr4de-Pl4n!x")
+
+        if with_trades:
+            # One row is the whole test: the count is of traders who have handed Larson a
+            # history at all, not of how much of one.
+            Trade.objects.create(user = user, executed_at = timezone.now(),
+                                 symbol = "MNQU6", instrument = "NQ",
+                                 source_timezone = "Asia/Jerusalem", currency = "USD",
+                                 pnl = 100.0, outcome = "win", dedup_hash = f"site-{name}")
+        return user
+
+    def test_every_active_trader_fits_underneath_it(self):
+        """**The property that matters**, and the one a flat number cannot have: all of them
+        maxing out at once still fits, so this ceiling can never be what refuses one."""
+        for n in range(14):
+            self.trader(f"t{n}")
+
+        earned = 14 * 350_000
+
+        self.assertGreaterEqual(budget.site_allowance(), earned)
+
+    def test_the_twelfth_trader_does_not_break_it(self):
+        """The exact number the old ceiling failed at."""
+        for n in range(12):
+            self.trader(f"t{n}")
+
+        self.assertGreater(budget.site_allowance(), 4_000_000)
+
+    def test_sign_ups_alone_do_not_lift_it(self):
+        """
+        **Scaling by accounts would hand the lever to whoever can run a registration
+        script.** Lifting it costs a parseable export per trader, which is work - and that
+        population is also exactly the one that legitimately calls the model.
+        """
+        for n in range(50):
+            self.trader(f"ghost{n}", with_trades = False)
+
+        self.assertEqual(budget.site_allowance(), 4_000_000)
+
+    def test_a_quiet_site_still_has_its_floor(self):
+        self.trader("only-one")
+
+        self.assertEqual(budget.site_allowance(), 4_000_000)
+
+    def test_it_never_passes_the_maximum_set_here(self):
+        """The one number that can still cost a customer an answer, raised deliberately."""
+        with override_settings(AI_GLOBAL_MAX_UNITS = 5_000_000):
+            for n in range(30):
+                self.trader(f"t{n}")
+
+            self.assertEqual(budget.site_allowance(), 5_000_000)
+
+    def test_zero_still_lifts_it_entirely(self):
+        with override_settings(AI_GLOBAL_DAILY_UNITS = 0):
+            for n in range(5):
+                self.trader(f"t{n}")
+
+            self.assertEqual(budget.site_allowance(), 0)
+
+    def test_the_sentence_never_sounds_like_we_are_being_stingy(self):
+        """
+        **Naming a system-wide money ceiling to somebody who has paid reads as holding back
+        when we could have given more.** It is a fault on our side, so it is said in the
+        sentence the product already uses for faults on our side - and he is told the only
+        two things that concern him: it is not his, and it is short.
+        """
+        user = self.trader("omer")
+
+        with override_settings(AI_GLOBAL_DAILY_UNITS = 1, AI_GLOBAL_MAX_UNITS = 1):
+            TokenSpend.objects.create(user = user, kind = "chat", input_tokens = 1_000)
+
+            message = budget.exhausted_message(user)
+
+        self.assertIn("לא קשור למכסה שלך", message)
+        for stingy in ("תקרת", "מכסת השימוש של כל", "המערכת", "יומית"):
+            self.assertNotIn(stingy, message)

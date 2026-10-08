@@ -234,6 +234,17 @@ AI_GLOBAL_DAILY_UNITS = int(os.environ.get('AI_GLOBAL_DAILY_UNITS', '4000000'))
 # saying it had changed. That is the kind of mistake a budget exists to prevent.
 AI_GLOBAL_WINDOW_HOURS = int(os.environ.get('AI_GLOBAL_WINDOW_HOURS', '24'))
 
+# **The one ceiling that can still cost a paying customer an answer, so it is the one to
+# raise deliberately.** `AI_GLOBAL_DAILY_UNITS` above is now a floor, not the ceiling: the
+# real one is the larger of it and what the active traders are collectively entitled to, so
+# that every one of them maxing out at once still fits. This caps that growth.
+#
+#   20,000,000 units ~ $100 a day, which is about 57 active traders at their daily cap.
+#
+# Nothing in the beta comes near it - ten traders earn 3,500,000, so the floor is what
+# applies. Set it to 0 to let the ceiling grow without a wall.
+AI_GLOBAL_MAX_UNITS = int(os.environ.get('AI_GLOBAL_MAX_UNITS', '20000000'))
+
 # When to say anything at all. **Late on purpose**: the point of the notice is that the wall
 # is not a surprise, not that the trader can budget around it - and somebody who ends the day
 # at 80% never needed to know a limit existed. See UsageNotice.tsx.

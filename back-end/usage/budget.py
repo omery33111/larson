@@ -144,8 +144,57 @@ def burst_allowance():
     return settings.AI_BURST_UNITS
 
 
+def traders_with_a_resume():
+    """
+    How many people have actually handed Larson a trading history.
+
+    **Counted rather than "how many signed up", and that is the whole safety of scaling the
+    site ceiling by it.** A thousand bot registrations would lift a ceiling tied to accounts
+    and defeat the thing it is there for; lifting this one costs a parseable export per
+    account, which is work, and which is also exactly the population that legitimately calls
+    the model.
+    """
+    from trades.models import Trade
+
+    return Trade.objects.values("user").distinct().count()
+
+
 def site_allowance():
-    return settings.AI_GLOBAL_DAILY_UNITS
+    """
+    The ceiling on everybody together - **and it grows with the people paying for it.**
+
+    It used to be a flat $20 a day, which was right when it was written and became wrong the
+    moment the per-trader budget started bounding the money. A trader is capped at $1.75 a
+    day and $31 a month, so the site total is already bounded at `traders x their own cap`,
+    automatically. **A second, flat bound on top of that cannot protect anything the first
+    one does not - the only thing it can still do, once there are customers, is refuse one
+    of them.** Measured before this changed: 11.4 traders could max their day, and the beta
+    is ten. One more sign-up and somebody who had paid would read that the system had run
+    out of money.
+    
+
+    So it is the larger of a floor and what the active traders are collectively entitled to,
+    and never more than a maximum set here:
+
+        max(AI_GLOBAL_DAILY_UNITS, traders x AI_BURST_UNITS)  capped at AI_GLOBAL_MAX_UNITS
+
+    **It can no longer be the thing that stops a legitimate trader**, because every one of
+    them maxing out at once still fits underneath it. What it does catch is spend that
+    should have been impossible - a hole in the per-trader accounting - which is the only
+    job left for a ceiling at this level, and the one it was really there for.
+
+    `AI_GLOBAL_MAX_UNITS` is the number to raise deliberately as the business grows, and the
+    only one that can ever cost a customer an answer. Set it to 0 to lift it.
+    """
+    floor = settings.AI_GLOBAL_DAILY_UNITS
+
+    if not floor:
+        return 0                          # the ceiling is off entirely
+
+    earned = traders_with_a_resume() * settings.AI_BURST_UNITS
+    ceiling = settings.AI_GLOBAL_MAX_UNITS
+
+    return min(max(floor, earned), ceiling) if ceiling else max(floor, earned)
 
 
 def _since(span = None):
@@ -470,10 +519,14 @@ def exhausted_message(user):
     So: the ceiling named correctly, one moment, and that moment is the next time an answer
     actually fits - not the next time anything at all frees up.
     """
-    # The site ceiling is not this trader's fault and must not be described as his doing.
+    # **Not his fault, and not described as ours being stingy either.** Naming a system-wide
+    # money ceiling to somebody who has paid reads as the operator holding back when he
+    # could have given more - and it is the one sentence here that can make a limit feel
+    # like a slight rather than a queue. It is a fault on our side, so it is said in the
+    # sentence the product already uses for faults on our side, and the trader is told the
+    # only two things that concern him: it is not his, and it is short.
     if site_exhausted() and spent(user) < allowance():
-        return ("לארסון הגיע לתקרת השימוש היומית של כל המערכת. "
-                "זה לא קשור למכסה שלך — נסה שוב בעוד זמן קצר.")
+        return "לארסון לא זמין כרגע. זה לא קשור למכסה שלך — נסה שוב בעוד כמה דקות."
 
     period = "של היום" if binding(user)[1] == burst_window() else "השבועית"
     when = next_answer_at(user)
