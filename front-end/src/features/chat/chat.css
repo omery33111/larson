@@ -681,7 +681,17 @@
    riding high and left inside its own box, so the padding was paying for empty space at the
    bottom rather than for clearance at the spikes. Centred, the same circle holds a larger
    figure with the same room around the outer spikes - which is the part that clips. */
+/* **Outside the turn as well, for the same reason the actions are.** 46px plus its gap was
+   52px of the answer's width going to a mark that is not part of the message - and with the
+   actions already out on the other side, leaving this one in made the block look narrower on
+   one side than the other for no reason the eye could name. Out here the answer spans the
+   whole turn and the mark sits beside it, which is the layout the thread is supposed to
+   have. The same measured 135px gutter holds it. */
 .chat-avatar {
+  position: absolute;
+  /* And `inset-inline-END` for the right-hand side, by the same inversion. */
+  inset-inline-end: calc(100% + 0.6rem);
+  top: 0;
   flex: 0 0 auto;
   display: grid;
   place-items: center;
@@ -745,18 +755,68 @@
 /* ------------------------- MESSAGE ACTIONS ------------------------- */
 /* In the flow, not on top of the text. An overlay would sit on the last line of an answer,
    and a row that appears and pushes layout would move the very text under the cursor. */
+/* **Beside the message, not under it.** In the flow they reserved about forty pixels under
+   every bubble whether or not anybody hovered, and a permanent gap at the bottom of every
+   message reads as a rendering fault - which is how it was reported.
+
+   The two alternatives were both tried and both worse: floating them over the last line
+   covers the text, and appearing on hover with layout in flow moves the words out from
+   under the cursor. Out here the column is always present and only its contents fade, so
+   nothing shifts and nothing is covered.
+
+   `flex-start` because the eye looks for them where the message begins, not where it
+   happens to end - an answer six paragraphs long would otherwise put them off-screen.
+
+   **And half a line down from there, so they centre on the first line rather than on the
+   top of the box.** A one-line message is the common case, and top-aligned the icons sat
+   above its only line - which read as the same misalignment the gap underneath used to.
+   On the first line they ARE centred when there is one line, and still where the eye looks
+   when there are twenty.
+
+   Measured on the live thread rather than guessed: the first line's centre sits 25.8px into
+   his bubble and 29.1px into an answer - different padding, different line-height - and a
+   32px button centres at `margin-top + 16`. Re-derive both if either changes. */
 .chat-actions {
   display: flex;
   align-items: center;
+  align-self: flex-start;
   gap: 0.1rem;
-  margin-top: 0.5rem;
-  margin-inline-start: -0.35rem;
+  margin-top: 0.61rem;
   opacity: 0;
   transition: opacity 0.15s ease-in-out;
 }
 
-.chat-answer:hover .chat-actions,
-.chat-bubble:hover .chat-actions,
+/* **Out of the layout, because in it they were taking width off the message.**
+   
+   The two sides are not the same shape and the measurement says so. His bubble sits at one
+   end of the turn with 562px of empty turn beside it - the actions live in that for free,
+   and nothing moves. An answer fills its turn, so a column beside it is width taken off the
+   text: measured, the answer lost 84px, which is what read as the layout having shrunk.
+   
+   So an answer's actions are positioned outside the turn altogether. Measured: the turn
+   caps at 780px inside a 1050px shell, which leaves **135px either side** and the shell does
+   not clip. Sixty-six fits in a hundred and thirty-five with room to spare, and the message
+   is back to the width it had before any of this. */
+.chat-turn {
+  position: relative;
+}
+
+.chat-turn-larson .chat-actions {
+  position: absolute;
+  /* **`inset-inline-START` to put it on the LEFT**, which is the opposite of what it reads
+     like and is the way round I got wrong once. In RTL the start edge is the right one, so
+     this resolves to `right: 100%` - the element's right edge against the turn's right...
+     no: against the turn's LEFT, which is what pushes it fully outside on that side.
+     Measured both ways before settling it: with `inset-inline-end` the actions landed at
+     x=2120 against a turn ending at 2110, i.e. the wrong side entirely. */
+  inset-inline-start: calc(100% + 0.6rem);
+  top: 0;
+  margin-top: 0.82rem;
+}
+
+/* The whole turn, because the actions are a sibling of the message now rather than a child
+   of it - the old descendant selectors would simply never match. */
+.chat-turn:hover .chat-actions,
 .chat-actions:focus-within,
 .chat-actions-pinned {
   opacity: 1;
@@ -1161,6 +1221,30 @@
 
 /* ------------------------- MOBILE RESPONSIVE STYLING ------------------------- */
 @media (max-width: 768px) {
+  /* **On a touch screen the column never fades**, because `hover: none` keeps it visible -
+     so here it is permanently taking width off a 320px line. Smaller buttons and a shorter
+     bubble, rather than sending the row back under the message where the gap came from. */
+  .chat-action {
+    width: 28px;
+    height: 28px;
+  }
+
+  /* **No gutter to escape into on a phone**, so both come back into the flow and the text
+     gives up the width. On a touch screen the actions are also always visible, so reserving
+     the space is the honest thing rather than overlaying the words. */
+  .chat-turn-larson .chat-actions {
+    position: static;
+    margin-top: 0.7rem;
+  }
+
+  .chat-avatar {
+    position: static;
+  }
+
+  .chat-answer {
+    max-width: calc(100% - 64px);
+  }
+
   /* Narrower gutters and a smaller label: on a phone the thread is the whole screen and
      this must not start competing with the messages for it. */
   .chat-day {

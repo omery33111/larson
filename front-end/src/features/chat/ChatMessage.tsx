@@ -111,6 +111,14 @@ const ChatMessage = ({ message, isWriting = false, isFound = false }: Props) => 
         className={`chat-turn chat-turn-user ${isFound ? 'chat-turn-found' : ''}`}
         data-message-id={message.id}
       >
+        {/* **Beside the bubble and never inside it.** In the flow they reserved about forty
+            pixels under every message whether or not anybody hovered - a permanent gap that
+            read as a rendering fault, which is how it was reported. Floating them over the
+            last line was the other option and was rejected for covering the text; appearing
+            on hover and pushing layout was rejected for moving the words under the cursor.
+            Out here the column is always there, so nothing shifts and nothing is covered. */}
+        {canAct && <Actions message={message} />}
+
         <div className="chat-bubble">
           {message.attachment_name && (
             <span className="chat-bubble-file">
@@ -119,8 +127,6 @@ const ChatMessage = ({ message, isWriting = false, isFound = false }: Props) => 
           )}
 
           {paragraphs(message.content).map((line, index) => <p key={index}>{inline(line)}</p>)}
-
-          {canAct && <Actions message={message} />}
         </div>
       </div>
     );
@@ -149,9 +155,10 @@ const ChatMessage = ({ message, isWriting = false, isFound = false }: Props) => 
               <span className="chat-caret" aria-hidden="true" />}
           </p>
         ))}
-
-        {canAct && <Actions message={message} />}
       </div>
+
+      {/* The far side from the avatar, which is the side with room on it. */}
+      {canAct && <Actions message={message} />}
     </div>
   )
 }
