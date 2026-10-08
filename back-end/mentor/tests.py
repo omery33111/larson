@@ -1235,7 +1235,10 @@ class CustomRuleTests(APITestCase):
         # module itself rather than on a name in `interpret`.
         with override_settings(ANTHROPIC_API_KEY = "test-key"),              patch("anthropic.Anthropic") as client:
             client.return_value.messages.create.side_effect = RuntimeError("stop here")
-            interpret_module.interpret("רק עם CISD",
+            # **`billed_to` is required now**, and not as bookkeeping: a call with nobody
+            # to bill used to skip the budget entirely, which is the same hole the gate
+            # closes, one argument further in.
+            interpret_module.interpret("רק עם CISD", billed_to = self.user,
                                        known_labels = interpret_module.vocabulary(self.user))
 
         body = client.return_value.messages.create.call_args.kwargs["messages"][0]["content"]

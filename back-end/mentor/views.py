@@ -414,6 +414,11 @@ def rules(request):
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+# **The budget is what bounds the money here; this bounds the requests.** Saving a rule in
+# his own words reaches the model, and this endpoint carried no AI rate limit at all - the
+# only one of the paid paths that did not. Forty an hour is far past anybody editing a
+# trading plan and nowhere near a script.
+@throttle_classes([AIBurstThrottle, AIDailyThrottle])
 def save_rule(request):
     """Create or replace one commitment."""
     kind = str(request.data.get("kind", "")).strip()
@@ -489,8 +494,13 @@ def save_rule(request):
         else:
             # His own labels go in with the sentence, so a term comes back as a string that
             # exists in his record rather than as a guess about what it might be called.
-            terms = interpret(text, billed_to = request.user,
-                              known_labels = vocabulary(request.user))
+            try:
+                terms = interpret(text, billed_to = request.user,
+                                  known_labels = vocabulary(request.user))
+            except ValueError as e:
+                # Out of budget. Said as the budget sentence rather than as "we could not
+                # translate it", which would send him to rewrite a rule that was fine.
+                return Response({"error": str(e)}, status = status.HTTP_400_BAD_REQUEST)
 
         if not terms:
             return Response({

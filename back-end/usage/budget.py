@@ -62,15 +62,17 @@ OUTPUT_WEIGHT = 5
 CACHE_WRITE_WEIGHT = 2.0
 CACHE_READ_WEIGHT = 0.1
 
-# What one ordinary answer costs, measured in October 2026 against a 233-trade resume: a
-# cached turn at `effort: medium`. **It exists so the trader is never shown a bare
+# What one ordinary answer costs: a cached turn at `effort: medium`, measured in October
+# 2026 across three question shapes rather than one. **The mean and not the cheapest of
+# them** - 5,937 was the shortest of the three, and quoting it would have promised about ten
+# per cent more answers than the budget buys. **It exists so the trader is never shown a bare
 # percentage.** "10% left" is a fraction of a number he has never seen and cannot act on;
 # "about 12 more answers" is the only unit he thinks in.
 #
 # **Deliberately the medium figure and not the cheaper one.** Past the warning line Larson
 # drops to `low`, which costs 4,747 - so the count quoted here is the floor and he gets at
 # least that many. A promise that runs out early is the one direction this must not fail in.
-TYPICAL_ANSWER = 5_937
+TYPICAL_ANSWER = 6_600
 
 # **How few answers have to be left before anything is said at all**, and it is a count and
 # not a percentage because a percentage of a week means something different from a percentage
@@ -293,6 +295,16 @@ def _wall_clock(moment):
     return local.strftime("ב-%d/%m בשעה ") + clock
 
 
+class OutOfBudget(ValueError):
+    """
+    Raised where the model is called rather than where the request arrives.
+
+    **A `ValueError` on purpose:** the paths that make these calls already turn one into a
+    400 carrying its own text, so the trader gets the budget sentence instead of a 500 and
+    nothing had to learn a new exception to make that true.
+    """
+
+
 def near_ceiling(user):
     """
     Whether he is into the last tenth of whichever budget binds.
@@ -311,10 +323,18 @@ def answers_left(user):
     Roughly how many more ordinary answers the remaining budget buys, on whichever ceiling
     is nearer. Floored, so it is never an over-promise.
     """
-    share, span = binding(user)
-    total = burst_allowance() if span == burst_window() else allowance()
+    # **Counted from the units and never through the percentage.** Going via the share
+    # round-trips through a float, and 39,600 units came back as 39,599.999... - which
+    # floors to one answer fewer than he has. A count that is wrong by one at exactly the
+    # moment it is shown is the only moment it is shown.
+    span = binding(user)[1]
 
-    return max(int(total * (1 - min(share, 1.0))) // TYPICAL_ANSWER, 0)
+    if span == burst_window():
+        total, used = burst_allowance(), burst_spent(user)
+    else:
+        total, used = allowance(), spent(user)
+
+    return max(total - used, 0) // TYPICAL_ANSWER
 
 
 def _frees_at(user, span, total, needed):
@@ -526,7 +546,7 @@ def exhausted_message(user):
     # sentence the product already uses for faults on our side, and the trader is told the
     # only two things that concern him: it is not his, and it is short.
     if site_exhausted() and spent(user) < allowance():
-        return "לארסון לא זמין כרגע. זה לא קשור למכסה שלך — נסה שוב בעוד כמה דקות."
+        return "לארסון עמוס כרגע. זה לא קשור למכסה שלך — נסה שוב בעוד כמה דקות."
 
     period = "של היום" if binding(user)[1] == burst_window() else "השבועית"
     when = next_answer_at(user)

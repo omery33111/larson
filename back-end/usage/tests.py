@@ -1162,3 +1162,140 @@ class SiteCeilingTests(APITestCase):
         self.assertIn("לא קשור למכסה שלך", message)
         for stingy in ("תקרת", "מכסת השימוש של כל", "המערכת", "יומית"):
             self.assertNotIn(stingy, message)
+
+
+# ------------------------- NO CALL ESCAPES THE LEDGER ------------------------- #
+
+@override_settings(AI_USER_UNITS = 1_450_000, AI_USER_WINDOW_HOURS = 168,
+                   AI_BURST_UNITS = 350_000, AI_BURST_WINDOW_HOURS = 24,
+                   AI_GLOBAL_DAILY_UNITS = 0)
+class EveryCallIsMeteredTests(APITestCase):
+    """
+    **A budget with an exit is not a budget**, and an audit of all five call sites found
+    three of them.
+
+    Two endpoints reached the model without ever asking whether the trader had anything
+    left: saving a rule in his own words, and uploading a file in a format the dictionary
+    cannot read. Neither costs much alone - and `/mentor/rules/save/` carried no AI rate
+    limit at all, so "not much" had no number after it.
+
+    And the streaming answer, which is where the real money is, recorded nothing on three
+    paths: a failed call, a refusal, and a browser that hung up. Anthropic had already
+    billed us for every token generated on all three. **A trader who presses stop on long
+    answers would have paid nothing against his budget**, and nothing anywhere would have
+    said so.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username = "omer", password = "Tr4de-Pl4n!x")
+        self.client.force_authenticate(self.user)
+
+    def drain(self):
+        TokenSpend.objects.create(user = self.user, kind = "chat",
+                                  input_tokens = 2_000_000, output_tokens = 0)
+
+    # ------------- THE TWO THAT HAD NO GATE AT ALL:
+
+    def test_saving_a_rule_cannot_outrun_the_budget(self):
+        from mentor.interpret import interpret
+
+        self.drain()
+
+        with self.assertRaises(budget.OutOfBudget):
+            interpret("רק עם IFVG", billed_to = self.user)
+
+    def test_reading_an_unknown_file_cannot_outrun_the_budget(self):
+        from trades.llm_mapping import map_with_model
+
+        self.drain()
+
+        with self.assertRaises(budget.OutOfBudget):
+            map_with_model(["a", "b"], [{"a": "1"}], {}, billed_to = self.user)
+
+    def test_a_call_with_nobody_to_bill_is_refused(self):
+        """**Leaving the gate conditional on `billed_to` is the same hole one argument
+        further in.** No caller, no call."""
+        from mentor.interpret import interpret
+        from trades.llm_mapping import map_with_model
+
+        with self.assertRaises(budget.OutOfBudget):
+            interpret("רק עם IFVG")
+
+        with self.assertRaises(budget.OutOfBudget):
+            map_with_model(["a"], [{"a": "1"}], {})
+
+    def test_the_free_paths_stay_open_to_a_capped_trader(self):
+        """
+        **He is out of model budget, not out of the product**, and that is the difference
+        between a ceiling and a shutter. Terms he picked himself never reach the model, so
+        the rule saves - exactly like a dictionary-mapped file and the temporary document.
+        """
+        make_trades(self.user, 3)
+        Trade.objects.update(setups = "ifvg")
+        self.drain()
+
+        response = self.client.post(
+            "/mentor/rules/save/",
+            {"kind": "custom", "text": "רק עם IFVG",
+             "terms": {"require": [["ifvg"]], "forbid": []}}, format = "json")
+
+        self.assertIn(response.status_code, (status.HTTP_200_OK, status.HTTP_201_CREATED))
+
+    def test_the_refusal_is_the_budget_sentence_and_not_a_parse_failure(self):
+        """Telling him the rule could not be translated would send him to rewrite one that
+        was fine."""
+        make_trades(self.user, 3)
+        Trade.objects.update(setups = "ifvg")
+        self.drain()
+
+        response = self.client.post("/mentor/rules/save/",
+                                    {"kind": "custom", "text": "רק עם IFVG"}, format = "json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("מכסת השימוש", response.data["error"])
+
+    # ------------- AND THE THREE WAYS A STREAM USED TO LEAVE WITHOUT PAYING:
+
+    def stream(self, **kwargs):
+        conversation = Conversation.objects.create(user = self.user, title = "t")
+        ChatMessage.objects.create(conversation = conversation, role = "user", content = "q")
+
+        with patch("anthropic.Anthropic", fake_client(["שלום", " עולם"], **kwargs)):
+            response = self.client.post(
+                f"/chat/conversations/{conversation.id}/stream/",
+                {"message": "מה הדליפה שלי?"}, format = "json")
+            read_events(response)
+
+    def test_a_refusal_is_still_on_the_meter(self):
+        """It costs exactly as much to produce as an answer does."""
+        self.stream(stop_reason = "refusal")
+
+        self.assertTrue(TokenSpend.objects.filter(user = self.user).exists())
+
+    def test_a_failed_call_is_still_on_the_meter(self):
+        """The tokens were generated before it fell over, and we were billed for them."""
+        self.stream(fails = True)
+
+        self.assertTrue(TokenSpend.objects.filter(user = self.user).exists())
+
+    def test_nothing_is_billed_twice(self):
+        """The `finally` is a safety net, not a second charge."""
+        self.stream()
+
+        self.assertEqual(TokenSpend.objects.filter(user = self.user).count(), 1)
+
+    # ------------- HOW FAR ONE CALL CAN PUSH HIM PAST THE CEILING:
+
+    def test_a_single_call_cannot_push_him_far_past_the_ceiling(self):
+        """
+        **The budget is checked before a call and measured after it**, so a trader sitting
+        one unit under his ceiling can still fire one whole answer. That overshoot is
+        bounded by `MAX_TOKENS`, and the bound has to leave the month inside the price.
+        """
+        from chat.context import MAX_TOKENS
+
+        worst_call = 20_000 + budget.OUTPUT_WEIGHT * MAX_TOKENS     # prompt + a full ceiling
+        worst_month = (budget.allowance() + worst_call) * 30 / 7
+
+        self.assertLess(worst_month * 5 / 1_000_000, 39,
+                        "one overshooting call puts the worst month past the subscription")

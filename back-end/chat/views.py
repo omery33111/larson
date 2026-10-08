@@ -311,6 +311,14 @@ def _answer(row, question, system, messages, prelude = "", verdict = "",
         collected.append(prelude)
         yield _event({"type": "delta", "text": prelude})
 
+    # **Held outside the block so the `finally` can still read what the call cost.** Three
+    # paths used to leave without recording anything - a failed call, a refusal, and a
+    # browser that hung up - and on all three Anthropic had already billed us for every
+    # token generated. A trader who presses stop on long answers would have paid nothing
+    # against his budget while costing real money, with nothing anywhere reporting it.
+    handle = None
+    recorded = False
+
     try:
         try:
             with client.messages.stream(
@@ -321,12 +329,14 @@ def _answer(row, question, system, messages, prelude = "", verdict = "",
                 output_config = {"effort": effort_for(row.user)},
                 system = system,
                 messages = messages,
-            ) as handle:
-                for delta in handle.text_stream:
+            ) as stream:
+                handle = stream
+
+                for delta in stream.text_stream:
                     collected.append(delta)
                     yield _event({"type": "delta", "text": delta})
 
-                final = handle.get_final_message()
+                final = stream.get_final_message()
 
         except Exception as e:
             log.exception("Claude stream failed (conversation %s)", row.id)
@@ -338,6 +348,14 @@ def _answer(row, question, system, messages, prelude = "", verdict = "",
                           "error": CALL_FAILED})
             return
 
+        # **Recorded before anything can return.** What it cost is taken from the response
+        # rather than estimated - the API's figure is the only one that counts the thinking,
+        # which is billed as output and can be several times the answer he reads - and a
+        # refusal costs exactly as much to produce as an answer does.
+        if getattr(final, "usage", None):
+            budget.record(row.user, budget_kind, final.usage)
+            recorded = True
+
         # A safety classifier declines with HTTP 200 and no usable content, so the stop
         # reason has to be read before the text is trusted.
         if final.stop_reason == "refusal":
@@ -347,22 +365,27 @@ def _answer(row, question, system, messages, prelude = "", verdict = "",
         # Touched only once the answer exists, so the sidebar orders by real activity.
         row.save()
 
-        # What it actually cost, taken from the response rather than estimated - the API's
-        # figure is the only one that counts the thinking, which is billed as output and can
-        # be several times the answer the trader reads.
-        if getattr(final, "usage", None):
-            budget.record(row.user, budget_kind, final.usage)
-
         # The fresh state rides the last event, so the meter is current without the client
         # having to ask for it after every answer.
         yield _event({"type": "done", "suggestion": suggestion, "message_id": answer.id,
                       "usage": budget.state(row.user)})
 
     finally:
-        # Runs on every path there is: a finished answer, a failed call, and a browser that
-        # hung up mid-answer - which closes this generator rather than raising anything a
-        # normal except clause would see. Whatever arrived is kept, so pressing stop leaves
-        # a readable thread instead of an empty bubble.
+        # **The ledger closes here or it has a hole in it.** This runs on every path there
+        # is - a finished answer, a failed call, and a browser that hung up mid-answer,
+        # which closes this generator rather than raising anything an except clause would
+        # see. The snapshot is what the stream accumulated before it stopped, so this is
+        # still a measurement and not an estimate: whatever arrived was billed to us.
+        if not recorded:
+            try:
+                partial = getattr(handle, "current_message_snapshot", None)
+                if getattr(partial, "usage", None):
+                    budget.record(row.user, budget_kind, partial.usage)
+            except Exception:
+                log.exception("Could not record a partial answer (conversation %s)", row.id)
+
+        # Whatever arrived is kept, so pressing stop leaves a readable thread instead of an
+        # empty bubble.
         answer.content = "".join(collected).strip()
         answer.save()
 

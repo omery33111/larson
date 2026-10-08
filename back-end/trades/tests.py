@@ -754,7 +754,14 @@ class ModelMappingTests(APITestCase):
     The dictionary goes first; this only ever sees a file it could not read. What is tested
     here is mostly the guard - the model's answer is checked against the file before any of
     it reaches the parser.
+
+    **`billed_to` is required on this path now.** A model call with nobody to bill skipped
+    the budget entirely, so it is refused outright - which is why every case below names a
+    payer even though none of them is about the money.
     """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username = "omer", password = "Tr4de-Pl4n!x")
 
     def test_a_file_the_dictionary_cannot_read_is_rejected_without_the_fallback(self):
         with self.assertRaises(ValueError):
@@ -765,7 +772,8 @@ class ModelMappingTests(APITestCase):
 
         with self.settings(ANTHROPIC_API_KEY = "test-key"):
             with patch("anthropic.Anthropic", fake_mapper(answer)):
-                trades, report = parse_file(STRANGE, "spanish.csv", allow_model = True)
+                trades, report = parse_file(STRANGE, "spanish.csv", allow_model = True,
+                                   billed_to = self.user)
 
         self.assertEqual(len(trades), 3)
         self.assertTrue(report["mapped_by_model"])
@@ -788,7 +796,8 @@ class ModelMappingTests(APITestCase):
 
         with self.settings(ANTHROPIC_API_KEY = "test-key"):
             with patch("anthropic.Anthropic", fake_mapper(answer)):
-                trades, report = parse_file(STRANGE, "spanish.csv", allow_model = True)
+                trades, report = parse_file(STRANGE, "spanish.csv", allow_model = True,
+                                   billed_to = self.user)
 
         self.assertNotIn("rating", report["mapped_fields"])
 
@@ -796,12 +805,14 @@ class ModelMappingTests(APITestCase):
         with self.settings(ANTHROPIC_API_KEY = "test-key"):
             with patch("anthropic.Anthropic", fake_mapper("I could not work this out.")):
                 with self.assertRaises(ValueError):
-                    parse_file(STRANGE, "spanish.csv", allow_model = True)
+                    parse_file(STRANGE, "spanish.csv", allow_model = True,
+                                   billed_to = self.user)
 
     def test_no_api_key_means_no_call_and_the_ordinary_rejection(self):
         with self.settings(ANTHROPIC_API_KEY = ""):
             with self.assertRaises(ValueError):
-                parse_file(STRANGE, "spanish.csv", allow_model = True)
+                parse_file(STRANGE, "spanish.csv", allow_model = True,
+                                   billed_to = self.user)
 
     def test_the_guard_drops_unknown_fields_and_taken_columns(self):
         resolved = _validate(

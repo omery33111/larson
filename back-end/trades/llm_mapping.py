@@ -103,6 +103,25 @@ def map_with_model(headers, sample, known, billed_to = None):
     a failed call or an unusable answer are all the same thing here, and all of them simply
     leave the file to be rejected with the ordinary explanation.
     """
+    # **The meter is next to the call, not at the endpoint that happens to make it today.**
+    # Both of these were reachable by a trader who had already spent his whole budget - one
+    # through saving a rule, one through uploading a file in a format the dictionary cannot
+    # read - and neither cost much on its own. Small times unlimited is the shape the budget
+    # exists to prevent, and `/mentor/rules/save/` carried no AI rate limit at all.
+    #
+    # Checked here so that a caller added next year cannot forget it, and only when there is
+    # somebody to bill: the deterministic paths above still cost nothing and stay open.
+    from usage import budget
+
+    # **No caller, no free pass.** Leaving the gate conditional on `billed_to` would mean a
+    # call made with nobody to bill skipped the budget entirely - which is the hole this
+    # closes, one argument further in. Every production caller already supplies one.
+    if billed_to is None:
+        raise budget.OutOfBudget("לארסון לא זמין כרגע. נסה שוב בעוד כמה דקות.")
+
+    if not budget.has_room(billed_to):
+        raise budget.OutOfBudget(budget.exhausted_message(billed_to))
+
     if not settings.ANTHROPIC_API_KEY:
         return {}
 

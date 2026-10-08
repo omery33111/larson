@@ -92,10 +92,11 @@ class FakeUsage:
 class FakeStream:
     """Stands in for client.messages.stream(...) so no real call is made in the tests."""
 
-    def __init__(self, chunks, stop_reason = "end_turn", usage = None):
+    def __init__(self, chunks, stop_reason = "end_turn", usage = None, fails = False):
         self.chunks = chunks
         self.stop_reason = stop_reason
         self.usage = usage if usage is not None else FakeUsage()
+        self.fails = fails
 
     def __enter__(self):
         return self
@@ -108,15 +109,26 @@ class FakeStream:
         return iter(self.chunks)
 
     def get_final_message(self):
+        if self.fails:
+            raise RuntimeError("the call fell over")
+
         return type("Final", (), {"stop_reason": self.stop_reason, "usage": self.usage})()
 
+    @property
+    def current_message_snapshot(self):
+        """**What the real SDK accumulates as the stream runs**, and the only measurement
+        available when it ends abnormally - a failed call, a refusal, or a browser that hung
+        up. Mirrored here because the ledger now reads it on exactly those paths."""
+        return type("Snap", (), {"usage": self.usage})()
 
-def fake_client(chunks, stop_reason = "end_turn", captured = None, usage = None):
+
+def fake_client(chunks, stop_reason = "end_turn", captured = None, usage = None,
+                fails = False):
     class Messages:
         def stream(self, **kwargs):
             if captured is not None:
                 captured.update(kwargs)
-            return FakeStream(chunks, stop_reason, usage)
+            return FakeStream(chunks, stop_reason, usage, fails)
 
     class Client:
         def __init__(self, *args, **kwargs):
