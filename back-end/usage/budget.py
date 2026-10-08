@@ -37,6 +37,7 @@ eleven hours of nothing; "you get some back in 40 minutes" is true and useful.
 from datetime import timedelta
 
 from django.conf import settings
+from django.db.models import F, FloatField, Sum
 from django.utils import timezone
 
 from .models import TokenSpend
@@ -83,6 +84,31 @@ TYPICAL_ANSWER = 6_600
 # Ten is about two sessions of notice: enough that the ceiling is never a surprise, not so
 # much that a line hovers over the chat for days.
 WARN_BELOW_ANSWERS = 10
+
+
+def _units_in_sql():
+    """
+    The same four weights as `units`, pushed into the database instead of Python.
+
+    **`site_spent` was loading every row every user had written in a day and adding them up
+    here.** At ten testers that is nothing; at a thousand it is tens of thousands of rows
+    pulled into memory on **every single call to the model**, because `has_room` asks for it
+    before each one. The arithmetic was never the cost - the rows were.
+
+    **Built from the constants rather than written out again**, so the two can never drift:
+    a weight changed in one place and not the other would make the meter and the ledger
+    disagree about what the same spend cost, and nothing would report it.
+    """
+    return (F("input_tokens")
+            + CACHE_WRITE_WEIGHT * F("cache_write_tokens")
+            + CACHE_READ_WEIGHT * F("cache_read_tokens")
+            + OUTPUT_WEIGHT * F("output_tokens"))
+
+
+def _total(rows):
+    """What a queryset of spends comes to, in units, counted by the database."""
+    return int(rows.aggregate(
+        total = Sum(_units_in_sql(), output_field = FloatField()))["total"] or 0)
 
 
 def warn_at():
@@ -212,10 +238,7 @@ WITHIN = "created_at__gt"
 
 def spent(user, span = None):
     """What this trader has used inside a window, in units. Defaults to the weekly one."""
-    rows = TokenSpend.objects.filter(user = user, **{WITHIN: _since(span)})
-
-    return sum(units(row.input_tokens, row.output_tokens,
-                     row.cache_write_tokens, row.cache_read_tokens) for row in rows)
+    return _total(TokenSpend.objects.filter(user = user, **{WITHIN: _since(span)}))
 
 
 def burst_spent(user):
@@ -449,10 +472,7 @@ def site_window():
 
 def site_spent():
     """What everyone together has used inside the site's own day."""
-    rows = TokenSpend.objects.filter(**{WITHIN: timezone.now() - site_window()})
-
-    return sum(units(row.input_tokens, row.output_tokens,
-                     row.cache_write_tokens, row.cache_read_tokens) for row in rows)
+    return _total(TokenSpend.objects.filter(**{WITHIN: timezone.now() - site_window()}))
 
 
 def has_room(user):

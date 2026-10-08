@@ -50,7 +50,13 @@ class TokenSpend(models.Model):
 
     class Meta:
         # Every read is "this user, since this moment", and it runs before each answer.
-        indexes = [models.Index(fields = ["user", "created_at"])]
+        indexes = [
+            models.Index(fields = ["user", "created_at"]),
+            # **`site_spent` filters on the date alone**, and an index whose leading column
+            # is the user cannot serve that - it scanned the whole table once per call to
+            # the model. Harmless at ten traders, a full scan per answer at a thousand.
+            models.Index(fields = ["created_at"]),
+        ]
         ordering = ["-created_at"]
 
     def __str__(self):

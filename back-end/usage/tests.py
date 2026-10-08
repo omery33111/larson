@@ -1299,3 +1299,84 @@ class EveryCallIsMeteredTests(APITestCase):
 
         self.assertLess(worst_month * 5 / 1_000_000, 39,
                         "one overshooting call puts the worst month past the subscription")
+
+
+# ------------------------- THE LEDGER AT A THOUSAND TRADERS ------------------------- #
+
+@override_settings(AI_USER_UNITS = 1_450_000, AI_USER_WINDOW_HOURS = 168,
+                   AI_BURST_UNITS = 350_000, AI_GLOBAL_DAILY_UNITS = 4_000_000)
+class LedgerScaleTests(APITestCase):
+    """
+    **`has_room` asks for the site total before every single call to the model**, and that
+    total used to be computed by loading every row every trader had written in a day into
+    Python and adding them up. Nothing at ten testers; a full table scan per answer at a
+    thousand, where the arithmetic was never the cost - the rows were.
+    """
+
+    def rows(self, user, n, **kw):
+        TokenSpend.objects.bulk_create([
+            TokenSpend(user = user, kind = "chat", input_tokens = 1_234 + i,
+                       output_tokens = 567 + i, cache_write_tokens = 890 + i,
+                       cache_read_tokens = 4_321 + i, **kw)
+            for i in range(n)])
+
+    def test_the_database_and_python_agree_on_what_a_spend_cost(self):
+        """
+        **The four weights exist once and are applied two ways**, so this is what stops them
+        drifting. A weight changed in one place and not the other would make the meter and
+        the ledger disagree about the same spend, and nothing anywhere would report it.
+
+        They are not bit-identical on purpose: `units` truncates each row and the database
+        truncates once at the end, so the SQL figure is the more accurate of the two by up
+        to a unit per row.
+        """
+        user = User.objects.create_user(username = "omer", password = "Tr4de-Pl4n!x")
+        self.rows(user, 40)
+
+        by_hand = sum(budget.units(r.input_tokens, r.output_tokens,
+                                   r.cache_write_tokens, r.cache_read_tokens)
+                      for r in TokenSpend.objects.all())
+
+        self.assertAlmostEqual(budget.spent(user), by_hand, delta = 40)
+        self.assertAlmostEqual(budget.site_spent(), by_hand, delta = 40)
+
+    def adds_up_in_the_database(self, call):
+        """
+        **Counting queries cannot tell these apart, and that is the trap.** Loading every
+        row and adding them up in Python is also exactly one query - it just carries all of
+        them back. What separates the two is whether the database did the arithmetic, so
+        that is what gets asserted.
+        """
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        with CaptureQueriesContext(connection) as queries:
+            call()
+
+        self.assertEqual(len(queries), 1)
+        self.assertIn("SUM(", queries[0]["sql"].upper())
+
+    def test_the_site_total_is_added_up_by_the_database(self):
+        """It is asked for before every answer, so its cost must not follow the user count."""
+        for n in range(12):
+            self.rows(User.objects.create_user(username = f"t{n}", password = "Tr4de!x9z"), 60)
+
+        self.adds_up_in_the_database(budget.site_spent)
+
+    def test_one_traders_total_is_too(self):
+        user = User.objects.create_user(username = "omer", password = "Tr4de-Pl4n!x")
+        self.rows(user, 200)
+
+        self.adds_up_in_the_database(lambda: budget.spent(user))
+
+    def test_an_empty_window_is_zero_and_not_an_error(self):
+        user = User.objects.create_user(username = "omer", password = "Tr4de-Pl4n!x")
+
+        self.assertEqual(budget.spent(user), 0)
+        self.assertEqual(budget.site_spent(), 0)
+
+    def test_the_date_is_indexed_on_its_own(self):
+        """`site_spent` filters on the date alone; an index led by the user cannot serve it."""
+        indexed = [tuple(i.fields) for i in TokenSpend._meta.indexes]
+
+        self.assertIn(("created_at",), indexed)
