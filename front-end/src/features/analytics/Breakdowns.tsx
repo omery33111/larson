@@ -96,6 +96,25 @@ const Breakdowns = () => {
         currency={currency}
       />
 
+      {/*
+        * **`by_tag` was computed from the first day and never rendered.** The statistics
+        * engine produces it, the prompt reads it, the rule engine now offers a rule from
+        * it - and the one screen whose whole job is to show the trader his own segments
+        * left it out. On a real record the tags carry more money than the setups do:
+        * "שורט בפרימיום" is 19 trades at -$894.50 with a profit factor of 0.51, and there
+        * was nowhere on the site he could see that.
+        *
+        * Beside the setups rather than further down, because the two answer the same
+        * question - what was true about the trade when he took it - and a trader comparing
+        * them should not have to scroll between them.
+        */}
+      <GroupTable
+        title="לפי תגית"
+        hint="התוויות שאתה עצמך רושם על העסקה. לרוב זה החתך שהכי קרוב להחלטה שקיבלת בזמן אמת."
+        groups={breakdowns.by_tag}
+        currency={currency}
+      />
+
       <GroupTable
         title="לפי טעות מתועדת"
         hint="מה כל טעות שסימנת בעצמך עולה לך בפועל."
@@ -123,6 +142,21 @@ const Breakdowns = () => {
         hint="הטיה ללונג או לשורט היא אחד הדפוסים שהכי קשה לראות מבפנים."
         groups={breakdowns.by_direction}
         formatKey={(key) => (key === 'long' ? 'לונג' : key === 'short' ? 'שורט' : 'לא ידוע')}
+        currency={currency}
+      />
+
+      {/*
+        * **The hour, which the documentation already said was on this page.** It was not.
+        * That mattered beyond a missing table: the sixteen opening questions in the chat
+        * were written to avoid asking anything "already printed on the ID page", and the
+        * hour breakdown is named there as one of those things - so the trader could not
+        * see his hours here, and the chat deliberately would not offer to tell him.
+        */}
+      <GroupTable
+        title="לפי שעת סגירה"
+        hint="השעה שבה העסקה נסגרה, בשעון של הקובץ. שעה מפסידה שחוזרת היא אחד הדפוסים הקלים לתקן."
+        groups={breakdowns.by_hour}
+        formatKey={(key) => `${String(key).padStart(2, '0')}:00`}
         currency={currency}
       />
 

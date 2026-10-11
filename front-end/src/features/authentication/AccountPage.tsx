@@ -94,20 +94,12 @@ const AccountPage = () => {
   const changePassword = async () => {
     setProblem(null);
 
-    // **Empty fields first.** All three blank passes `next !== confirm` - "" equals "" -
-    // and the server then answers "your current password is wrong", which is true and
-    // misleading: he did not type one. Same shape as the login form, which told an empty
-    // submit that its password could not contain spaces.
-    const blank = !current ? 'צריך למלא את הסיסמה הנוכחית.'
-                : !next ? 'צריך למלא סיסמה חדשה.'
-                : !confirm ? 'צריך לאשר את הסיסמה החדשה.'
-                : '';
-
-    if (blank) {
-      failed('password', blank);
-      return;
-    }
-
+    // **No blank check here, and that is deliberate.** The button below is already
+    // `disabled` until all three fields have something in them, so an empty submit cannot
+    // reach this function at all - unlike the login, register, forgot and reset forms,
+    // whose buttons are only disabled while loading and which therefore each needed one.
+    // A guard that cannot run, sitting under a comment claiming it fixed something, is
+    // worse than no guard: it is documentation that lies.
     if (next !== confirm) {
       failed('password', 'שתי הסיסמאות אינן זהות.');
       return;
