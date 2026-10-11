@@ -140,6 +140,7 @@ const Login = () => {
             autoComplete="username"
             value={username}
             placeholder="שם משתמש"
+                aria-label="שם משתמש"
             onChange={onChange}
           />
         </div>
@@ -153,6 +154,7 @@ const Login = () => {
             autoComplete="current-password"
             value={password}
             placeholder="סיסמה"
+                aria-label="סיסמה"
             onChange={onChange}
           />
         </div>

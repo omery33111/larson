@@ -85,6 +85,7 @@ const VerifyEmail = () => {
                     className="app-input"
                     value={email}
                     placeholder="כתובת האימייל שנרשמת איתה"
+                aria-label="כתובת האימייל שנרשמת איתה"
                     onChange={(event) => setEmail(event.target.value)}
                   />
                 </div>

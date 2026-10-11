@@ -102,6 +102,7 @@ const ResetPassword = () => {
                 name="password"
                 value={password}
                 placeholder="סיסמה חדשה"
+                aria-label="סיסמה חדשה"
                 onChange={(event) => { setPassword(event.target.value); setProblem(''); }}
               />
             </div>
@@ -113,6 +114,7 @@ const ResetPassword = () => {
                 name="confirm"
                 value={confirm}
                 placeholder="וידוא סיסמה"
+                aria-label="אימות הסיסמה"
                 onChange={(event) => { setConfirm(event.target.value); setProblem(''); }}
               />
             </div>

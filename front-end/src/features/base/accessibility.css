@@ -1,0 +1,273 @@
+/* -------------------------------------------------------------------------------------
+ * THE ACCESSIBILITY MENU, AND THE PREFERENCES IT SETS
+ *
+ * The preferences are classes on `<html>`, so every rule below can be answered by a media
+ * query and none of them needs `!important`. See `accessibility.ts` for why a widget is
+ * not the same thing as an accessible site.
+ * ------------------------------------------------------------------------------------- */
+
+/* ------------- THE BUTTON:
+ *
+ * Bottom-left in an RTL page, which is the corner furthest from the composer and the send
+ * button - the two things somebody uses constantly on the screens where this floats. */
+.a11y-open {
+  position: fixed;
+  inset-block-end: 1rem;
+  inset-inline-start: 1rem;
+  z-index: 1500;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 1px solid #2a2f3a;
+  background: #161a21;
+  color: #f0b90b;
+  font-size: 1.5rem;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+}
+
+.a11y-open:hover {
+  background: #1d222b;
+}
+
+.a11y-panel {
+  position: fixed;
+  inset-block-end: 4.5rem;
+  inset-inline-start: 1rem;
+  z-index: 1500;
+
+  width: min(19rem, calc(100vw - 2rem));
+  padding: 0.9rem;
+  border: 1px solid #2a2f3a;
+  border-radius: 14px;
+  background: #13161c;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6);
+
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.a11y-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.2rem;
+}
+
+.a11y-title {
+  margin: 0;
+  font-size: 1rem;
+  color: #e6e8ec;
+}
+
+.a11y-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin: -0.5rem;
+  border: none;
+  background: none;
+  color: #8b909c;
+  font-size: 1.05rem;
+  cursor: pointer;
+}
+
+.a11y-close:hover { color: #e6e8ec; }
+
+.a11y-row,
+.a11y-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+
+  width: 100%;
+  min-height: 44px;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid #242932;
+  border-radius: 10px;
+  background: #171b22;
+  color: #d7dae0;
+  font-size: 0.92rem;
+  font-family: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.a11y-row { cursor: default; }
+
+.a11y-option-on {
+  border-color: #f0b90b;
+  color: #f5d479;
+}
+
+.a11y-state {
+  font-size: 0.78rem;
+  color: #7f8696;
+}
+
+.a11y-option-on .a11y-state { color: #f0b90b; }
+
+.a11y-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.a11y-stepper button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid #2a2f3a;
+  border-radius: 8px;
+  background: #1d222b;
+  color: #e6e8ec;
+  cursor: pointer;
+}
+
+.a11y-stepper button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.a11y-step-value {
+  min-width: 3.4rem;
+  text-align: center;
+  font-size: 0.82rem;
+  color: #9aa1ad;
+}
+
+.a11y-reset,
+.a11y-statement-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 44px;
+  border: none;
+  background: none;
+  color: #8b909c;
+  font-size: 0.85rem;
+  font-family: inherit;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.a11y-reset:hover,
+.a11y-statement-link:hover { color: #f0b90b; }
+
+
+/* ------------- WHAT THE PREFERENCES DO:
+ *
+ * **The text scale multiplies a variable and never the root `font-size`.** Nearly every
+ * size in this product is `rem` or `clamp()`, so scaling the root would grow the boxes
+ * along with the words and the page would run out of room before the text was big enough
+ * to help. This grows the words inside the boxes that already exist. */
+:root { --a11y-text-scale: 1; }
+
+/*
+ * **Two rules, because one of them alone does nothing - and the first version shipped with
+ * only the weaker half.**
+ *
+ * Measured on the deployed stylesheet: `body{font-size:calc(1rem * var(--a11y-text-scale))}`
+ * was in the bundle, and **`body{font-size:15px}` appeared twice after it.** Equal
+ * specificity, later wins, so the headline control of the whole menu moved nothing at all.
+ *
+ * And even winning that would not have been enough: almost every size in this product is
+ * `rem`, which is relative to the **root** and not to `body`, so scaling `body` leaves all
+ * of it untouched. The root carries the `rem` sizes; the `html body` rule carries the text
+ * that inherits an absolute size from `body`. Neither one scales anything twice, because no
+ * element takes its size from both.
+ */
+:root {
+  font-size: calc(100% * var(--a11y-text-scale));
+}
+
+html body {
+  font-size: calc(15px * var(--a11y-text-scale));
+}
+
+.a11y-contrast body {
+  background: #000;
+}
+
+/* Raised toward white rather than inverted: this is a dark product, and flipping it to a
+   light theme would be a different site rather than a more readable one. */
+.a11y-contrast p,
+.a11y-contrast span,
+.a11y-contrast li,
+.a11y-contrast td,
+.a11y-contrast th,
+.a11y-contrast label,
+.a11y-contrast h1,
+.a11y-contrast h2,
+.a11y-contrast h3 {
+  color: #fff;
+}
+
+.a11y-contrast a,
+.a11y-contrast button {
+  color: #ffd84d;
+}
+
+.a11y-links a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 2px;
+  color: #ffd84d;
+}
+
+/* **Everything, including what the theme animates by itself** - Larson's aura breathes and
+   the caret blinks, and both are exactly what somebody turning this on is turning off. */
+.a11y-still *,
+.a11y-still *::before,
+.a11y-still *::after {
+  animation-duration: 0s;
+  animation-iteration-count: 1;
+  transition-duration: 0s;
+  scroll-behavior: auto;
+}
+
+.a11y-readable body {
+  font-family: Arial, 'Segoe UI', sans-serif;
+  letter-spacing: 0.01em;
+  word-spacing: 0.08em;
+  line-height: 1.75;
+}
+
+.a11y-readable i,
+.a11y-readable em {
+  font-style: normal;
+  font-weight: 600;
+}
+
+
+/* ------------------------- MOBILE RESPONSIVE STYLING ------------------------- */
+@media (max-width: 768px) {
+  /* The composer on the chat and mentor screens owns the bottom of the phone, so the
+     button steps up above it rather than sitting on top of the thing being typed into. */
+  .a11y-open {
+    inset-block-end: 0.75rem;
+    inset-inline-start: 0.75rem;
+    width: 44px;
+    height: 44px;
+    font-size: 1.3rem;
+  }
+
+  .a11y-panel {
+    inset-block-end: 4rem;
+    inset-inline-start: 0.75rem;
+    inset-inline-end: 0.75rem;
+    width: auto;
+  }
+}

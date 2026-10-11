@@ -165,6 +165,7 @@ const Register = () => {
                 autoComplete="username"
                 value={username}
                 placeholder="הזן שם משתמש"
+                aria-label="שם משתמש"
                 onChange={onChange}
               />
             </div>
@@ -178,6 +179,7 @@ const Register = () => {
                 autoComplete="new-password"
                 value={password}
                 placeholder="סיסמה"
+                aria-label="סיסמה"
                 onChange={onChange}
               />
             </div>
@@ -191,6 +193,7 @@ const Register = () => {
                 autoComplete="new-password"
                 value={password2}
                 placeholder="וידוא סיסמה"
+                aria-label="אימות הסיסמה"
                 onChange={onChange}
               />
             </div>
@@ -213,6 +216,7 @@ const Register = () => {
                 name="email"
                 value={email}
                 placeholder="כתובת אימייל"
+                aria-label="כתובת אימייל"
                 onChange={onChange}
               />
             </div>

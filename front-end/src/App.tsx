@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
+import { IconContext } from 'react-icons';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useAppDispatch, useAppSelector } from './app/hooks';
@@ -7,6 +8,7 @@ import { isRemembered, readItem } from './app/session';
 import { logoutAsync, selectIsLogged } from './features/authentication/authenticationSlice';
 import MyFooter from './features/navigators/MyFooter';
 import MyNavbar from './features/navigators/MyNavbar';
+import AccessibilityMenu from './features/base/AccessibilityMenu';
 import IngestionConfirm from './features/trades/IngestionConfirm';
 import './index.css';
 
@@ -34,6 +36,7 @@ const EXACT: Record<string, string> = {
   '/authentication/forgot': 'Larson - שכחתי סיסמה',
   '/terms': 'Larson - תנאי שימוש',
   '/privacy': 'Larson - מדיניות פרטיות',
+  '/accessibility': 'Larson - הצהרת נגישות',
 };
 
 // These three arrive from an email and carry a token in the path, so they match on prefix.
@@ -100,22 +103,42 @@ function App() {
   const isFullHeight = pathname === '/chat' || pathname === '/mentor';
 
   return (
+    /*
+     * **Every icon in the product is decorative, and now says so.** `react-icons` renders a
+     * bare `<svg>`, which a screen reader walks into and reads as a graphic with no name -
+     * four of them on the login screen alone. They all sit beside the words they illustrate,
+     * so the right answer is for them to be silent, and one provider is the whole fix.
+     * An icon that genuinely carries meaning on its own overrides this with its own label.
+     */
+    <IconContext.Provider value={{ attr: { 'aria-hidden': 'true', focusable: 'false' } }}>
     <div className={`App ${isFullHeight ? 'App-fullheight' : ''}`}>
       <ToastContainer />
+
+      {/*
+        * **WCAG 2.4.1, and it was missing.** Every page opens with the same navigation, so
+        * a keyboard or screen-reader user had to walk the whole bar on every single screen
+        * before reaching anything. It is invisible until focused, which is the first thing
+        * Tab reaches.
+        */}
+      <a className="skip-link" href="#main">דילוג לתוכן הראשי</a>
+
       <MyNavbar />
 
-      <main className="app-main">
+      <main className="app-main" id="main" tabIndex={-1}>
         <ScrollToTop />
         <Outlet />
       </main>
 
       <MyFooter />
 
+      <AccessibilityMenu />
+
       {/* Mounted once for the whole app. It is driven entirely by the store and takes no
           props, so every screen that starts an ingestion - the mentor, the resume dialog -
           shares this one. Two of them on the same page meant two stacked overlays. */}
       <IngestionConfirm />
     </div>
+    </IconContext.Provider>
   );
 }
 

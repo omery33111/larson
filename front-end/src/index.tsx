@@ -16,6 +16,7 @@ import Register from './features/authentication/Register';
 import ResetPassword from './features/authentication/ResetPassword';
 import VerifyEmail from './features/authentication/VerifyEmail';
 import Privacy from './features/base/Privacy';
+import AccessibilityStatement from './features/base/AccessibilityStatement';
 import Terms from './features/base/Terms';
 import ErrorPage from './features/base/ErrorPage';
 import HomePage from './features/base/HomePage';
@@ -70,6 +71,10 @@ root.render(
 
       <Route path = "/terms" element={<Terms />} />
       <Route path = "/privacy" element={<Privacy />} />
+
+      {/* The artefact תקנות נגישות לשירות actually names. Open to everyone, with no
+          session: somebody who cannot use the site has to be able to read how to tell us. */}
+      <Route path = "/accessibility" element={<AccessibilityStatement />} />
 
       <Route path = "/profile" element={<TraderProfilePage />} />
 

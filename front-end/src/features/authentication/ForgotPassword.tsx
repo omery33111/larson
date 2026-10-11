@@ -82,6 +82,7 @@ const ForgotPassword = () => {
                 name="email"
                 value={email}
                 placeholder="כתובת האימייל שלך"
+                aria-label="כתובת האימייל שלך"
                 autoComplete="email"
                 onChange={(event) => { setEmail(event.target.value); setProblem(''); }}
               />

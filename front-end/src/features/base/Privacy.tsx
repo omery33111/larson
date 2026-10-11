@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { ACCESSIBILITY_CONTACT as CONTACT } from './AccessibilityStatement'
 import './legal.css'
 
 
@@ -122,9 +123,16 @@ const Privacy = () => (
 
     <section className="legal-section">
       <h2>יצירת קשר</h2>
+      {/*
+        * **This used to say "by the email address that appears on the site", and no email
+        * address appeared anywhere on the site.** A privacy policy whose contact route is
+        * a circular reference is a policy with no contact route - which is exactly the
+        * thing it is required to have. One constant, shared with the accessibility
+        * statement, so the two can never drift apart.
+        */}
       <p>
-        לשאלות על המידע שלך, או לבקשת מחיקה שלא הצלחת לבצע לבד — אפשר לפנות אלינו במייל
-        שמופיע באתר.
+        לשאלות על המידע שלך, או לבקשת מחיקה שלא הצלחת לבצע לבד:{' '}
+        <a href={`mailto:${CONTACT}`} dir="ltr">{CONTACT}</a>
       </p>
     </section>
 

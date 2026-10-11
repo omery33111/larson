@@ -116,6 +116,7 @@ const ChatComposer = () => {
           value={draft}
           rows={1}
           placeholder="שאל את לארסון על המסחר שלך..."
+                aria-label="ההודעה שלך ללארסון"
           onChange={(event) => dispatch(setDraft(event.target.value))}
           onKeyDown={onKeyDown}
           disabled={isStreaming}

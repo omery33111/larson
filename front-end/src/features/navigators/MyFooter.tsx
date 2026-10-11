@@ -24,6 +24,10 @@ const MyFooter = () => {
           <Link to="/terms">תנאי שימוש</Link>
           <span aria-hidden="true">·</span>
           <Link to="/privacy">מדיניות פרטיות</Link>
+          <span aria-hidden="true">·</span>
+          {/* In the footer as well as in the menu: the regulations expect the statement to
+              be findable from any page, and the footer is where people look for it. */}
+          <Link to="/accessibility">הצהרת נגישות</Link>
         </nav>
 
       </div>

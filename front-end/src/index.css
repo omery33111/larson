@@ -260,6 +260,82 @@ a {
 
 
 
+
+/* -------------------------------------------------------------------------------------
+ * REACHING THINGS WITHOUT A MOUSE
+ *
+ * Two WCAG level-A requirements that the product did not meet, and both are cheap.
+ * ------------------------------------------------------------------------------------- */
+
+/*
+ * **2.4.1 Bypass Blocks.** Invisible until it has focus, and then it is the first thing
+ * Tab reaches - so a keyboard or screen-reader user skips the navigation bar instead of
+ * walking it again on every screen.
+ */
+.skip-link {
+  /*
+   * **`fixed`, `nowrap` and `max-content`, and each one is load-bearing.**
+   *
+   * Measured on the deployed page: the box came out **35 pixels wide and 94 tall - which
+   * is exactly the horizontal padding and nothing else.** Shrink-to-fit against the
+   * initial containing block collapsed the content to zero and wrapped the words one
+   * character per line, so the moment the link appeared it would have been unreadable.
+   * `max-content` plus `nowrap` lays it out at the width of its own text, once.
+   *
+   * `fixed` rather than `absolute` because the link must sit at the top of the *screen*
+   * when it is focused. Absolute puts it at the top of the document, so on a page the
+   * visitor has already scrolled - a long policy page, a long thread - focusing it would
+   * reveal nothing.
+   */
+  position: fixed;
+  inset-block-start: -200px;
+  inset-inline-start: 1rem;
+  z-index: 2000;
+
+  width: max-content;
+  /*
+   * **`none`, and it has to be explicit.** `* { max-width: 100% }` reaches this too, and
+   * measured on the deployed page it resolved to `max-width: 0` - which clamps the content
+   * box to nothing and leaves a 35px box that is purely the horizontal padding. The words
+   * were being rendered into zero width.
+   */
+  max-width: none;
+  white-space: nowrap;
+
+  padding: 0.7rem 1.1rem;
+  border-radius: 0 0 10px 10px;
+  background: #f0b90b;
+  color: #0f1115;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+/* `:focus` and not `:focus-visible`: this link exists only for the keyboard, and the one
+   way to reach it is to Tab onto it. */
+.skip-link:focus {
+  inset-block-start: 0;
+}
+
+/*
+ * **2.4.7 Focus Visible.** There were five `:focus` rules in the whole product, so on most
+ * controls the only thing marking where you were was whatever the browser draws by
+ * default - which on a dark surface is frequently nothing you can see.
+ *
+ * `:focus-visible` and not `:focus`, so a mouse click does not leave a ring behind it;
+ * the ring is for the person who needs to know where the keyboard is.
+ */
+:focus-visible {
+  outline: 3px solid #f0b90b;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* On the gold surfaces the gold ring disappears, so there it goes dark instead. */
+.app-btn-primary:focus-visible,
+.skip-link:focus-visible {
+  outline-color: #0f1115;
+}
+
 /* ------------------------- LAPTOP RESPONSIVE STYLING ------------------------- */
 @media (min-width: 1025px) and (max-width: 1919px) {
 
