@@ -319,6 +319,12 @@ def _answer(row, question, system, messages, prelude = "", verdict = "",
     handle = None
     recorded = False
 
+    # **Why it ended, because the row has to say so after a reload.** The error goes out as
+    # a stream event and a stream event lives exactly as long as the tab does; the row is
+    # what survives. Seen on the live thread: seven of his questions sit there with nothing
+    # under them, forever, reading as a mentor that ignored him.
+    failed = ""
+
     try:
         try:
             with client.messages.stream(
@@ -344,6 +350,7 @@ def _answer(row, question, system, messages, prelude = "", verdict = "",
             # client library and describes our infrastructure, not anything the trader can
             # act on - request ids, endpoints, whatever the SDK chose to say. He gets a
             # sentence he can do something with; the detail is on the line above.
+            failed = CALL_FAILED
             yield _event({"type": "error",
                           "error": CALL_FAILED})
             return
@@ -359,7 +366,8 @@ def _answer(row, question, system, messages, prelude = "", verdict = "",
         # A safety classifier declines with HTTP 200 and no usable content, so the stop
         # reason has to be read before the text is trusted.
         if final.stop_reason == "refusal":
-            yield _event({"type": "error", "error": "המודל סירב לענות על ההודעה הזו."})
+            failed = "המודל סירב לענות על ההודעה הזו."
+            yield _event({"type": "error", "error": failed})
             return
 
         # Touched only once the answer exists, so the sidebar orders by real activity.
@@ -387,6 +395,30 @@ def _answer(row, question, system, messages, prelude = "", verdict = "",
         # Whatever arrived is kept, so pressing stop leaves a readable thread instead of an
         # empty bubble.
         answer.content = "".join(collected).strip()
-        answer.save()
+
+        # **And when nothing arrived at all, the row says why or it goes.** That sentence
+        # above was true for a *partial* answer and quietly false for an empty one: the join
+        # produced "", it was saved, and the thread kept an assistant turn with nothing in
+        # it. **This is the same shape as `verdict` and the suggestion card** - a sign that
+        # rides only the stream is a sign that disappears on reload - and it is the third
+        # time it has come up here.
+        #
+        # Two endings and they are not the same thing:
+        #
+        # - **It broke.** He gets the sentence, and it is still there tomorrow. Without it
+        #   he reloads, sees his own question alone, and concludes he was ignored - which
+        #   is worse than an error, because an error at least tells him to ask again.
+        # - **He pressed stop before the first token.** Nothing failed and he knows exactly
+        #   why it is empty, so an error sentence there would be a lie. The row is removed
+        #   and his question stands on its own, which is what actually happened.
+        if not answer.content:
+            if failed:
+                answer.content = failed
+            else:
+                answer.delete()
+                answer = None
+
+        if answer is not None:
+            answer.save()
 
 # ------------------------- STREAMING END ------------------------- #

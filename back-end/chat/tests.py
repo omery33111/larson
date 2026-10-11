@@ -173,6 +173,73 @@ def fake_mapper(answer, stop_reason = "end_turn", captured = None):
 # a test nobody knows is checking anything - the same lesson the isolation tests were written
 # under, and the reason the docstrings below say what was broken to prove it.
 
+
+class AQuestionIsNeverLeftAloneTests(APITestCase):
+    """
+    **Found by reading his real mentor thread in production, not by a test failing.** Seven
+    of his questions sat there with nothing underneath them - "suggest a rule I am not aware
+    of", four times in a row, and silence each time.
+
+    The error does reach the browser, as a stream event. A stream event lives exactly as long
+    as the tab does: on the next load the row is what is left, and the row was saved with an
+    empty string. **The same shape as `verdict` and the suggestion card, which both had to be
+    moved onto the row for the same reason** - a sign that rides only the stream is a sign
+    that disappears - and this is the third time.
+
+    It reads as a mentor that ignored him, which is worse than an error: an error at least
+    tells him to ask again.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username = "omer", password = "Tr4de-Pl4n!x")
+        self.client.force_authenticate(user = self.user)
+        self.row = Conversation.objects.create(user = self.user, title = "שיחה")
+
+    def answers(self):
+        return list(Message.objects.filter(conversation = self.row, role = ASSISTANT))
+
+    def test_a_call_that_produced_nothing_leaves_the_reason_on_the_row(self):
+        with self.settings(ANTHROPIC_API_KEY = "test-key"):
+            with patch("anthropic.Anthropic", fake_client([], fails = True)):
+                events = read_events(self.client.post(
+                    f"/chat/conversations/{self.row.id}/stream/", {"message": "מה הדליפה?"}))
+
+        self.assertEqual(events[-1]["type"], "error")
+
+        # The question is still his, and the answer beside it says what happened - after a
+        # reload, which is the only moment that matters here.
+        kept = self.answers()
+
+        self.assertEqual(len(kept), 1, "the failed answer was dropped instead of explained")
+        self.assertTrue(kept[0].content.strip(), "an empty bubble was saved")
+        self.assertIn("לארסון", kept[0].content)
+
+    def test_a_refusal_is_also_still_there_tomorrow(self):
+        with self.settings(ANTHROPIC_API_KEY = "test-key"):
+            with patch("anthropic.Anthropic", fake_client([], stop_reason = "refusal")):
+                read_events(self.client.post(
+                    f"/chat/conversations/{self.row.id}/stream/", {"message": "משהו"}))
+
+        kept = self.answers()
+
+        self.assertEqual(len(kept), 1)
+        self.assertIn("סירב", kept[0].content)
+
+    def test_what_did_arrive_is_still_what_is_kept(self):
+        """The partial case was already right and must stay right: a stop mid-answer leaves
+        the text that made it, not an apology on top of it."""
+        with self.settings(ANTHROPIC_API_KEY = "test-key"):
+            with patch("anthropic.Anthropic", fake_client(["הדליפה שלך היא "], fails = True)):
+                read_events(self.client.post(
+                    f"/chat/conversations/{self.row.id}/stream/", {"message": "מה הדליפה?"}))
+
+        kept = self.answers()
+
+        self.assertEqual(len(kept), 1)
+        self.assertEqual(kept[0].content, "הדליפה שלך היא")
+        self.assertNotIn("לארסון לא הצליח", kept[0].content)
+
+
 class RetrievalTests(APITestCase):
 
     def setUp(self):
