@@ -105,6 +105,34 @@ def build_rules(statistics, currency):
             "value": str(group["key"]),
         })
 
+    # ------------- HIS OWN TAGS:
+    #
+    # **`by_tag` existed in the statistics from the start and nothing ever read it.**
+    # Found by reading a real thread: Larson named "שורט בפרימיום" - 19 trades, -$894.50,
+    # profit factor 0.51 - as the one thing in the record worth a rule, and then had to say
+    # *"write it yourself in My Rules"*, because the engine that makes buttons only ever
+    # looked at `by_setup`. The trader asked for a rule roughly twenty times in that thread.
+    # **He kept asking because asking was all there was.**
+    #
+    # The shape is the setup block's exactly, and it lands on the same free-text rule - the
+    # terms are built here, in python, from a label that is already on his trades, so the
+    # model is no closer to the write path than it was.
+    #
+    # **`by_mistake` is deliberately left out.** A mistake tag is written *after* the trade,
+    # about the trade - "entered early", "chased it" - so a rule saying not to take trades
+    # he will later call mistakes is circular: it cannot be obeyed at the moment of entry,
+    # which is the one test a rule has to pass. Tags describe the setup he saw; mistakes
+    # describe the regret.
+    for group in _bad_groups(breakdowns.get("by_tag", [])):
+        rules.append({
+            "key": f"tag:{group['key']}",
+            "rule": f"לא להיכנס כשזה {group['key']}",
+            "why": _evidence(group, currency),
+            "weight": abs(group["net_pnl"]),
+            "kind": "tag",
+            "value": str(group["key"]),
+        })
+
     # ------------- INSTRUMENTS:
     # Only where he has somewhere else to go. "Stop trading NQ" to a trader who only trades
     # NQ is not a rule, it is a shrug - so a market that carries most of his history is left

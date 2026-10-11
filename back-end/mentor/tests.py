@@ -2440,6 +2440,77 @@ class SuggestionTests(APITestCase):
 
     # ------------- WHAT IT REFUSES TO PROPOSE:
 
+    def test_a_losing_tag_can_become_a_rule_with_a_button(self):
+        """
+        **`by_tag` sat in the statistics from the start and nothing ever read it.**
+
+        Found by reading a real thread rather than by a test failing. Larson named
+        "שורט בפרימיום" - 19 trades, -$894.50, profit factor 0.51 - as the one thing in the
+        record worth a rule, and then told him to *write it himself in My Rules*, because
+        the engine that makes buttons only looked at `by_setup`. He asked for a rule about
+        twenty times in that thread: **he kept asking because asking was all there was.**
+
+        The terms are still chosen in python from a label already on his trades, so this
+        does not move the model one step closer to the write path.
+        """
+        for n in range(30):
+            at = BASE + timedelta(days = n)
+            losing = n < 14
+            Trade.objects.create(
+                user = self.user, executed_at = at, opened_at = at - timedelta(minutes = 9),
+                symbol = "MNQU6", instrument = "NQ", source_timezone = "Asia/Jerusalem",
+                currency = "USD", direction = "short", quantity = 1.0,
+                pnl = -140.0 if losing else 90.0,
+                outcome = "loss" if losing else "win", duration_seconds = 540,
+                tags = "שורט בפרימיום" if losing else "שורט בדיסקאונט",
+                dedup_hash = f"tagged-{n}")
+
+        rows = list(Trade.objects.all())
+        card = propose(self.user, rows[-6:], compute_statistics(rows), asked = True)
+
+        self.assertIsNotNone(card, "a losing tag worth real money was not offered")
+        self.assertEqual(card["action"], "add")
+        self.assertEqual(card["rule_kind"], TraderRule.CUSTOM)
+
+        # The terms come from his own label, lower-cased, on the forbidden side.
+        self.assertIn("שורט בפרימיום", card["rule_terms"]["forbid"])
+        self.assertEqual(card["rule_terms"]["require"], [])
+
+        # **It is called a tag and not a setup.** Describing his own record back to him
+        # wrongly is the fastest way to lose the argument before he finishes reading.
+        self.assertNotIn("הסטאפ", card["title"])
+
+        # And pressing it produces a rule that the checker can actually judge.
+        response = self.client.post("/mentor/suggestion/accept/",
+                                    {"message_id": self.answered_debrief(card).id},
+                                    format = "json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(TraderRule.objects.filter(user = self.user,
+                                                  kind = TraderRule.CUSTOM).exists())
+
+    def test_a_mistake_tag_is_never_offered_as_a_rule(self):
+        """
+        **A mistake is written after the trade, about the trade.** "Entered early",
+        "chased it" - a rule saying not to take trades he will later call mistakes cannot
+        be obeyed at the moment of entry, which is the one test a rule has to pass. Tags
+        describe the setup he saw; mistakes describe the regret.
+        """
+        for n in range(30):
+            at = BASE + timedelta(days = n)
+            Trade.objects.create(
+                user = self.user, executed_at = at, opened_at = at - timedelta(minutes = 9),
+                symbol = "MNQU6", instrument = "NQ", source_timezone = "Asia/Jerusalem",
+                currency = "USD", direction = "long", quantity = 1.0, pnl = -140.0,
+                outcome = "loss", duration_seconds = 540,
+                mistakes = "נכנסתי מוקדם", dedup_hash = f"regret-{n}")
+
+        rows = list(Trade.objects.all())
+        card = propose(self.user, rows[-6:], compute_statistics(rows), asked = True)
+
+        if card and card.get("rule_terms"):
+            self.assertNotIn("נכנסתי מוקדם", card["rule_terms"].get("forbid", []))
+
     def test_a_losing_hour_in_the_middle_of_a_good_day_is_not_a_cut_off(self):
         """
         **This is the check that stops the card from proposing a rule the evidence does not

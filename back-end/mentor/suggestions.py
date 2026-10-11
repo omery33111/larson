@@ -1,7 +1,7 @@
 from collections import defaultdict
 from zoneinfo import ZoneInfo
 
-from analytics.formatting import money, ratio, trades as trade_count
+from analytics.formatting import money, quoted, ratio, trades as trade_count
 
 from .compliance import build_rules, check_plan
 from .interpret import matches, vocabulary
@@ -746,6 +746,17 @@ def _as_declarable(rule, statistics, timezone_name):
                 "text": f"לא לקחת את הסטאפ {rule['value']}",
                 "terms": {"require": [], "forbid": [setup]},
                 "title": f"הסטאפ {rule['value']} מדמם — להפוך את זה לכלל?"}
+
+    if kind == "tag":
+        # Same destination as a setup - a condition in his own words, with the terms chosen
+        # here from a label already on his trades - but it has to be *called* a tag. "The
+        # setup שורט בפרימיום is bleeding" would be describing his record wrongly back to
+        # him, which is the fastest way to lose the argument before he finishes reading.
+        tag = str(rule["value"]).lower()
+        return {"kind": TraderRule.CUSTOM,
+                "text": f"לא להיכנס כשזה {rule['value']}",
+                "terms": {"require": [], "forbid": [tag]},
+                "title": f"מה שאתה מתייג {quoted(rule['value'])} מדמם — להפוך את זה לכלל?"}
 
     if kind == "hour":
         edge = _clean_edge(rule["value"], statistics)
