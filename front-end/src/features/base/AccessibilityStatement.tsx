@@ -18,11 +18,19 @@ import './accessibility.css'
  */
 
 /**
- * **One constant, in one file.** The address appears in the statement and nowhere else, so
- * changing it is one line — which matters, because today it is a personal mailbox and it
- * is meant to become a dedicated one.
+ * **One constant, in one file**, read by this page and by the privacy policy.
+ *
+ * It is a Google Group and not a personal mailbox, and the reason is that this address is
+ * published three times over: on Google's own consent screen, here as the accessibility
+ * coordinator, and in the privacy policy as the route for a data request. A group keeps
+ * all three pointing at a working address without putting a personal inbox on the page,
+ * and mail to it still lands in that inbox - the owner is subscribed to every message.
+ *
+ * **"Who can post" on the group is "anyone on the web", and that is the setting the whole
+ * thing turns on.** Google's default is members only, which would have bounced every
+ * stranger who wrote to any of the three - silently, from their side.
  */
-export const ACCESSIBILITY_CONTACT = 'omery33111@gmail.com';
+export const ACCESSIBILITY_CONTACT = 'larson-support@googlegroups.com';
 
 
 const AccessibilityStatement = () => (
