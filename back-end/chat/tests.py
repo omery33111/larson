@@ -831,6 +831,27 @@ class StreamThrottleTests(APITestCase):
 
         self.assertEqual(self.ask().status_code, status.HTTP_429_TOO_MANY_REQUESTS)
 
+    def test_the_refusal_says_how_long_to_wait(self):
+        """
+        **`Retry-After` is the only thing that lets the screen say *when* rather than just
+        *no*.** The browser's stream never passes through the axios interceptor, so a 429
+        arrives there as a bare status - and both streaming thunks used to translate every
+        status that was not 401 into "the connection was cut". For a rate limit that is
+        untrue, and untrue in the expensive direction: it tells him the site is broken,
+        which invites the immediate retry that makes it worse.
+
+        DRF sets the header from the throttle's own wait. This holds it there, because the
+        sentence the browser builds is only as good as this number.
+        """
+        self.ask()
+        self.ask()
+
+        refused = self.ask()
+
+        self.assertEqual(refused.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+        self.assertIn("Retry-After", refused.headers)
+        self.assertGreater(int(refused.headers["Retry-After"]), 0)
+
     def test_the_two_windows_do_not_share_one_counter(self):
         # An hourly and a daily cap on the same view have to count separately; sharing a
         # bucket would silently make the tighter one the only one that exists.

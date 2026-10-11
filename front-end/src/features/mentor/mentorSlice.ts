@@ -1,4 +1,5 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit"
+import { streamFailureMessage } from '../base/failures';
 import { RootState } from "../../app/store";
 import { usageReported } from "../usage/usageSlice";
 import { sessionExpired } from "../authentication/authenticationSlice";
@@ -130,7 +131,10 @@ export const sendToMentorAsync = createAsyncThunk(
                 thunkAPI.dispatch(sessionExpired());
                 return thunkAPI.rejectWithValue("");
             }
-            failure = "החיבור לשרת נקטע.";
+            // **Named by what actually broke.** This was one sentence for every status
+            // that was not 401, so hitting the rate limit told him the connection was cut
+            // - which is untrue, and invites the retry that makes it worse.
+            failure = streamFailureMessage(error);
         }
     } finally {
         controller = null;

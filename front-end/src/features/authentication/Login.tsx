@@ -71,11 +71,23 @@ const Login = () => {
   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
-    const passwordRegex = /^[^\s]+$/;
+    // **Empty first, because the space check answers it wrongly.** `/^[^\s]+$/` needs at
+    // least one character, so it returns false for "" - and an empty form was told "the
+    // password cannot contain spaces", which is not true about anything he did. The first
+    // thing a person does on a login screen they are unsure about is press Enter.
+    if (!username.trim()) {
+      setProblem("צריך למלא שם משתמש.");
+      return;
+    }
 
-    if (!passwordRegex.test(password)) {
-        setProblem("הסיסמה לא יכולה להכיל רווחים.");
-        return;
+    if (!password) {
+      setProblem("צריך למלא סיסמה.");
+      return;
+    }
+
+    if (/\s/.test(password)) {
+      setProblem("הסיסמה לא יכולה להכיל רווחים.");
+      return;
     }
 
     // `loginTime` is written by the API once the pair comes back, because until then it is
@@ -106,6 +118,7 @@ const Login = () => {
             className="app-input"
             id="username"
             name="username"
+            autoComplete="username"
             value={username}
             placeholder="שם משתמש"
             onChange={onChange}
@@ -118,6 +131,7 @@ const Login = () => {
             className="app-input"
             id="password"
             name="password"
+            autoComplete="current-password"
             value={password}
             placeholder="סיסמה"
             onChange={onChange}

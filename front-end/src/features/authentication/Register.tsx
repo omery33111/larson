@@ -60,12 +60,32 @@ const Register = () => {
       // would have accepted it.
       setProblem('');
 
-      if (!accepted) {
-        setProblem("צריך לאשר את תנאי השימוש ומדיניות הפרטיות.");
+      // **In the order he reads the form, and the empty fields first.**
+      //
+      // The consent box was checked before anything else, so submitting a *completely
+      // empty* form answered "you need to accept the terms" - the least important of the
+      // five things wrong with it, and the one furthest down the screen. He ticks the box,
+      // submits again, and only then hears about the password. Each mistake cost its own
+      // round trip, in an order that had nothing to do with the form.
+      //
+      // Naming the first blank field is the browser's job by the same argument the comment
+      // above already makes for the length floor: it costs nothing here and saves a trip.
+      // Everything a server has to judge - a password on Django's common list, an address
+      // that cannot receive mail, a name already taken - is still the server's.
+      const blank = !username.trim() ? "צריך למלא שם משתמש."
+                  : !password ? "צריך למלא סיסמה."
+                  : !password2 ? "צריך לאשר את הסיסמה פעם שנייה."
+                  : !email.trim() ? "צריך למלא כתובת אימייל."
+                  : "";
+
+      if (blank) {
+        setProblem(blank);
       } else if (password.length < 8) {
         setProblem("הסיסמה צריכה להיות באורך 8 תווים לפחות.");
       } else if (password !== password2) {
         setProblem("הסיסמאות לא זהות.");
+      } else if (!accepted) {
+        setProblem("צריך לאשר את תנאי השימוש ומדיניות הפרטיות.");
       } else {
         const userData = {
           username,
@@ -142,6 +162,7 @@ const Register = () => {
                 className="app-input"
                 id="username"
                 name="username"
+                autoComplete="username"
                 value={username}
                 placeholder="הזן שם משתמש"
                 onChange={onChange}
@@ -154,6 +175,7 @@ const Register = () => {
                 className="app-input"
                 id="password"
                 name="password"
+                autoComplete="new-password"
                 value={password}
                 placeholder="סיסמה"
                 onChange={onChange}
@@ -166,6 +188,7 @@ const Register = () => {
                 className="app-input"
                 id="password2"
                 name="password2"
+                autoComplete="new-password"
                 value={password2}
                 placeholder="וידוא סיסמה"
                 onChange={onChange}
@@ -173,8 +196,18 @@ const Register = () => {
             </div>
 
             <div className="auth-field">
+              {/*
+                * `inputMode` and deliberately **not** `type="email"`: the hint alone gives
+                * a phone the keyboard with "@" on it, while the type would add a native
+                * constraint, and a native constraint shows the browser's own bubble - in
+                * the browser's language - above the Hebrew sentence this product puts
+                * under the field. Whether the address is well formed is the server's call
+                * anyway; it is the only side that knows whether it can receive mail.
+                */}
               <input
                 type="text"
+                inputMode="email"
+                autoComplete="email"
                 className="app-input"
                 id="email"
                 name="email"

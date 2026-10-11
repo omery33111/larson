@@ -94,6 +94,20 @@ const AccountPage = () => {
   const changePassword = async () => {
     setProblem(null);
 
+    // **Empty fields first.** All three blank passes `next !== confirm` - "" equals "" -
+    // and the server then answers "your current password is wrong", which is true and
+    // misleading: he did not type one. Same shape as the login form, which told an empty
+    // submit that its password could not contain spaces.
+    const blank = !current ? 'צריך למלא את הסיסמה הנוכחית.'
+                : !next ? 'צריך למלא סיסמה חדשה.'
+                : !confirm ? 'צריך לאשר את הסיסמה החדשה.'
+                : '';
+
+    if (blank) {
+      failed('password', blank);
+      return;
+    }
+
     if (next !== confirm) {
       failed('password', 'שתי הסיסמאות אינן זהות.');
       return;

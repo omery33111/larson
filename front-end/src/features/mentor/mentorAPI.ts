@@ -49,8 +49,10 @@ const streamDebrief = async (
 
     if (!response.ok || !response.body) {
         // fetch never passes through the axios interceptor, so the status is handed back for
-        // the thunk to interpret rather than being swallowed here.
-        throw { status: response.status };
+        // the thunk to interpret rather than being swallowed here. `Retry-After` travels
+        // with it: on a 429 it is the only thing that lets the screen say *when* rather
+        // than just *no*.
+        throw { status: response.status, retryAfter: response.headers.get('Retry-After') };
     }
 
     await readEventStream(response, onEvent);

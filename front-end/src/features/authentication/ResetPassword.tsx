@@ -36,6 +36,19 @@ const ResetPassword = () => {
 
     setProblem('');
 
+    // Blank first: two empty boxes are "equal", so without this the server is asked to
+    // judge an empty password and answers that it is too short - which is not what he
+    // needs to hear about a field he has not filled in.
+    if (!password) {
+      setProblem('צריך למלא סיסמה חדשה.');
+      return;
+    }
+
+    if (!confirm) {
+      setProblem('צריך לאשר את הסיסמה פעם שנייה.');
+      return;
+    }
+
     if (password !== confirm) {
       setProblem('שתי הסיסמאות אינן זהות.');
       return;

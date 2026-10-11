@@ -11,6 +11,39 @@ import IngestionConfirm from './features/trades/IngestionConfirm';
 import './index.css';
 
 
+
+// **The page title for every screen, and a default that says something.**
+//
+// This was a `switch` whose default was a bare "Larson", and seven screens fell through it:
+// forgot password, the two policy pages, the account page, the three that arrive from an
+// email - verify, reset, unsubscribe - and the 404 itself. Every tab read the same word,
+// which makes a row of open tabs and the browser's own history useless, and the one page
+// that most needs to say what happened said nothing at all.
+const EXACT: Record<string, string> = {
+  '/': 'Larson - המנטור שלך',
+  '/mentor': 'Larson - המנטור',
+
+  // **"צ'אט" and not "שיחה עם לארסון".** The nav bar was renamed and the title was left
+  // behind, so the tab and the link he clicked to get there disagreed on the screen's name.
+  '/chat': "Larson - צ'אט",
+
+  '/profile': 'Larson - תעודת הזהות המסחרית',
+  '/account': 'Larson - החשבון שלי',
+  '/authentication/login': 'Larson - התחברות',
+  '/authentication/register': 'Larson - הרשמה',
+  '/authentication/forgot': 'Larson - שכחתי סיסמה',
+  '/terms': 'Larson - תנאי שימוש',
+  '/privacy': 'Larson - מדיניות פרטיות',
+};
+
+// These three arrive from an email and carry a token in the path, so they match on prefix.
+const PREFIXED: [string, string][] = [
+  ['/authentication/verify/', 'Larson - אימות כתובת המייל'],
+  ['/authentication/reset/', 'Larson - סיסמה חדשה'],
+  ['/email/unsubscribe/', 'Larson - הסרה מרשימת התפוצה'],
+];
+
+
 function ScrollToTop() {
   const { pathname } = useLocation();
 
@@ -54,34 +87,9 @@ function App() {
   }, [pathname, isLogged]);
 
   useEffect(() => {
-    let title = 'Larson';
+    const prefixed = PREFIXED.find(([at]) => pathname.startsWith(at));
 
-    switch (pathname) {
-      case '/':
-        title = 'Larson - המנטור שלך';
-        break;
-      case '/authentication/login':
-        title = 'Larson - התחברות';
-        break;
-      case '/authentication/register':
-        title = 'Larson - הרשמה';
-        break;
-      case '/profile':
-        title = 'Larson - תעודת הזהות המסחרית';
-        break;
-      case '/chat':
-        title = 'Larson - שיחה עם לארסון';
-        break;
-      case '/mentor':
-        title = 'Larson - המנטור';
-        break;
-
-      default:
-        title = 'Larson';
-        break;
-    }
-
-    document.title = title;
+    document.title = EXACT[pathname] ?? prefixed?.[1] ?? 'Larson - הדף לא נמצא';
   }, [pathname]);
 
 

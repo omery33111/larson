@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { FiMail } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
+import Problem from '../base/Problem'
 import { useAppDispatch, useAppSelector } from '../../app/hooks'
 import { forgotPasswordAsync, selectIsLoading } from './authenticationSlice'
 import './authentication.css'
@@ -25,11 +26,21 @@ const ForgotPassword = () => {
 
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
+  const [problem, setProblem] = useState('');
 
   const onSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!email.trim()) return;
 
+    // **A bare `return` here was a button that did nothing.** He clicks "send a link",
+    // the screen does not move, and there is no way to tell whether it worked, whether it
+    // is still working, or whether he is being ignored - on the one screen reached by
+    // somebody already locked out. Silence is the worst answer this form can give.
+    if (!email.trim()) {
+      setProblem("צריך למלא כתובת אימייל.");
+      return;
+    }
+
+    setProblem('');
     dispatch(forgotPasswordAsync(email.trim()));
     setSent(true);
   };
@@ -71,9 +82,14 @@ const ForgotPassword = () => {
                 name="email"
                 value={email}
                 placeholder="כתובת האימייל שלך"
-                onChange={(event) => setEmail(event.target.value)}
+                autoComplete="email"
+                onChange={(event) => { setEmail(event.target.value); setProblem(''); }}
               />
             </div>
+
+            {/* Under the field that produced it, and cleared by typing - the shape every
+                other form in the product uses. */}
+            {problem && <Problem>{problem}</Problem>}
 
             <div className="auth-actions">
               <button type="submit" className="app-btn app-btn-primary" disabled={isLoading}>

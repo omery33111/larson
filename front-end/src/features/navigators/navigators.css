@@ -17,6 +17,13 @@
 /* Mark plus wordmark, so it reads as a logo rather than as a face floating in the bar. The
    mentor button carries its own icon for the same reason - Larson twice in one row made the
    brand look like a button and the button look like decoration. */
+/*
+ * **44px of hit area, with the mark itself unchanged.** Measured at 320px the brand link
+ * was 35x35 - it is the only way back to the home page from every screen, and on a phone
+ * it sat nine pixels under the product's own floor for a touch target. The negative margin
+ * keeps the bar's height exactly where it was: the padding grows the area a thumb lands
+ * in, not the row.
+ */
 .my-navbar-brand {
   display: inline-flex;
   align-items: center;
@@ -25,6 +32,9 @@
   font-weight: 700;
   font-size: 1.35rem;
   letter-spacing: 1px;
+  padding: 0.3rem 0.1rem;
+  margin: -0.3rem -0.1rem;
+  min-height: 44px;
 }
 
 .my-navbar-wordmark {
