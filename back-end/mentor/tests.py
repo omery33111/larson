@@ -31,6 +31,22 @@ from .deviation import MIN_BASELINE_TRADES, MIN_RECENT_TRADES, build_deviation
 
 BASE = datetime(2026, 6, 1, 14, 0, tzinfo = timezone.utc)
 
+def committed_before_these(user):
+    """
+    Date his declarations before the trades these fixtures build.
+
+    **The retire engine counts only trades taken after he committed**, because a rule is a
+    promise about what he does next and trades from before it are not evidence about it.
+    Measured on the real engine: a condition saved one second ago was offered for deletion
+    on 199 breaches out of 233, every one of them predating the rule.
+
+    `created_at` is `auto_now_add`, so a fixture that creates the rule and then its trades
+    in the past has - correctly - no evidence at all. These tests are about a rule he had
+    already declared, and this is the line that says so.
+    """
+    TraderRule.objects.filter(user = user).update(created_at = BASE - timedelta(days = 1))
+
+
 
 def make_trades(user, count, start = 0, trade_file = None, **overrides):
     """One trade a day, so days, frequency and streaks are all well defined."""
@@ -2114,6 +2130,7 @@ class SuggestionTests(APITestCase):
                 outcome = "win", duration_seconds = 540, dedup_hash = f"kept-{n}")
 
         TraderRule.objects.create(user = self.user, kind = TraderRule.MAX_SIZE, number = 3)
+        committed_before_these(self.user)
 
         card = propose(self.user, [], compute_statistics(list(Trade.objects.all())))
 
@@ -2132,6 +2149,7 @@ class SuggestionTests(APITestCase):
                 outcome = "loss", duration_seconds = 540, dedup_hash = f"broke-{n}")
 
         TraderRule.objects.create(user = self.user, kind = TraderRule.MAX_SIZE, number = 2)
+        committed_before_these(self.user)
 
         card = propose(self.user, [], compute_statistics(list(Trade.objects.all())))
 
@@ -2159,6 +2177,7 @@ class SuggestionTests(APITestCase):
         TraderRule.objects.create(user = self.user, kind = TraderRule.CUSTOM,
                                   text = "להיכנס לעסקה רק בהימור",
                                   terms = {"require": [["gamble"]], "forbid": []})
+        committed_before_these(self.user)
 
         card = propose(self.user, [], compute_statistics(list(Trade.objects.all())))
 
@@ -2371,6 +2390,7 @@ class SuggestionTests(APITestCase):
         TraderRule.objects.create(user = self.user, kind = TraderRule.CUSTOM,
                                   text = "להיכנס לעסקה רק בלי ifvg",
                                   terms = {"require": [], "forbid": ["ifvg"]})
+        committed_before_these(self.user)
 
         card = propose(self.user, [], compute_statistics(list(Trade.objects.all())))
 
@@ -2410,6 +2430,7 @@ class SuggestionTests(APITestCase):
         rows = self.oversized_losses()
         TraderRule.objects.create(user = self.user, kind = TraderRule.NO_REVENGE_WITHIN,
                                   number = 1)
+        committed_before_these(self.user)
 
         card = propose(self.user, rows[-6:], compute_statistics(rows))
 
@@ -2907,6 +2928,7 @@ class StandingsTests(APITestCase):
         TraderRule.objects.create(user = self.user, kind = TraderRule.CUSTOM,
                                   text = "להיכנס רק על IFVG",
                                   terms = {"require": [["ifvg"]], "forbid": []})
+        committed_before_these(self.user)
 
         statistics = compute_statistics(list(Trade.objects.all()))
 
@@ -2922,8 +2944,9 @@ class StandingsTests(APITestCase):
         self.assertEqual(figures[0]["נשבר"], 31)
 
     def test_the_brief_answers_the_question_and_explains_the_missing_button(self):
-        brief = suggestion_brief(None, [{"הכלל": "רק IFVG", "נבדק_על": 83,
-                                         "נשמר": 19, "נשבר": 64}])
+        brief = suggestion_brief(None, [{"הכלל": "רק IFVG", "נקבע_ב": "01/06/2026",
+                                         "נבדק_על": 83, "נשמר": 19, "נשבר": 64,
+                                         "בהיסטוריה_כולה": {"נבדק_על": 233, "נשבר": 199}}])
 
         # The figures, so the answer is grounded in the same numbers the engine used.
         self.assertIn("נשמר ב-19", brief)
@@ -2932,6 +2955,99 @@ class StandingsTests(APITestCase):
         # And why there is nothing to press.
         self.assertIn("אין כפתור", brief)
         self.assertIn("להפסיק לנסות", brief)
+
+        # **The bar in the words is the bar in the code.** It said 90% while `BARELY_KEPT`
+        # was already a fifth, which is the same disagreement this whole brief exists to
+        # prevent, one layer down.
+        self.assertIn("80%", brief)
+        self.assertNotIn("90%", brief)
+
+        # Since when, and what his history said before he committed - a different sentence
+        # from "give it up", and the model needs both to tell them apart.
+        self.assertIn("01/06/2026", brief)
+        self.assertIn("נשבר ב-199 מתוך 233", brief)
+
+    def test_the_brief_does_not_print_the_same_figure_twice(self):
+        """
+        **Found by measuring the brief rather than reading it.** Five real rules, all
+        declared before the record, produced "broken on 199 of 233. Over his whole history:
+        broken on 199 of 233" on every line - the same number twice, 235 tokens of it, and
+        it reads as software that has lost count. Same shape as two indicators for one fact.
+
+        The clause is for the rule declared *recently*, where what came before genuinely
+        differs and is worth saying out loud.
+        """
+        same = suggestion_brief(None, [{"הכלל": "רק IFVG", "נקבע_ב": "01/01/2026",
+                                        "נבדק_על": 233, "נשמר": 34, "נשבר": 199,
+                                        "בהיסטוריה_כולה": {"נבדק_על": 233, "נשבר": 199}}])
+
+        self.assertNotIn("בכל ההיסטוריה", same)
+        self.assertIn("נשבר ב-199", same)
+
+        fresh = suggestion_brief(None, [{"הכלל": "רק IFVG", "נקבע_ב": "11/10/2026",
+                                         "נבדק_על": 0, "נשמר": 0, "נשבר": 0,
+                                         "בהיסטוריה_כולה": {"נבדק_על": 233, "נשבר": 199}}])
+
+        self.assertIn("בכל ההיסטוריה", fresh)
+        self.assertIn("עוד לא נבדק", fresh)
+
+    def test_the_brief_survives_a_row_with_no_declaration_date(self):
+        """
+        **It builds a prompt, so a `KeyError` here does not lose a line - it loses the whole
+        answer**, and the row is assembled two modules away. Seen falling: the key was read
+        with `[...]` and this test was the failure.
+        """
+        brief = suggestion_brief(None, [{"הכלל": "רק IFVG", "נבדק_על": 0,
+                                         "נשמר": 0, "נשבר": 0}])
+
+        self.assertIn("רק IFVG", brief)
+        self.assertIn("עוד לא נבדק", brief)
+
+    def test_a_rule_declared_today_is_not_judged_on_what_came_before_it(self):
+        """
+        **A promise is about what he does next.** He wrote "only enter on CISD" and was
+        offered deletion in the very first debrief after saving it, on 199 breaches out of
+        233 - every one of them from before the rule existed. From his seat that is Larson
+        reading his plan and immediately telling him to give up on it, which is the one
+        outcome this feature does not survive.
+
+        Same family as the graduation card that congratulated a rule nothing could break:
+        the engine confidently wrong in a way he cannot tell apart from software working.
+        """
+        for n in range(40):
+            at = BASE + timedelta(days = n)
+            Trade.objects.create(
+                user = self.user, executed_at = at, opened_at = at - timedelta(minutes = 9),
+                symbol = "MNQU6", instrument = "NQ", source_timezone = "Asia/Jerusalem",
+                currency = "USD", direction = "long", quantity = 1.0, pnl = -40.0,
+                outcome = "loss", duration_seconds = 540,
+                setups = "gamble" if n < 2 else "breakout", dedup_hash = f"fresh-{n}")
+
+        # Declared **now**, after every one of those trades.
+        TraderRule.objects.create(user = self.user, kind = TraderRule.CUSTOM,
+                                  text = "להיכנס לעסקה רק בהימור",
+                                  terms = {"require": [["gamble"]], "forbid": []})
+
+        card = propose(self.user, [], compute_statistics(list(Trade.objects.all())))
+
+        self.assertNotEqual((card or {}).get("action"), "retire",
+                            "a rule declared after every trade on the record was judged on them")
+
+        # And the figures the model reads agree with the silence, which is the whole point:
+        # otherwise Larson recommends dropping a rule no button offers to drop.
+        figures = standings(self.user)
+
+        self.assertEqual(figures[0]["נבדק_על"], 0)
+        self.assertEqual(figures[0]["בהיסטוריה_כולה"]["נבדק_על"], 40)
+
+        # **The same rule, declared before those trades, is still offered** - otherwise this
+        # did not fix a wrong offer, it removed a right one.
+        committed_before_these(self.user)
+
+        again = propose(self.user, [], compute_statistics(list(Trade.objects.all())))
+
+        self.assertEqual(again["action"], "retire")
+        self.assertEqual(standings(self.user)[0]["נבדק_על"], 40)
 
     def test_a_ceiling_nothing_exceeds_is_not_offered(self):
         """

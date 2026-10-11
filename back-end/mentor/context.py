@@ -240,9 +240,42 @@ def suggestion_brief(card, standings = ()):
     figures and can say which one it would pick *and* why there is nothing to press.
     """
     if standings and not card:
-        lines = "\n".join(
-            f"- \"{row['הכלל']}\": נבדק על {row['נבדק_על']}, נשמר ב-{row['נשמר']}, נשבר ב-{row['נשבר']}"
-            for row in standings)
+        def line(row):
+            # **Only when the two tallies disagree, which is the only case it says
+            # anything.** Measured on five real rules: all of them were declared before the
+            # record, so every line read "broken on 199 of 233. Over his whole history:
+            # broken on 199 of 233" - the same number twice, 235 tokens of it, and it reads
+            # as software that has lost count. The clause exists for the rule declared
+            # *recently*, where what came before genuinely differs and is worth a sentence:
+            # "your history enters without this 85% of the time, so you are asking yourself
+            # for a real change." Identical figures carry none of that.
+            every = row.get("בהיסטוריה_כולה") or {}
+            differs = (every.get("נבדק_על") not in (None, row["נבדק_על"])
+                       or every.get("נשבר") != row["נשבר"])
+
+            before = (f" בכל ההיסטוריה שלו, כולל מלפני ההתחייבות: נשבר ב-{every['נשבר']} "
+                      f"מתוך {every['נבדק_על']}."
+                      if every.get("נבדק_על") and differs else "")
+
+            # **Zero is said in words, because a bare 0 reads as a measurement.** A rule
+            # declared this week has nothing to answer for yet, and that is the fact rather
+            # than a score of nothing.
+            # **`.get` and not `[...]`, because this builds a prompt.** A `KeyError` here
+            # does not lose a line, it loses the whole answer - and the row is assembled
+            # two modules away.
+            when = row.get("נקבע_ב")
+
+            if not row["נבדק_על"]:
+                head = f"- \"{row['הכלל']}\": "
+                return (head + (f"נקבע ב-{when} ועוד לא נבדק על אף עסקה מאז." if when
+                                else "עוד לא נבדק על אף עסקה.") + before)
+
+            since = f"מאז שנקבע ({when}) " if when else ""
+
+            return (f"- \"{row['הכלל']}\": {since}נבדק על "
+                    f"{row['נבדק_על']}, נשמר ב-{row['נשמר']}, נשבר ב-{row['נשבר']}.{before}")
+
+        lines = chr(10).join(line(row) for row in standings)
 
         return f"""**הסוחר שאל על הכללים שלו, ואין כרגע כלל שעומד בסף להצעת הורדה.**
 
@@ -251,8 +284,10 @@ def suggestion_brief(card, standings = ()):
 
 **מותר ומומלץ לענות על השאלה** — אם הוא שאל על איזה היה מוותר, תגיד איזה ולמה, עם המספרים.
 **אבל אמור לו גם שאין כפתור, ולמה:** המערכת מציעה להוריד כלל רק כשהוא נשבר כמעט תמיד
-(90% ומעלה) או כשהוא נשמר לגמרי לאורך זמן. **כלל שהוא שומר עליו בחלק מהמקרים הוא כלל שהוא
-עובד עליו, ולהציע למחוק אותו זה להגיד לו להפסיק לנסות.**"""
+(80% ומעלה) או כשהוא נשמר לגמרי לאורך זמן. **כלל שהוא שומר עליו בחלק מהמקרים הוא כלל שהוא
+עובד עליו, ולהציע למחוק אותו זה להגיד לו להפסיק לנסות.**
+**והספירה מתחילה ביום שהוא קבע את הכלל** — עסקאות מלפני ההתחייבות אינן עדות עליה, וכלל טרי
+פשוט עוד לא נבדק."""
 
     if card:
         return (f"**הסוחר ביקש כלל, ומתחת לתשובה שלך יופיע כפתור שמציע לו בדיוק את זה:**"

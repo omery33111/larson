@@ -400,6 +400,43 @@ def _retire(user, currency, timezone_name, declined, statistics = None):
 
     plan = check_plan({}, [], rows, currency, timezone_name, declared = declared)
 
+    # ------------- AND THE TALLY STARTS THE DAY HE COMMITTED:
+    #
+    # **A rule is a promise about what he does next, and trades he took before he made it
+    # are not evidence about it.** Measured on the real engine: a condition saved one second
+    # ago, with *zero* trades after it, was offered for deletion on 199 breaches out of 233
+    # - every one of them from before the rule existed. From his seat that is Larson reading
+    # his plan and immediately telling him to give up on it, in the very first debrief after
+    # he wrote it. **That is the one outcome this feature does not survive**, and it is the
+    # same family as the graduation card that congratulated a rule nothing could break: the
+    # engine confidently wrong in a way he cannot tell apart from software working.
+    #
+    # Only the two **ratio** branches move. `costly`, `gone` and `vacuous` stay on the whole
+    # record on purpose - whether a tag still exists, and whether a bucket makes him money,
+    # are facts about his history rather than about his compliance, and his history is the
+    # only place they can be read.
+    #
+    # One pass per distinct declaration time, not one per rule: rules saved in the same
+    # sitting share a timestamp, so this is normally a single extra pass and is bounded by
+    # the number of rules either way.
+    since_declared = {}
+
+    def tally_since(moment):
+        if moment not in since_declared:
+            later = [t for t in rows if t.executed_at and t.executed_at >= moment]
+            fresh = check_plan({}, [], later, currency, timezone_name, declared = declared)
+
+            # **A rule declared today has nothing after it, and the checker says so rather
+            # than returning empty buckets** (`available: False`). An empty tally is the
+            # right answer: both branches below need a count, and zero is a count.
+            since_declared[moment] = {
+                e["rule"]: (e.get("checked", 0), e.get("broke", 0))
+                for e in fresh.get("kept", []) + fresh.get("broken", [])
+                if e.get("declared")
+            }
+
+        return since_declared[moment]
+
     # The sentence a rule was translated into is the only handle a judged entry carries, so
     # the map is built with the same translator the checker used - not with a second copy
     # of the wording, which is how the two would drift apart.
@@ -431,8 +468,6 @@ def _retire(user, currency, timezone_name, declined, statistics = None):
         def asked_before(reason):
             return f"retire:{row.id}:{reason}" in declined
 
-        judged = entry.get("checked", 0)
-        broke = entry.get("broke", 0)
         name = entry["rule"]
 
         # **Before the ratios, because this is a reason to drop a rule and they are only
@@ -497,25 +532,31 @@ def _retire(user, currency, timezone_name, declined, statistics = None):
                 "decline": "להשאיר",
             }
 
-        if broke == 0 and judged >= GRADUATED_AFTER and not asked_before("graduated"):
+        # From here down the question is "how has he done since he promised", so the counts
+        # come from the post-commitment tally and not from the whole record.
+        judged_since, broke_since = tally_since(row.created_at).get(name, (0, 0))
+
+        if (broke_since == 0 and judged_since >= GRADUATED_AFTER
+                and not asked_before("graduated")):
             return {
                 "action": "retire",
                 "key": f"retire:{row.id}:graduated",
                 "rule_id": row.id,
-                "title": f'שמרת על "{name}" {trade_count(judged)} ברצף, אפס חריגות.',
+                "title": f'שמרת על "{name}" {trade_count(judged_since)} ברצף, אפס חריגות.',
                 "detail": "זה כבר לא כלל — זה אתה. אפשר להוריד אותו ולפנות מקום למשהו שעוד נבדק.",
                 "accept": "להוריד",
                 "decline": "להשאיר",
             }
 
         # Strictly fewer than a fifth kept: at exactly a fifth he is still working on it.
-        if (judged >= NEVER_KEPT_AFTER and (judged - broke) < judged * BARELY_KEPT
+        if (judged_since >= NEVER_KEPT_AFTER
+                and (judged_since - broke_since) < judged_since * BARELY_KEPT
                 and not asked_before("wish")):
             return {
                 "action": "retire",
                 "key": f"retire:{row.id}:wish",
                 "rule_id": row.id,
-                "title": f'"{name}" נשבר ב-{broke} מתוך {trade_count(judged)} שנבדקו.',
+                "title": f'"{name}" נשבר ב-{broke_since} מתוך {trade_count(judged_since)} שנבדקו.',
                 # **The first version told him to lower the rule to something he already
                 # meets, and he was right that it is wrong at the root: a rule is set in
                 # order to be worked towards.** "Change it to what you already do" turns a
@@ -554,6 +595,14 @@ def standings(user, currency = "USD", timezone_name = "Asia/Jerusalem"):
     What was missing is that the model had no idea. Given the figures it can answer the
     forced choice honestly *and* say why there is nothing to press, which is a better
     answer than either half alone.
+
+    **And it carries two tallies, because the card now counts only from the day he
+    committed.** Had this one kept counting over the whole record, the model would read 199
+    breaches out of 233 and recommend dropping a rule the engine has decided to stay quiet
+    about - **which is the exact disagreement this function exists to prevent**, rebuilt one
+    layer down. The pre-commitment figure is not dropped, because it says something a mentor
+    should say: "your history enters without this 85% of the time, so you are asking
+    yourself for a real change." That is a different sentence from "give it up."
     """
     from trades.models import Trade
 
@@ -565,20 +614,38 @@ def standings(user, currency = "USD", timezone_name = "Asia/Jerusalem"):
 
     plan = check_plan({}, [], rows, currency, timezone_name, declared = declared)
 
+    whole = {e["rule"]: (e.get("checked", 0), e.get("broke", 0))
+             for e in plan["kept"] + plan["broken"] if e.get("declared")}
+
+    from .rules import _translate
+
     out = []
 
-    for entry in plan["kept"] + plan["broken"]:
-        if not entry.get("declared"):
+    for row in TraderRule.objects.filter(user = user, is_active = True):
+        translated = _translate(row, currency)
+
+        if not translated or translated["rule"] not in whole:
             continue
 
-        judged = entry.get("checked", 0)
-        broke = entry.get("broke", 0)
+        name = translated["rule"]
+        since = [t for t in rows if t.executed_at and t.executed_at >= row.created_at]
+        fresh = check_plan({}, [], since, currency, timezone_name, declared = declared)
+
+        judged = broke = 0
+
+        for e in fresh.get("kept", []) + fresh.get("broken", []):
+            if e.get("declared") and e["rule"] == name:
+                judged, broke = e.get("checked", 0), e.get("broke", 0)
+
+        every_judged, every_broke = whole[name]
 
         out.append({
-            "הכלל": entry["rule"],
+            "הכלל": name,
+            "נקבע_ב": row.created_at.strftime("%d/%m/%Y"),
             "נבדק_על": judged,
             "נשבר": broke,
             "נשמר": judged - broke,
+            "בהיסטוריה_כולה": {"נבדק_על": every_judged, "נשבר": every_broke},
         })
 
     return out
