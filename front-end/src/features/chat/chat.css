@@ -1195,6 +1195,16 @@
 }
 
 
+
+/*
+ * An answer that never arrived. **Quieter than a real answer and not red**, because it is
+ * not an alarm - the thing to do about it is ask again, and the sentence says so.
+ */
+.chat-answer-missing {
+  color: #6b7280;
+  font-style: italic;
+}
+
 /* ------------------------- LAPTOP RESPONSIVE STYLING ------------------------- */
 @media (min-width: 1025px) and (max-width: 1919px) {
   .chat-shell {

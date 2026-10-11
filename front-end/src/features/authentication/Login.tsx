@@ -37,7 +37,26 @@ const Login = () => {
   // **Off by default, and that is the decision.** Ticking it keeps the session after the
   // browser closes; leaving it means the session dies with the tab. On a borrowed machine the
   // safe answer has to be the one that happens when nobody touches anything.
-  const [remember, setRemember] = useState(false);
+  // **Starts ticked, which reverses the original decision — and the reason it was made
+  // is still true, it is just outweighed here.**
+  //
+  // The argument for starting unticked was the borrowed computer: the safe answer should
+  // be the one that happens when nobody touches anything. That is right for a bank. This
+  // holds a trading journal - a record, not money - and the product it is actually like
+  // is Notion or GitHub, which keep you signed in and do not ask.
+  //
+  // What the box chooses is only *which storage holds the pair*: `sessionStorage`
+  // unticked, which dies with the tab, or `localStorage` ticked. Measured on the live
+  // site: a session started unticked is not reachable from a second tab at all, so a
+  // trader who closes the window is signed out every single time - and nothing on screen
+  // connects that to a checkbox he did not notice. He reads it as "this thing keeps
+  // logging me out".
+  //
+  // **The risk is real and is not being waved away**: on a shared machine the pair now
+  // survives the tab. Three things hold the line against it - the box is still there and
+  // still says plainly what it does, the access token lives fifteen minutes, and the
+  // account page has "ניתוק החיבורים האחרים" built for exactly this.
+  const [remember, setRemember] = useState(true);
 
   useEffect(() =>
   {

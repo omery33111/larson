@@ -145,7 +145,24 @@ const ChatMessage = ({ message, isWriting = false, isFound = false }: Props) => 
       </span>
 
       <div className="chat-answer">
-        {paragraphs(message.content).map((line, index, all) => (
+        {/*
+          * **An answer that never arrived says so, instead of being nothing.**
+          *
+          * The server now writes the reason onto the row when a call fails, so this only
+          * catches the ones already in the database from before that - and there are
+          * seven of them in the first real thread: questions he asked with absolutely
+          * nothing underneath them, forever. From his seat that is not an error, it is a
+          * mentor who ignored him, which is the worse of the two readings.
+          *
+          * Fixing it here rather than with a migration is deliberate: it repairs every
+          * old row at once, on a database that is not reachable from outside the server,
+          * and it cannot damage anything - there is no such thing as a legitimately empty
+          * answer. While the reply is still streaming the bubble is *expected* to be
+          * empty, so `isWriting` is excluded.
+          */}
+        {!isWriting && !message.content.trim() ? (
+          <p className="chat-answer-missing">לארסון לא הצליח לענות כאן. אפשר לשאול שוב.</p>
+        ) : paragraphs(message.content).map((line, index, all) => (
           <p key={index}>
             {inline(line)}
 
