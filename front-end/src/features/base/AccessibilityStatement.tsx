@@ -95,9 +95,21 @@ const AccessibilityStatement = () => (
       זה הדבר הכי מועיל שאפשר לעשות בשבילנו. כתבו לנו מה ניסיתם לעשות, באיזה עמוד, ובאיזה
       אמצעי (דפדפן, קורא מסך, מקלדת) — ונחזור אליכם.
     </p>
+    {/*
+      * **No named coordinator, and that is the correct reading rather than a shortcut.**
+      * The duty to appoint a רכז נגישות under תקנות שוויון זכויות לאנשים עם מוגבלות
+      * (התאמות נגישות לשירות) attaches to a service provider employing **25 people or
+      * more**. This is one person, so there is no such duty - and publishing a private
+      * individual's name on a public page that nothing requires is the sort of detail
+      * that is easy to add and impossible to take back.
+      *
+      * **What the statement does owe is a working way to report a problem**, which is the
+      * address - and it is a group, so it reaches a real inbox without being a personal
+      * one. Verified end to end: a message sent from an unrelated account landed in the
+      * group with no moderation, and the group's only member is subscribed to every mail.
+      */}
     <p>
-      <b>רכז הנגישות:</b> עומר ינאי<br />
-      <b>דוא"ל:</b>{' '}
+      <b>לפניות בנושא נגישות:</b>{' '}
       <a href={`mailto:${ACCESSIBILITY_CONTACT}`} dir="ltr">{ACCESSIBILITY_CONTACT}</a>
     </p>
 
