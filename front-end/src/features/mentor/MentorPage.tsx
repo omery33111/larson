@@ -196,7 +196,11 @@ const MentorPage = () => {
               is the reason to be here: it names the gap the page exists to close. */}
           <div className="chat-topbar mentor-topbar">
             <div className="chat-topbar-side chat-topbar-side-stack">
-              <span className="chat-topbar-title">לארסון המנטור</span>
+              {/* Same fix as the chat topbar, and it was worse here: the main feature of the
+                  product had **no heading of any kind** once the trader had data - the
+                  onboarding `h1` is the only one in the file, and it is gone by then. The
+                  class carries the size and the weight, so nothing moves. */}
+              <h1 className="chat-topbar-title">לארסון המנטור</h1>
 
               {resume.total_trades > 0 ? (
                 <span className={`mentor-resume ${isStale ? 'mentor-resume-stale' : ''}`}>
@@ -388,6 +392,11 @@ const MentorPage = () => {
                 className="chat-input"
                 value={draft}
                 rows={1}
+                /* **The one control on this screen that had no accessible name.** The
+                   placeholder is not one: it changes with the state, and it is gone the
+                   moment he types. The chat composer already carried a label; this one was
+                   missed because the earlier audit only walked the public screens. */
+                aria-label="מה לספר ללארסון על הסשן"
                 placeholder={pendingFile
                   ? 'רוצה להוסיף משהו לפני ששולחים? אפשר גם בלי'
                   : knowsHim

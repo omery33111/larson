@@ -197,7 +197,7 @@
 }
 
 .account-danger-title {
-  color: #d1494e;
+  color: var(--text-loss);
 }
 
 .account-label {
@@ -231,7 +231,7 @@
 .account-danger-go:disabled {
   background-color: #2a2226;
   border-color: #3a3033;
-  color: #6b7280;
+  color: var(--text-muted);
   cursor: not-allowed;
 }
 

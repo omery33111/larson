@@ -126,9 +126,16 @@ const ChatPage = () => {
                 <FiMenu />
               </button>
 
-              <span className="chat-topbar-title">
+              {/* **An `h1` and not a `span`, and it costs nothing visually.** Measured on
+                  the live site: with a conversation open this screen had **zero headings**,
+                  so a screen reader navigating by heading - which is how it is navigated -
+                  got nothing at all, on the one element that says which conversation this
+                  is. `.chat-topbar-title` already sets its own size and weight, so the tag
+                  change moves no pixels. The empty state has its own `h1`, which is why this
+                  was invisible until the thread was not empty. */}
+              <h1 className="chat-topbar-title">
                 {conversations.find((c) => c.id === activeId)?.title || 'שיחה עם לארסון'}
-              </span>
+              </h1>
             </div>
 
             {/* Him, at a size the state can be read at, in the fixed strip that never

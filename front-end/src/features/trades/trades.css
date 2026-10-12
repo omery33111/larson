@@ -51,7 +51,7 @@
 }
 
 .upload-formats {
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 0.85rem;
 }
 
@@ -95,19 +95,10 @@
 
 
 /* ------------------------- CONFIRMATION DIALOG ------------------------- */
-.confirm-backdrop {
-  position: fixed;
-  inset: 0;
-  /* Above MUI's modal layer, which sits at 1300. This is the gate that decides what enters
-     the resume, and it must never end up underneath a dialog that opened it. */
-  z-index: 1400;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-  background-color: rgba(0, 0, 0, 0.7);
-}
-
+/* `.confirm-backdrop` is gone: the gate is a MUI dialog now, so the overlay, the centring
+   and the stacking are its job. **The `z-index: 1400` this block carried moved with it** and
+   is set on the dialog itself - it is above MUI's own 1300 layer because this gate must
+   never end up underneath the dialog that opened it. See the note in `IngestionConfirm`. */
 .confirm-dialog {
   width: 100%;
   max-width: 720px;
@@ -153,7 +144,7 @@
 }
 
 .confirm-stat-label {
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 0.85rem;
 }
 
@@ -177,7 +168,7 @@
 }
 
 .confirm-table th {
-  color: #6b7280;
+  color: var(--text-muted);
   font-weight: 600;
   text-align: right;
   padding: 0.5rem;
@@ -227,7 +218,7 @@
 
 .field-chip-missing {
   background-color: #1b1f27;
-  color: #6b7280;
+  color: var(--text-muted);
   border: 1px solid #2b303b;
 }
 
@@ -236,7 +227,7 @@
 }
 
 .confirm-note {
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 0.85rem;
   margin-bottom: 0.6rem;
 }
@@ -384,7 +375,7 @@
 }
 
 .resume-line dt {
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 0.82rem;
   white-space: nowrap;
 }
@@ -486,7 +477,7 @@
 }
 
 .resume-delete-open:hover {
-  color: #d1494e;
+  color: var(--text-loss);
   border-color: #d1494e;
 }
 
@@ -494,7 +485,7 @@
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  color: #d1494e;
+  color: var(--text-loss);
   font-size: 0.95rem;
   font-weight: 700;
 }
@@ -507,7 +498,7 @@
 }
 
 .resume-danger-keep {
-  color: #6b7280;
+  color: var(--text-muted);
 }
 
 .resume-danger-label {
@@ -594,7 +585,7 @@
 }
 
 .outcome-win       { color: #2fa66a; }
-.outcome-loss      { color: #d1494e; }
+.outcome-loss      { color: var(--text-loss); }
 .outcome-breakeven { color: #8b909c;
 
   .resume-dialog {

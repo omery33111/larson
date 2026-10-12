@@ -18,7 +18,7 @@
 .legal-updated {
   margin-top: 0.35rem;
   margin-bottom: 2rem;
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 0.82rem;
 }
 
@@ -75,7 +75,7 @@
   margin-top: 2.5rem;
   padding-top: 1.2rem;
   border-top: 1px solid #23262f;
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 0.85rem;
 }
 

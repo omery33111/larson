@@ -87,7 +87,7 @@
 }
 
 .my-navbar-chevron {
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 0.9rem;
 }
 
@@ -102,7 +102,7 @@
 }
 
 .my-navbar-menu-sub {
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 0.78rem;
 }
 
@@ -214,12 +214,12 @@
   justify-content: center;
   gap: 0.5rem;
   margin-top: 0.6rem;
-  color: #4a505c;
+  color: var(--text-muted);
   font-size: 0.78rem;
 }
 
 .my-footer-links a {
-  color: #6b7280;
+  color: var(--text-muted);
   text-decoration: none;
 }
 
@@ -229,7 +229,7 @@
 }
 
 .my-footer-disclaimer {
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 0.78rem;
 }
 

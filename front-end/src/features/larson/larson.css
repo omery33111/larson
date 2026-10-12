@@ -105,7 +105,7 @@
 .larson-presence-note::before {
   content: '·';
   margin-inline-end: 0.35rem;
-  color: #4a505c;
+  color: var(--text-muted);
 }
 
 

@@ -83,6 +83,8 @@ const ResumeDialog = () => {
           was still there, and both were on screen at once. It stays "open" - the trader comes
           straight back to it, with the new numbers already in it. */}
       <Dialog open={isOpen && !isConfirmOpen} onClose={close} disableScrollLock
+        /* Named from its own heading - see the note in `RulesPanel`. */
+        aria-labelledby="resume-title"
         slotProps={{
           paper: {
             sx: {
@@ -99,7 +101,7 @@ const ResumeDialog = () => {
         <div className="resume-dialog">
 
           <div className="resume-head">
-            <h2 className="resume-title">הרזומה שלי</h2>
+            <h2 className="resume-title" id="resume-title">הרזומה שלי</h2>
 
             <button className="resume-close" onClick={close} aria-label="סגירה">
               <FiX />

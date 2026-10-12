@@ -1,3 +1,4 @@
+import Dialog from '@mui/material/Dialog'
 import { FiAlertCircle } from 'react-icons/fi'
 import Problem from '../base/Problem'
 import { useAppDispatch, useAppSelector } from '../../app/hooks'
@@ -65,11 +66,56 @@ const IngestionConfirm = () => {
 
 
   return (
-    <div className="confirm-backdrop" onClick={onCancel}>
+    /**
+     * **The gate that decides what enters the resume was the one modal in the product that
+     * was not a dialog.** It was a hand-rolled `div` overlay: no `role`, so a screen reader
+     * never announced that it opened; no focus move, so focus stayed wherever it was behind
+     * the overlay; no focus trap, so Tab walked the page underneath it; no Escape; and no
+     * focus restore on close. The three real dialogs - the chat delete, the rules panel and
+     * "my resume" - get all five from MUI, and the project's own note on the first of them
+     * already says MUI here is **behaviour only**. This is that note applied to the fourth.
+     *
+     * **The paper is stripped and `.confirm-dialog` stays exactly as it was**, so the box on
+     * screen is the same box: same fill, same border, same radius, same `max-width: 720px`
+     * and `max-height: 90dvh` with its own scroll. Nothing visual changed hands.
+     *
+     * **`zIndex: 1400` is kept, and it is not redundant.** `.confirm-backdrop` carried it to
+     * sit above MUI's 1300 layer, because this gate must never end up underneath the dialog
+     * that opened it - which happened once already. "My resume" also closes itself while the
+     * gate is open, and the doc is explicit that those are two guards and not one. Becoming
+     * a MUI dialog would have quietly dropped the second.
+     *
+     * `onClose` is backdrop-click and Escape together, which is what the old overlay's
+     * click-through handler did minus the `stopPropagation` dance it needed to do it.
+     */
+    <Dialog
+      open
+      onClose={onCancel}
+      maxWidth={false}
+      /* It locks body scroll and compensates with padding; `scrollbar-gutter: stable` is
+         reserved on every page, so that measurement shifts the whole layout sideways the
+         moment it opens. */
+      disableScrollLock
+      aria-labelledby="confirm-title"
+      sx={{ zIndex: 1400 }}
+      slotProps={{
+        paper: {
+          sx: {
+            width: 'min(720px, 100%)',
+            margin: '1rem',
+            maxHeight: 'none',
+            background: 'none',
+            boxShadow: 'none',
+            borderRadius: 0,
+            overflow: 'visible',
+          },
+        },
+      }}
+    >
 
-      <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
+      <div className="confirm-dialog">
 
-        <h2 className="confirm-title">אישור קליטה לרזומה</h2>
+        <h2 className="confirm-title" id="confirm-title">אישור קליטה לרזומה</h2>
 
         <p className="confirm-headline">
           זיהינו <b>{report.parsed}</b> עסקאות
@@ -211,7 +257,7 @@ const IngestionConfirm = () => {
 
       </div>
 
-    </div>
+    </Dialog>
   )
 }
 

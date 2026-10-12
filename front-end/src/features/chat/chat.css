@@ -292,7 +292,7 @@
   min-height: 44px;
   background: none;
   border: none;
-  color: #4d525d;
+  color: var(--text-muted);
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.15s ease-in-out, color 0.15s ease-in-out;
@@ -308,7 +308,7 @@
 }
 
 .chat-list-delete:hover {
-  color: #d1494e;
+  color: var(--text-loss);
 }
 
 /* A touch screen has no hover, so the tools would be unreachable there. */
@@ -384,13 +384,13 @@
 }
 
 .chat-saved-mine {
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 0.7rem;
 }
 
 .chat-saved-go {
   margin-inline-start: auto;
-  color: #4d525d;
+  color: var(--text-muted);
   font-size: 0.8rem;
 }
 
@@ -549,7 +549,7 @@
 }
 
 .chat-thread-loading {
-  color: #6b7280;
+  color: var(--text-muted);
   text-align: center;
   padding-block: 2rem;
 }
@@ -941,7 +941,7 @@
   margin-bottom: 0.9rem;
   background-color: rgba(209, 73, 78, 0.12);
   border-radius: 50%;
-  color: #d1494e;
+  color: var(--text-loss);
   font-size: 1.35rem;
 }
 
@@ -983,7 +983,7 @@
 
 
 .chat-waiting {
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 0.83rem;
   padding-inline-start: 3.2rem;
   margin-top: -0.6rem;
@@ -1042,7 +1042,7 @@
 }
 
 .chat-attachment-drop:hover {
-  color: #d1494e;
+  color: var(--text-loss);
 }
 
 .chat-input-row {
@@ -1155,7 +1155,7 @@
 }
 
 .chat-disclaimer {
-  color: #4d525d;
+  color: var(--text-muted);
   font-size: 0.74rem;
   text-align: center;
   margin-top: 0.6rem;
@@ -1201,7 +1201,7 @@
  * not an alarm - the thing to do about it is ask again, and the sentence says so.
  */
 .chat-answer-missing {
-  color: #6b7280;
+  color: var(--text-muted);
   font-style: italic;
 }
 

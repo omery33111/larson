@@ -49,11 +49,11 @@
 }
 
 .pnl-positive { color: #2fa66a; }
-.pnl-negative { color: #d1494e; }
+.pnl-negative { color: var(--text-loss); }
 
 .score-good { color: #2fa66a; }
 .score-mid  { color: #f0b90b; }
-.score-bad  { color: #d1494e; }
+.score-bad  { color: var(--text-loss); }
 
 
 /* ------------------------- SHARED CARD ------------------------- */
@@ -135,7 +135,7 @@
 }
 
 .pillar-weight {
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 0.75rem;
   margin-inline-start: auto;
 }
@@ -148,7 +148,7 @@
 }
 
 .pillar-detail {
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 0.78rem;
   margin-top: 0.3rem;
 }
@@ -265,7 +265,7 @@
 }
 
 .split-bar-win-label  { color: #2fa66a; }
-.split-bar-loss-label { color: #d1494e; }
+.split-bar-loss-label { color: var(--text-loss); }
 
 
 /* ------------------------- SECONDARY METRICS (COLLAPSIBLE) ------------------------- */
@@ -283,7 +283,7 @@
   padding: 0 0.9rem;
   background: none;
   border: none;
-  color: #6b7280;
+  color: var(--text-muted);
   font-family: inherit;
   font-size: 0.85rem;
   cursor: pointer;
@@ -339,7 +339,7 @@
 }
 
 .metric-label {
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 0.78rem;
   text-align: center;
 }
@@ -374,7 +374,7 @@
 }
 
 .shoulders-subtitle {
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 0.84rem;
 }
 
@@ -426,13 +426,13 @@
 .shoulder-devil .shoulder-title { color: #f27272; }
 
 .shoulder-subtitle {
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 0.82rem;
   line-height: 1.5;
 }
 
 .shoulder-empty {
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 0.9rem;
 }
 
@@ -482,7 +482,7 @@
 .finding-evidence {
   display: inline-block;
   padding-top: 0.45rem;
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 0.74rem;
 }
 
@@ -587,7 +587,7 @@
 }
 
 .written-basis {
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 0.82rem;
   margin-bottom: 1.5rem;
 }
@@ -662,7 +662,7 @@
 }
 
 .written-meta {
-  color: #4d525d;
+  color: var(--text-muted);
   font-size: 0.78rem;
 }
 
@@ -693,7 +693,7 @@
 }
 
 .section-subtitle {
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 0.84rem;
   line-height: 1.55;
   max-width: 68ch;
@@ -726,7 +726,7 @@
 }
 
 .breakdown-hint {
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 0.78rem;
   margin-bottom: 0.9rem;
 }
@@ -781,7 +781,7 @@
 }
 
 .breakdown-table th {
-  color: #6b7280;
+  color: var(--text-muted);
   font-weight: 600;
   text-align: right;
   padding: 0.45rem 0.5rem;
@@ -837,7 +837,7 @@
 }
 
 .progress-up { color: #2fa66a; }
-.progress-down { color: #d1494e; }
+.progress-down { color: var(--text-loss); }
 .progress-flat { color: #8b909c; }
 
 /* Both children are elements, so `gap` is what separates them - a bare text node beside a
@@ -885,7 +885,7 @@
 
 .progress-month-name {
   font-size: 0.76rem;
-  color: #626875;
+  color: var(--text-muted);
 }
 
 .progress-month-figure {
@@ -1070,7 +1070,7 @@
 
 .account-trigger-arrow {
   display: inline-flex;
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 0.95rem;
 }
 
@@ -1096,7 +1096,7 @@
 }
 
 .account-option-meta {
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 0.75rem;
 }
 
@@ -1111,6 +1111,6 @@
 }
 
 .breakdown-key-label {
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 0.8rem;
 }

@@ -401,7 +401,7 @@
   cursor: pointer;
 }
 
-.rules-drop:hover { border-color: #d1494e; color: #d1494e; }
+.rules-drop:hover { border-color: #d1494e; color: var(--text-loss); }
 
 .rules-foot {
   margin: 1.1rem 0 0;
@@ -602,13 +602,13 @@
   padding-inline: 0.1rem;
   font-size: 0.74rem;
   font-style: normal;
-  color: #626875;
+  color: var(--text-muted);
 }
 
 /* Scoped rather than forced. `.rules-looking code` is (0,1,1), so a bare class loses to it -
    and the moment one `!important` goes in, the next one follows. The project has none. */
 .rules-looking code.rules-forbidden {
-  color: #d1494e;
+  color: var(--text-loss);
   border-color: #3a2326;
 }
 
@@ -640,7 +640,7 @@
 .rules-note {
   margin: 0.7rem 0 0;
   font-size: 0.79rem;
-  color: #626875;
+  color: var(--text-muted);
 }
 
 .rules-templates { margin-bottom: 0.5rem; }
@@ -673,7 +673,7 @@
 
 .rules-hits-none {
   background: #2a1619;
-  color: #d1494e;
+  color: var(--text-loss);
 }
 
 .rules-edit-terms {
@@ -721,7 +721,7 @@
   min-width: 5.2rem;
   padding-top: 0.6rem;
   font-size: 0.76rem;
-  color: #626875;
+  color: var(--text-muted);
 }
 
 .terms-chips {
@@ -761,7 +761,7 @@
 }
 
 .terms-chip-dead { border-color: #4a2326; }
-.terms-chip-dead .terms-count { color: #d1494e; }
+.terms-chip-dead .terms-count { color: var(--text-loss); }
 .terms-chip-dead code { color: #8b909c; }
 
 .terms-chip button {
@@ -775,11 +775,11 @@
   border: 0;
   border-radius: 50%;
   background: transparent;
-  color: #626875;
+  color: var(--text-muted);
   cursor: pointer;
 }
 
-.terms-chip button:hover { color: #d1494e; background: #1f242c; }
+.terms-chip button:hover { color: var(--text-loss); background: #1f242c; }
 
 .terms-add,
 .terms-vocab-chip {
@@ -841,7 +841,7 @@
   border: 0;
   background: transparent;
   font-size: 0.76rem;
-  color: #626875;
+  color: var(--text-muted);
   cursor: pointer;
 }
 

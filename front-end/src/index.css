@@ -4,6 +4,34 @@
   max-width: 100%;
 }
 
+/* ------------------------- THE TWO COLOURS THAT HAD TO BE MEASURED -------------------------
+ *
+ * **Four greys and one red failed WCGA AA, and they were four accidents of one intended
+ * colour.** Measured on the live site with the real resolved backgrounds, not read off the
+ * stylesheet: `#4a505c` 2.19:1, `#4d525d` 2.27, `#626875` 3.27, `#6b7280` 3.42-3.91 across
+ * 76 occurrences, and the loss red `#d1494e` 4.04 wherever it is small text. AA wants 4.5
+ * for body text, so every one of them was a failure - on the ID page, both chats, the
+ * ingestion gate, **and the footer, which is on every page in the product including the
+ * public ones.**
+ *
+ * Lifting each of the four along its own hue until it cleared 4.5 produced `#818896`,
+ * `#828894`, `#828895` and `#838893` - the same colour four times. That is the finding: the
+ * hierarchy they were reaching for was never carried by the colour, it is carried by the
+ * size and the weight, which already differ. So one token.
+ *
+ * **`--text-loss` exists so the figure red can be lifted without touching the mark.**
+ * `#d1494e` is also the devil's horns and the warning polyline inside the visor, where it is
+ * deliberate and documented and sits on `#0b0e13`; and it is the fill of the loss bar and
+ * the gauge arc, which are graphics and only owe 3:1 (they measure 3.75). Only the red that
+ * is *text* moves.
+ *
+ * Both are checked against every background either one actually lands on - the lightest of
+ * them, `#1b1f27`, is the one that decides - and clear it at 4.95 and 5.22. */
+:root {
+  --text-muted: #868d9a;
+  --text-loss: #e8686e;
+}
+
 html, body {
   margin: 0;
   padding: 0;
@@ -135,7 +163,7 @@ a {
 }
 
 .app-input::placeholder {
-  color: #6b7280;
+  color: var(--text-muted);
 }
 
 .app-btn {

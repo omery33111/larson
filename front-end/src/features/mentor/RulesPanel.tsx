@@ -223,12 +223,17 @@ const RulesPanel = () => {
       // is already set on every page, that measurement shifts the whole layout sideways the
       // moment the dialog opens.
       disableScrollLock
+      /* **Named from the heading it already shows.** MUI gives the focus trap, Escape and
+         the focus restore for free, but an unnamed dialog is announced as just "dialog" -
+         so the one thing a screen reader user needs to hear on open was the one thing
+         missing. */
+      aria-labelledby="rules-title"
     >
       <div className="rules-panel">
 
         <header className="rules-head">
           <div>
-            <h2 className="rules-title">הכללים שלך</h2>
+            <h2 className="rules-title" id="rules-title">הכללים שלך</h2>
             <p className="rules-sub">
               מה שתקבע כאן <b>לארסון בודק מול כל קובץ שתשלח</b> — ואומר לך בשמה את העסקה
               שחרגה. כלל שלא תקבע פשוט לא נבדק.
