@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import Dialog from '@mui/material/Dialog'
 import { FiAlertCircle } from 'react-icons/fi'
 import Problem from '../base/Problem'
@@ -49,6 +50,52 @@ const IngestionConfirm = () => {
   const preview = useAppSelector(selectPreview);
   const isConfirming = useAppSelector(selectIsConfirming);
   const message = useAppSelector(selectTradesMessage);
+
+  /**
+   * **Where the focus goes when the gate closes, which MUI cannot do for us here.**
+   *
+   * Measured on the live site after the conversion: focus moved into the dialog correctly
+   * and then landed on `body` when it closed - so a keyboard user who cancels is returned
+   * to the top of the document and has to tab through the whole navbar to get back.
+   *
+   * **The cause is structural and worth knowing: this component returns `null` when the
+   * gate is shut, so the dialog *unmounts* rather than closing.** MUI restores focus in its
+   * close path, and that path never runs - the whole subtree simply disappears. The rules
+   * panel and "my resume" stay mounted and toggle `open`, which is why they restore focus
+   * and this did not. (Verified: the rules panel returns focus to the button that opened it.)
+   *
+   * Reshaping this one to match them would mean keeping it mounted and rendering an empty
+   * paper for the length of the exit transition, so instead the restore is explicit here -
+   * eight lines that depend on nothing inside MUI.
+   *
+   * While the gate is shut, whoever holds focus is whoever is about to open it; the listener
+   * only exists in that state, so it costs nothing while the dialog is up.
+   */
+  const opener = useRef<HTMLElement | null>(null);
+  const wasOpen = useRef(false);
+
+  useEffect(() => {
+    if (isConfirmOpen) {
+      wasOpen.current = true;
+      return;
+    }
+
+    if (wasOpen.current) {
+      wasOpen.current = false;
+      opener.current?.focus?.();
+    }
+
+    const remember = () => {
+      const active = document.activeElement as HTMLElement | null;
+      // `body` is not an opener - it is what we are trying to avoid being sent back to.
+      if (active && active !== document.body) opener.current = active;
+    };
+
+    remember();
+    document.addEventListener('focusin', remember);
+
+    return () => document.removeEventListener('focusin', remember);
+  }, [isConfirmOpen]);
 
   if (!isConfirmOpen || !preview) return null;
 
