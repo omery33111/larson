@@ -13,6 +13,7 @@ script useless in any clone but one machine's.
 """
 
 import pathlib
+import json
 import os
 import subprocess
 import sys
@@ -20,8 +21,19 @@ import zipfile
 from datetime import datetime
 
 ROOT = str(pathlib.Path(__file__).resolve().parent.parent / "back-end")
-BUCKET = "elasticbeanstalk-eu-central-1-904233086909"
 APP, ENV = "larson", "larson-api"
+
+# **The bucket is asked for, not written down, and that is because the repo is public.**
+# Its name embeds the AWS account id, which is not a credential but is also not something to
+# publish: it is what someone needs to guess at role ARNs or to sound convincing to support.
+# `create-storage-location` is idempotent - it returns the existing Elastic Beanstalk bucket
+# for this account and region, and creates one only if there is none - so this costs a call
+# and removes the number from the source.
+#
+# (It was hardcoded when this script lived in a scratch folder, and committed on the reasoning
+# that the repository was private. That stopped being true on 2026-10-20.)
+def bucket():
+    return json.loads(run("aws", "elasticbeanstalk", "create-storage-location"))["S3Bucket"]
 
 SKIP_DIRS = {".venv", "__pycache__", "media", "staticfiles", ".git", "node_modules"}
 SKIP_FILES = {".env", ".env.production", "db.sqlite3"}
@@ -70,12 +82,13 @@ def main():
     print("checked    separators are '/', Procfile and settings are in")
 
     key = f"{APP}/{label}.zip"
-    run("aws", "s3", "cp", local, f"s3://{BUCKET}/{key}")
+    store = bucket()
+    run("aws", "s3", "cp", local, f"s3://{store}/{key}")
     print("uploaded  ", key)
 
     run("aws", "elasticbeanstalk", "create-application-version",
         "--application-name", APP, "--version-label", label,
-        "--source-bundle", f"S3Bucket={BUCKET},S3Key={key}",
+        "--source-bundle", f"S3Bucket={store},S3Key={key}",
         "--description", label)
     print("version    created")
 
