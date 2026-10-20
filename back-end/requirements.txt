@@ -9,7 +9,7 @@ certifi==2026.7.22
 cffi==2.1.1
 cryptography==50.0.1
 defusedxml==0.7.1
-Django==6.1
+Django==6.1.1
 django-cors-headers==4.9.0
 django-storages==1.14.6
 djangorestframework==3.18.0
@@ -32,7 +32,7 @@ psycopg2-binary==2.9.13
 pycparser==3.0
 pydantic==2.13.4
 pydantic_core==2.46.4
-PyJWT==2.13.0
+PyJWT==2.15.0
 python-dateutil==2.9.0.post0
 python-dotenv==1.2.3
 s3transfer==0.19.2
@@ -44,7 +44,7 @@ truststore==0.10.4
 typing-inspection==0.4.4
 typing_extensions==4.16.0
 tzdata==2026.3
-urllib3==2.7.0
+urllib3==2.8.0
 whitenoise==6.12.0
 # Reads the old binary .xls, which the upload screen offers and pandas cannot open alone.
 xlrd==2.0.2

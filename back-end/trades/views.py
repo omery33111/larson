@@ -9,6 +9,7 @@ from rest_framework.response import Response
 
 from mentor.rules import refresh as refresh_rules
 
+from django.core.exceptions import SuspiciousFileOperation
 from django.db import IntegrityError
 from django.shortcuts import get_object_or_404
 
@@ -77,14 +78,24 @@ def upload(request):
     # ever displayed.
     uploaded.name = os.path.basename(str(uploaded.name).replace("\\", "/"))
 
-    trade_file = TradeFile.objects.create(
-        user = request.user,
-        file = uploaded,
-        original_name = uploaded.name,
-        row_count = report["total_rows"],
-        column_mapping = json.dumps(report["mapping"], ensure_ascii = False),
-        mapped_by_model = report["mapped_by_model"],
-    )
+    # **The basename strip closes traversal, but the storage layer can still refuse a name
+    # for its own reasons** - a Windows reserved device name (`con`, `nul`, `aux`, `lpt1`)
+    # raises `SuspiciousFileOperation` at save time, and an uncaught one here is a 500 with a
+    # traceback rather than a sentence. Production is Linux, where those names save fine, so
+    # this only bites a crafted client on a Windows host; it is caught anyway so the refusal
+    # reads like every other rejected file, not like the server fell over.
+    try:
+        trade_file = TradeFile.objects.create(
+            user = request.user,
+            file = uploaded,
+            original_name = uploaded.name,
+            row_count = report["total_rows"],
+            column_mapping = json.dumps(report["mapping"], ensure_ascii = False),
+            mapped_by_model = report["mapped_by_model"],
+        )
+    except SuspiciousFileOperation:
+        return Response({"error": "שם הקובץ אינו תקין. נסה לשנות את שם הקובץ ולהעלות שוב."},
+                        status = status.HTTP_400_BAD_REQUEST)
 
     # How many of these are actually new tells the user what the merge will do before it happens.
     hashes = [t["dedup_hash"] for t in trades]

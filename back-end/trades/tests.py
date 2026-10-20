@@ -480,6 +480,21 @@ class IngestionFlowTests(APITestCase):
         self.assertEqual(Trade.objects.count(), 0)
 
 
+    def test_a_name_the_storage_refuses_is_a_sentence_not_a_500(self):
+        # A Windows reserved device name (`con`, `nul`, `aux`, `lpt1`) parses fine and strips
+        # to a clean basename, but the storage layer raises SuspiciousFileOperation when it
+        # tries to save it - only on a Windows host, so this is mocked to assert portably that
+        # the view answers 400 with a sentence rather than letting the exception become a 500.
+        from django.core.exceptions import SuspiciousFileOperation
+        with patch("trades.views.TradeFile.objects.create",
+                   side_effect = SuspiciousFileOperation("reserved name")):
+            response = self.client.post("/trades/upload/", {"file": csv_file(CSV_HEADER + CSV_ROWS)})
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("error", response.data)
+        self.assertEqual(Trade.objects.count(), 0)
+
+
     def test_confirm_saves_the_trades(self):
         upload = self.client.post("/trades/upload/", {"file": csv_file(CSV_HEADER + CSV_ROWS)})
         file_id = upload.data["trade_file"]["id"]
