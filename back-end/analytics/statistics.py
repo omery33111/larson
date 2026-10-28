@@ -323,6 +323,9 @@ def _excursion_metrics(trades):
         "winners_measured": len(winners),
         "avg_heat_on_winners": round(_mean(winner_heat), 2) if winner_heat else None,
         "avg_left_on_table": round(_mean(give_back), 2) if give_back else None,
+        # How many of the contributing rows were derived from the price path rather than read
+        # as money. Lets the model temper its certainty when the block leans on estimates.
+        "estimated_rows": sum(1 for t in mfe_trades if getattr(t, "excursion_estimated", False)),
     }
 
 

@@ -871,6 +871,53 @@ def parse_direction(value):
     return "unknown"
 
 
+def _derive_excursion(direction, entry, exit_price, quantity, pnl, highest, lowest):
+    """
+    MFE/MAE in money from the high/low prices, when the file gave prices but not the money.
+
+    **No multiplier table.** The dollars-per-point is the trade's own realised P&L divided by
+    its own realised price move, so each trade recovers its own contract size - MNQ comes out
+    near $2, NQ near $20 - with nothing assumed. The only error is fees, which the realised
+    P&L is already net of, so the result is an estimate.
+
+    Returns (mfe, mae), either of which may be None when its price or a prerequisite is
+    missing. Skips entirely - returns (None, None) - unless the direction is known, the size
+    and both fill prices are present, the realised move is non-zero, and the implied
+    dollars-per-point is positive (a fee-dominated or dirty row is left alone rather than
+    guessed).
+    """
+    if direction not in ("long", "short"):
+        return None, None
+    if entry is None or exit_price is None or not quantity or pnl is None:
+        return None, None
+
+    realized = (exit_price - entry) if direction == "long" else (entry - exit_price)
+    if realized == 0:
+        return None, None
+
+    per_point = pnl / (realized * quantity)
+    if per_point <= 0:
+        # P&L and the move disagree in sign - fees swamped a tiny move, or the row is dirty.
+        # An inferred negative dollars-per-point is nonsense, so derive nothing.
+        return None, None
+
+    # Favourable uses the high for a long and the low for a short; adverse is the opposite.
+    if direction == "long":
+        favourable = (highest - entry) if highest is not None else None
+        adverse = (lowest - entry) if lowest is not None else None
+    else:
+        favourable = (entry - lowest) if lowest is not None else None
+        adverse = (entry - highest) if highest is not None else None
+
+    # Clamped so a dirty high/low that brackets the entry the wrong way cannot flip the sign:
+    # MFE is favourable and non-negative, MAE is adverse and non-positive, by definition.
+    mfe = max(0.0, favourable) * quantity * per_point if favourable is not None else None
+    mae = min(0.0, adverse) * quantity * per_point if adverse is not None else None
+
+    return (round(mfe, 2) if mfe is not None else None,
+            round(mae, 2) if mae is not None else None)
+
+
 TRUE_WORDS = ["כן", "true", "yes", "y", "1", "v", "✓", "✔", "x", "done", "בוצע"]
 FALSE_WORDS = ["לא", "false", "no", "n", "0", "", "-", "pending", "ממתין"]
 
@@ -1159,6 +1206,24 @@ def parse_file(file_bytes, filename, source_timezone = DEFAULT_SOURCE_TIMEZONE,
         mfe = abs(mfe) if mfe is not None else None
         mae = -abs(mae) if mae is not None else None
 
+        highest_price = parse_number(cell("highest_price"))
+        lowest_price = parse_number(cell("lowest_price"))
+
+        # When the file gave the price path but not the money, derive MFE/MAE from this
+        # trade's own realised P&L. Only fills a side the file left blank - a measured value
+        # is authoritative and never overwritten - and marks the trade so the figure is shown
+        # as an estimate.
+        excursion_estimated = False
+        if mfe is None or mae is None:
+            derived_mfe, derived_mae = _derive_excursion(
+                direction, entry_price, exit_price, quantity, pnl, highest_price, lowest_price)
+            if mfe is None and derived_mfe is not None:
+                mfe = derived_mfe
+                excursion_estimated = True
+            if mae is None and derived_mae is not None:
+                mae = derived_mae
+                excursion_estimated = True
+
         trade = {
             "executed_at": executed_at,
             "opened_at": opened_at,
@@ -1172,8 +1237,9 @@ def parse_file(file_bytes, filename, source_timezone = DEFAULT_SOURCE_TIMEZONE,
             "pnl": pnl,
             "mfe": mfe,
             "mae": mae,
-            "highest_price": parse_number(cell("highest_price")),
-            "lowest_price": parse_number(cell("lowest_price")),
+            "excursion_estimated": excursion_estimated,
+            "highest_price": highest_price,
+            "lowest_price": lowest_price,
             "was_documented": parse_bool(cell("was_documented")),
             "points": parse_number(cell("points")),
             "fees": _sum_fees(row, fee_columns),

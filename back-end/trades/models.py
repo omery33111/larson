@@ -138,6 +138,14 @@ class Trade(models.Model):
     highest_price = models.FloatField(null = True, blank = True)
     lowest_price = models.FloatField(null = True, blank = True)
 
+    # **True when MFE/MAE were not in the file and were derived from the high/low prices.**
+    # The dollars-per-point is backed out of this same trade's realised P&L and price move -
+    # never a hardcoded table - so MNQ recovers ~$2 and NQ ~$20 on their own. The one
+    # inaccuracy is fees, which the realised P&L already carries, so a derived figure is an
+    # estimate and is marked as one everywhere it is shown. A measured value is never
+    # overwritten by a derived one.
+    excursion_estimated = models.BooleanField(default = False)
+
     # Whether the trader journaled this trade (TradeReport's "documented" flag). None when the
     # file did not say. Kept because it was asked for; it drives no scoring - journaling
     # coverage is already visible from the qualitative fields.

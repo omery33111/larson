@@ -1291,3 +1291,65 @@ class ExcursionParsingTests(APITestCase):
         self.assertIn("excursion", [e["key"] for e in report["enrichment_found"]])
 
 # ------------------------- EXCURSION FIELD TESTS END ------------------------- #
+
+
+
+# ------------------------- EXCURSION DERIVATION TESTS START ------------------------- #
+
+class ExcursionDerivationTests(APITestCase):
+    """
+    Deriving MFE/MAE in money from the price path, when the file gives prices but not money.
+    The dollars-per-point is backed out of each trade's own realised P&L, so no instrument
+    multiplier is ever assumed.
+    """
+
+    def _parse(self, content):
+        from .parsers import parse_file
+        return parse_file(content.encode("utf-8"), "x.csv")
+
+    def test_multiplier_is_recovered_per_trade_not_assumed(self):
+        # Identical price move; the only difference is the P&L, i.e. the contract size. MNQ
+        # (~$2/pt) and NQ (~$20/pt) must come out ~10x apart with nothing hardcoded.
+        from .parsers import _derive_excursion
+        mnq_mfe, _ = _derive_excursion("long", 29555.75, 29580.25, 3, 144.0, 29611.0, 29549.0)
+        nq_mfe, _ = _derive_excursion("long", 29555.75, 29580.25, 3, 1470.0, 29611.0, 29549.0)
+        self.assertAlmostEqual(nq_mfe / mnq_mfe, 10.2, delta = 0.3)
+
+    def test_short_trade_uses_low_for_favourable(self):
+        from .parsers import _derive_excursion
+        # Short 100->95, qty 2, $200 => $20/pt. Low 92 is +8pt favourable, high 103 is -3pt.
+        mfe, mae = _derive_excursion("short", 100, 95, 2, 200.0, 103.0, 92.0)
+        self.assertEqual(mfe, 320.0)
+        self.assertEqual(mae, -120.0)
+
+    def test_prices_without_money_are_derived_and_marked(self):
+        trades, _ = self._parse(
+            "Date,Symbol,Side,Qty,Entry,Exit,P&L,High Price,Low Price\n"
+            "2026-01-02,MNQ,long,3,29555.75,29580.25,144,29611,29549\n")
+        t = trades[0]
+        self.assertIsNotNone(t["mfe"])
+        self.assertIsNotNone(t["mae"])
+        self.assertTrue(t["excursion_estimated"])
+        self.assertGreater(t["mfe"], 0)
+        self.assertLess(t["mae"], 0)
+
+    def test_a_measured_value_is_never_overwritten(self):
+        # The file carries the real MFE/MAE; derivation must not touch them, and the trade is
+        # not marked estimated.
+        trades, _ = self._parse(
+            "Date,Symbol,Side,Qty,Entry,Exit,P&L,MFE,MAE,High Price,Low Price\n"
+            "2026-01-02,MNQ,long,3,29555.75,29580.25,144,331.5,-40.5,29611,29549\n")
+        t = trades[0]
+        self.assertEqual(t["mfe"], 331.5)
+        self.assertEqual(t["mae"], -40.5)
+        self.assertFalse(t["excursion_estimated"])
+
+    def test_nothing_is_derived_without_the_inputs(self):
+        # No prices at all: nothing to derive from, and the trade stays unmarked.
+        trades, _ = self._parse(
+            "Date,Symbol,Side,Qty,Entry,Exit,P&L\n2026-01-02,MNQ,long,3,100,105,30\n")
+        t = trades[0]
+        self.assertIsNone(t["mfe"])
+        self.assertFalse(t["excursion_estimated"])
+
+# ------------------------- EXCURSION DERIVATION TESTS END ------------------------- #

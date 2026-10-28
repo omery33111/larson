@@ -38,6 +38,7 @@ def make_trade(**overrides):
         "take_profit": None,
         "mfe": None,
         "mae": None,
+        "excursion_estimated": False,
         "highest_price": None,
         "lowest_price": None,
         "was_documented": None,
