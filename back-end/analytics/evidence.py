@@ -46,6 +46,14 @@ def describe_trade(trade, tz, currency):
     if trade.pnl is not None:
         line += f" · {money(trade.pnl, currency)}"
 
+    # **The two numbers the realised P&L hides.** MFE is how far into profit the trade ran,
+    # MAE how far underwater it went first; quoted on the trade itself so Larson can say
+    # "this one was +$331 before you booked $144" instead of only the $144.
+    if getattr(trade, "mfe", None) is not None:
+        line += f" · שיא {money(trade.mfe, currency)}"
+    if getattr(trade, "mae", None) is not None:
+        line += f" · שפל {money(trade.mae, currency)}"
+
     # **His own words, on the trade they were written about.**
     #
     # `notes` sat in the database and in the data export and reached no prompt at all, which

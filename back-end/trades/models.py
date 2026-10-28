@@ -119,6 +119,30 @@ class Trade(models.Model):
     stop_loss = models.FloatField(null = True, blank = True)
     take_profit = models.FloatField(null = True, blank = True)
 
+    # ------------- EXCURSION (how far the trade ran each way before it closed):
+    # MFE and MAE are the headline here - the best unrealised profit and the worst unrealised
+    # loss reached while the trade was open, in money. They answer a question the realised
+    # P&L cannot: not "did it win" but "how much was on the table, and how much heat did it
+    # take to get there". A trader who reaches +$300 on every trade but keeps a tenth of it
+    # is told something no win-rate can say.
+    #
+    # **Normalised by sign at parse time, not stored as the journal happened to write it.**
+    # MFE is favourable by definition, so it is stored non-negative; MAE is adverse, so it is
+    # stored non-positive. Journals disagree on whether MAE is "-40.5" or "40.5"; folding the
+    # sign here means every downstream number means the same thing regardless of the source.
+    mfe = models.FloatField(null = True, blank = True)
+    mae = models.FloatField(null = True, blank = True)
+
+    # The raw price path - the highest and lowest the instrument traded while the position
+    # was open. The price-terms counterpart to MFE/MAE; kept as the file wrote them.
+    highest_price = models.FloatField(null = True, blank = True)
+    lowest_price = models.FloatField(null = True, blank = True)
+
+    # Whether the trader journaled this trade (TradeReport's "documented" flag). None when the
+    # file did not say. Kept because it was asked for; it drives no scoring - journaling
+    # coverage is already visible from the qualitative fields.
+    was_documented = models.BooleanField(null = True, blank = True)
+
     # ------------- EXECUTION DETAIL:
     opened_at = models.DateTimeField(null = True, blank = True)
     duration_seconds = models.IntegerField(null = True, blank = True)

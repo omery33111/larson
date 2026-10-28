@@ -109,6 +109,44 @@ COLUMN_SYNONYMS = {
     "take_profit": ["טייק פרופיט", "טייק", "take profit", "takeprofit", "profit target",
                     "profit_target", "target", "tp", "t/p", "target price"],
 
+    # ------------- EXCURSION:
+    # How far the trade ran in favour and against while open. The money versions (MFE/MAE)
+    # are the valuable pair; the price versions are the raw high/low the instrument touched.
+    #
+    # Named every way the major journals write them. MFE: TradeZella/TraderSync "Max Favorable
+    # Excursion", Tradervue "Run-up", Edgewonk "MFE", generic "max run up / max profit / max
+    # potential profit". MAE: the adverse twin - Tradervue "Drawdown", "Run-down", "Max Adverse
+    # Excursion", "max heat", "max loss". A header holding a win/loss word rather than a number
+    # is settled off to `status` by value, so "max loss" claiming a figure is safe.
+    "mfe": ["רווח מקסימלי", "רווח מרבי", "תנועה מיטיבה מקסימלית", "mfe",
+            "max favorable excursion", "max favourable excursion",
+            "maximum favorable excursion", "maximum favourable excursion",
+            "favorable excursion", "favourable excursion", "run up", "runup", "run-up",
+            "max run up", "max runup", "maximum run up", "max profit", "maximum profit",
+            "peak profit", "highest profit", "max open profit", "max unrealized profit",
+            "max unrealised profit", "max potential profit", "potential profit",
+            "best case", "max gain", "maximum gain"],
+
+    "mae": ["הפסד מקסימלי", "הפסד מרבי", "תנועה שלילית מקסימלית", "mae",
+            "max adverse excursion", "maximum adverse excursion", "adverse excursion",
+            "run down", "rundown", "run-down", "max run down", "max rundown",
+            "drawdown", "max drawdown", "maximum drawdown", "trade drawdown",
+            "max heat", "heat", "max loss", "maximum loss", "max open loss",
+            "max unrealized loss", "max unrealised loss", "max potential loss",
+            "worst case", "max pain"],
+
+    "highest_price": ["מחיר גבוה ביותר", "מחיר שיא", "highest price", "high price",
+                      "highest", "trade high", "session high", "max price", "price high",
+                      "high of trade", "peak price"],
+
+    "lowest_price": ["מחיר נמוך ביותר", "מחיר שפל", "lowest price", "low price",
+                     "lowest", "trade low", "session low", "min price", "price low",
+                     "low of trade", "trough price"],
+
+    # TradeReport's yes/no "was this trade journaled" flag. Hebrew "כן"/"לא" or English.
+    "was_documented": ["תועד", "documented", "is documented", "journaled", "journalled",
+                       "logged", "reviewed", "has notes", "written up"],
+
     "orders_count": ["פקודות", "orders", "executions", "fills", "num orders", "no of trades"],
 
     "duration": ["סה\"כ זמן", 'סה"כ זמן', "זמן", "duration", "time in trade", "hold time",
@@ -147,7 +185,8 @@ DEFAULT_CURRENCY = "USD"
 # Fields whose value is a number. Used to settle headers that two fields both claim - a
 # "Result" column holding "win" is a status, one holding "-142.5" is a P&L.
 NUMERIC_FIELDS = ["pnl", "points", "fees", "r_multiple", "quantity", "entry_price", "exit_price",
-                  "stop_loss", "take_profit", "orders_count", "rating"]
+                  "stop_loss", "take_profit", "orders_count", "rating",
+                  "mfe", "mae", "highest_price", "lowest_price"]
 
 
 # ------------- FIELD REQUIREMENTS:
@@ -222,6 +261,16 @@ ENRICHMENT_FIELDS = {
         "label": "השוואת הערכה עצמית לתוצאה בפועל",
         "columns": ["rating"],
         "check": lambda t: t["rating"] is not None,
+    },
+    "excursion": {
+        "label": "רווח/הפסד מקסימלי (MFE/MAE) ואיכות יציאה",
+        "columns": ["mfe", "mae"],
+        "check": lambda t: t["mfe"] is not None or t["mae"] is not None,
+    },
+    "price_range": {
+        "label": "טווח המחיר בעסקה — גבוה ונמוך ביותר",
+        "columns": ["highest_price", "lowest_price"],
+        "check": lambda t: t["highest_price"] is not None or t["lowest_price"] is not None,
     },
 }
 
@@ -822,6 +871,30 @@ def parse_direction(value):
     return "unknown"
 
 
+TRUE_WORDS = ["כן", "true", "yes", "y", "1", "v", "✓", "✔", "x", "done", "בוצע"]
+FALSE_WORDS = ["לא", "false", "no", "n", "0", "", "-", "pending", "ממתין"]
+
+
+def parse_bool(value):
+    """A yes/no cell to a real boolean, or None when the file did not say.
+
+    Journals write this flag as כן/לא, Yes/No, true/false, a tick, or a 1/0, so all of them
+    are read; anything unrecognised returns None rather than guessing a direction.
+    """
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return None
+
+    if isinstance(value, bool):
+        return value
+
+    text = str(value).strip().lower()
+    if text in TRUE_WORDS:
+        return True
+    if text in FALSE_WORDS:
+        return False
+    return None
+
+
 def parse_outcome(value):
     """Reads an outcome cell. Returns 'win' / 'loss' / 'breakeven', or None if unreadable."""
     if value is None or (isinstance(value, float) and pd.isna(value)):
@@ -1078,6 +1151,14 @@ def parse_file(file_bytes, filename, source_timezone = DEFAULT_SOURCE_TIMEZONE,
                 risk = risk_per_unit * (quantity if quantity else 1)
                 r_multiple = pnl / risk if risk else None
 
+        # Excursion, folded to a fixed sign so the meaning does not depend on the journal.
+        # MFE is favourable (non-negative), MAE is adverse (non-positive); a file that wrote
+        # MAE as a positive magnitude and one that wrote it negative now store the same thing.
+        mfe = parse_number(cell("mfe"))
+        mae = parse_number(cell("mae"))
+        mfe = abs(mfe) if mfe is not None else None
+        mae = -abs(mae) if mae is not None else None
+
         trade = {
             "executed_at": executed_at,
             "opened_at": opened_at,
@@ -1089,6 +1170,11 @@ def parse_file(file_bytes, filename, source_timezone = DEFAULT_SOURCE_TIMEZONE,
             "entry_price": entry_price,
             "exit_price": exit_price,
             "pnl": pnl,
+            "mfe": mfe,
+            "mae": mae,
+            "highest_price": parse_number(cell("highest_price")),
+            "lowest_price": parse_number(cell("lowest_price")),
+            "was_documented": parse_bool(cell("was_documented")),
             "points": parse_number(cell("points")),
             "fees": _sum_fees(row, fee_columns),
             "r_multiple": r_multiple,

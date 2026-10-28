@@ -36,6 +36,11 @@ def make_trade(**overrides):
         "r_multiple": None,
         "stop_loss": None,
         "take_profit": None,
+        "mfe": None,
+        "mae": None,
+        "highest_price": None,
+        "lowest_price": None,
+        "was_documented": None,
         "duration_seconds": 600,
         "orders_count": None,
         "setups": "",
@@ -947,3 +952,51 @@ class PeriodsTests(SimpleTestCase):
 
 
 
+
+
+
+# ------------------------- EXCURSION METRIC TESTS START ------------------------- #
+
+class ExcursionMetricTests(SimpleTestCase):
+    """The MFE/MAE block: capture on winners, heat endured, money left on the table."""
+
+    def test_unavailable_when_no_trade_carries_it(self):
+        stats = compute_statistics(series([100, -50, 80, -30]))
+        self.assertFalse(stats["excursion"]["available"])
+
+    def test_capture_rate_is_booked_over_peak_on_winners(self):
+        trades = [
+            make_trade(pnl = 100, mfe = 400, mae = -20, outcome = "win"),
+            make_trade(pnl = 50, mfe = 200, mae = -10, outcome = "win"),
+            make_trade(pnl = -30, mfe = 60, mae = -90, outcome = "loss"),
+        ]
+        ex = compute_statistics(trades)["excursion"]
+        self.assertTrue(ex["available"])
+        # (100 + 50) booked of (400 + 200) available = 25%.
+        self.assertEqual(ex["capture_rate_on_winners"], 25.0)
+        # Heat the winners sat through: mean(|-20|, |-10|) = 15.
+        self.assertEqual(ex["avg_heat_on_winners"], 15.0)
+        # Left on the table, every trade with a peak: mean(300, 150, 90) = 180.
+        self.assertEqual(ex["avg_left_on_table"], 180.0)
+        self.assertEqual(ex["winners_measured"], 2)
+
+    def test_partial_coverage_counts_only_rows_that_carry_it(self):
+        trades = [
+            make_trade(pnl = 100, mfe = 300, mae = -40, outcome = "win"),
+            make_trade(pnl = -50, outcome = "loss"),  # no excursion on this one
+        ]
+        ex = compute_statistics(trades)["excursion"]
+        self.assertEqual(ex["mfe_coverage"], 1)
+        self.assertEqual(ex["avg_mfe"], 300.0)
+
+    def test_described_trade_names_the_peak_and_trough(self):
+        from .evidence import describe_trade
+        from .statistics import _safe_zone
+        trade = make_trade(pnl = 144, mfe = 331.5, mae = -40.5, currency = "USD")
+        tz = _safe_zone("Asia/Jerusalem", [trade])
+        line = describe_trade(trade, tz, "USD")
+        self.assertIn("שיא", line)
+        self.assertIn("331.5", line)
+        self.assertIn("שפל", line)
+
+# ------------------------- EXCURSION METRIC TESTS END ------------------------- #

@@ -156,6 +156,34 @@ class PlatformHeaderTests(APITestCase):
         self.assertNotIn("direction", mapping)
 
 
+    def test_tradereport_hebrew_excursion_headers(self):
+        # The columns TradeReport added: max profit / max loss (MFE/MAE), high/low, documented.
+        mapping = self._mapping(
+            "חשבון,תאריך סגירה,סטטוס,תועד,נכס,סוג,מחיר כניסה,מחיר יציאה,תוצאה,"
+            "מחיר נמוך ביותר,מחיר גבוה ביותר,הפסד מקסימלי,רווח מקסימלי")
+
+        self.assertEqual(mapping["mfe"], "רווח מקסימלי")
+        self.assertEqual(mapping["mae"], "הפסד מקסימלי")
+        self.assertEqual(mapping["highest_price"], "מחיר גבוה ביותר")
+        self.assertEqual(mapping["lowest_price"], "מחיר נמוך ביותר")
+        self.assertEqual(mapping["was_documented"], "תועד")
+
+
+    def test_excursion_headers_across_journals(self):
+        # The same two fields, written the way the major English journals write them, must
+        # all land on mfe/mae - TraderSync/TradeZella "excursion", Tradervue "Run-up/Drawdown".
+        for header, field, column in [
+            ("Date,Symbol,P&L,Max Favorable Excursion", "mfe", "Max Favorable Excursion"),
+            ("Date,Symbol,P&L,MFE,MAE", "mfe", "MFE"),
+            ("Date,Symbol,P&L,MFE,MAE", "mae", "MAE"),
+            ("Date,Symbol,P&L,Run-up,Drawdown", "mfe", "Run-up"),
+            ("Date,Symbol,P&L,Run-up,Drawdown", "mae", "Drawdown"),
+            ("Date,Symbol,P&L,Max Adverse Excursion", "mae", "Max Adverse Excursion"),
+        ]:
+            mapping = self._mapping(header)
+            self.assertEqual(mapping.get(field), column, f"{header} -> {field}")
+
+
 
 class MultiColumnFeeTests(APITestCase):
 
@@ -1206,3 +1234,60 @@ class UploadNameTests(APITestCase):
         stored = TradeFile.objects.get()
         self.assertNotIn("..", stored.file.name)
         self.assertTrue(stored.file.name.startswith("trade_files/"))
+
+
+
+# ------------------------- EXCURSION FIELD TESTS START ------------------------- #
+
+class ExcursionParsingTests(APITestCase):
+    """
+    The MFE / MAE / high-low / documented columns TradeReport added, and the sign folding
+    that keeps them meaning one thing across journals that disagree on it.
+    """
+
+    def _parse(self, content):
+        from .parsers import parse_file
+        return parse_file(content.encode("utf-8"), "x.csv")
+
+    def test_excursion_is_read_and_sign_folded(self):
+        # Journal A writes MAE negative. The next test writes it positive; both must store a
+        # non-positive MAE and a non-negative MFE.
+        trades, _ = self._parse(
+            "Date,Symbol,P&L,MFE,MAE,High Price,Low Price\n"
+            "2026-01-02,MNQ,144,331.5,-40.5,29611,29549\n")
+        t = trades[0]
+        self.assertEqual(t["mfe"], 331.5)
+        self.assertEqual(t["mae"], -40.5)
+        self.assertEqual(t["highest_price"], 29611)
+        self.assertEqual(t["lowest_price"], 29549)
+
+    def test_mae_written_positive_is_still_stored_adverse(self):
+        trades, _ = self._parse(
+            "Date,Symbol,P&L,Run-up,Drawdown\n"
+            "2026-01-02,MNQ,144,331.5,40.5\n")
+        self.assertEqual(trades[0]["mfe"], 331.5)
+        self.assertEqual(trades[0]["mae"], -40.5)
+
+    def test_documented_flag_reads_hebrew_and_english(self):
+        trades, _ = self._parse(
+            "תאריך סגירה,נכס,תוצאה,תועד\n"
+            "2026-01-02,MNQ,144,כן\n"
+            "2026-01-03,MNQ,-20,לא\n")
+        self.assertIs(trades[0]["was_documented"], True)
+        self.assertIs(trades[1]["was_documented"], False)
+
+    def test_a_file_without_the_columns_leaves_them_none(self):
+        trades, report = self._parse(
+            "Date,Symbol,P&L\n2026-01-02,MNQ,144\n")
+        t = trades[0]
+        self.assertIsNone(t["mfe"])
+        self.assertIsNone(t["mae"])
+        self.assertIsNone(t["was_documented"])
+        self.assertNotIn("excursion", [e["key"] for e in report["enrichment_found"]])
+
+    def test_excursion_is_offered_as_enrichment_when_present(self):
+        _, report = self._parse(
+            "Date,Symbol,P&L,MFE,MAE\n2026-01-02,MNQ,144,331.5,-40.5\n")
+        self.assertIn("excursion", [e["key"] for e in report["enrichment_found"]])
+
+# ------------------------- EXCURSION FIELD TESTS END ------------------------- #

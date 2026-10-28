@@ -83,6 +83,7 @@ def compute_statistics(trades, timezone_name = "Asia/Jerusalem"):
     daily = _daily_metrics(trades, tz, flat_band)
     streaks = _streaks(trades)
     behaviour = _behavioural_metrics(trades, tz)
+    excursion = _excursion_metrics(trades)
 
     breakdowns = {
         "by_hour": _breakdown(trades, lambda t: t.executed_at.astimezone(tz).hour),
@@ -115,6 +116,7 @@ def compute_statistics(trades, timezone_name = "Asia/Jerusalem"):
         "daily": daily,
         "streaks": streaks,
         "behaviour": behaviour,
+        "excursion": excursion,
         "breakdowns": breakdowns,
         "score": score,
     }
@@ -275,6 +277,52 @@ def _behavioural_metrics(trades, tz):
         "mistake_tax": _mistake_tax(trades),
         "self_awareness": _self_awareness(trades),
         "size_discipline": _size_discipline(trades),
+    }
+
+
+# ------------- EXCURSION (MFE / MAE):
+#
+# **What the realised P&L cannot say: not whether the trade won, but how much was on the
+# table and how much heat it took.** MFE is the best unrealised profit the trade reached,
+# MAE the worst unrealised loss - both in money, both folded to a fixed sign at parse time
+# (MFE non-negative, MAE non-positive).
+#
+# The number that pays for the whole block is the capture rate: on his winners, how much of
+# the peak profit he actually kept. A trader who reaches +$300 on nearly every trade and
+# books a tenth of it does not have a win-rate problem, he has an exit problem - and no
+# metric built on realised P&L can see it, because the money he left behind was never
+# realised. Everything here is computed in python; the model only quotes it.
+def _excursion_metrics(trades):
+    mfe_trades = [t for t in trades if t.mfe is not None]
+    mae_trades = [t for t in trades if t.mae is not None]
+
+    if not mfe_trades and not mae_trades:
+        return {"available": False}
+
+    # Of the peak profit reached on winners, how much was booked. Aggregated over the pool
+    # rather than averaged per trade, so one tiny-MFE winner cannot swing the ratio.
+    winners = [t for t in mfe_trades if _is_win(t) and t.mfe and t.mfe > 0 and t.pnl is not None]
+    captured_from = sum(t.mfe for t in winners)
+    capture_rate = (sum(t.pnl for t in winners) / captured_from * 100) if captured_from else None
+
+    # How far underwater a winning trade went before it came good - the heat he sat through.
+    winner_heat = [abs(t.mae) for t in trades if _is_win(t) and t.mae is not None]
+
+    # Money that was on the table and walked away, per trade that reached a peak.
+    give_back = [t.mfe - t.pnl for t in mfe_trades if t.pnl is not None and t.mfe is not None]
+
+    return {
+        "available": True,
+        "mfe_coverage": len(mfe_trades),
+        "mae_coverage": len(mae_trades),
+        "avg_mfe": round(_mean([t.mfe for t in mfe_trades]), 2) if mfe_trades else None,
+        "avg_mae": round(_mean([t.mae for t in mae_trades]), 2) if mae_trades else None,
+        # Percent of the peak kept on winners. Low means tight targets would raise the win
+        # rate; near 100 means he exits at the high and the edge is elsewhere.
+        "capture_rate_on_winners": round(capture_rate, 2) if capture_rate is not None else None,
+        "winners_measured": len(winners),
+        "avg_heat_on_winners": round(_mean(winner_heat), 2) if winner_heat else None,
+        "avg_left_on_table": round(_mean(give_back), 2) if give_back else None,
     }
 
 
