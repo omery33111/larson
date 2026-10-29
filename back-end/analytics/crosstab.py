@@ -80,14 +80,25 @@ def _cross(trades, first, second):
         # the same convention the whole product classifies by.
         decided = wins + sum(1 for t in rows if _is_loss(t))
 
-        out.append({
+        cell = {
             "a": a,
             "b": b,
             "trades": len(rows),
             "net_pnl": round(sum(pnls), 2),
             "expectancy": round(sum(pnls) / len(pnls), 2),
             "win_rate": round(wins / decided * 100, 1) if decided else None,
-        })
+        }
+
+        # Entry quality for the combined bucket, when the price path is in the file - so
+        # "was my entry optimal on long-from-premium" has heat and peak numbers, not a guess.
+        maes = [t.mae for t in rows if getattr(t, "mae", None) is not None]
+        mfes = [t.mfe for t in rows if getattr(t, "mfe", None) is not None]
+        if maes:
+            cell["avg_mae"] = round(sum(maes) / len(maes), 2)
+        if mfes:
+            cell["avg_mfe"] = round(sum(mfes) / len(mfes), 2)
+
+        out.append(cell)
 
     out.sort(key = lambda cell: -abs(cell["net_pnl"]))
 
@@ -116,13 +127,21 @@ def cross_breakdowns(trades, timezone_name = "Asia/Jerusalem"):
         cells = _cross(trades, first, second)
 
         if cells:
-            result[name] = [
-                {a_label: cell["a"], b_label: cell["b"], "עסקאות": cell["trades"],
-                 "net_pnl": cell["net_pnl"], "expectancy": cell["expectancy"],
-                 "win_rate": cell["win_rate"]}
-                for cell in cells
-            ]
+            result[name] = [_public_cell(cell, a_label, b_label) for cell in cells]
 
     return result
+
+
+def _public_cell(cell, a_label, b_label):
+    """A cell as the model sees it - the internal a/b keys renamed, entry quality kept."""
+    out = {a_label: cell["a"], b_label: cell["b"], "עסקאות": cell["trades"],
+           "net_pnl": cell["net_pnl"], "expectancy": cell["expectancy"],
+           "win_rate": cell["win_rate"]}
+
+    for field in ("avg_mae", "avg_mfe"):
+        if field in cell:
+            out[field] = cell[field]
+
+    return out
 
 # ------------------------- CROSS-TABULATION END ------------------------- #

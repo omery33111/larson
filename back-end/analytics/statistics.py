@@ -600,7 +600,7 @@ def _group_stats(key, group, label = None):
     losses = [t.pnl for t in group if _is_loss(t)]
     decided = len(wins) + len(losses)
 
-    return {
+    stats = {
         # Cleaned here rather than at each caller, because this is the one place every
         # breakdown passes through - hours and weekdays included, which are numbers and are
         # left alone.
@@ -615,6 +615,19 @@ def _group_stats(key, group, label = None):
         # Below the floor a breakdown is an anecdote, and the UI greys it out.
         "is_significant": len(group) >= MIN_TRADES_FOR_BREAKDOWN,
     }
+
+    # **Entry quality, when the file carried the price path.** MAE is the heat a bucket took on
+    # average before it worked, MFE how far it ran - so "was my entry optimal on this setup" is
+    # a number here and not a guess. Added only when MFE/MAE exist, so a journal without them
+    # grows the bucket by nothing.
+    maes = [t.mae for t in group if getattr(t, "mae", None) is not None]
+    mfes = [t.mfe for t in group if getattr(t, "mfe", None) is not None]
+    if maes:
+        stats["avg_mae"] = round(sum(maes) / len(maes), 2)
+    if mfes:
+        stats["avg_mfe"] = round(sum(mfes) / len(mfes), 2)
+
+    return stats
 
 
 # A label is meant to be a few words a trader typed into a column: "breakout", "fomo",

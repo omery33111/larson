@@ -1202,3 +1202,16 @@ class CrossReferenceTests(SimpleTestCase):
         self.assertIn("אי אפשר להצליב", PERSONA)
         self.assertIn("אי אפשר להצליב", MENTOR_PERSONA)
         self.assertIn("מעט מדי עסקאות", MENTOR_PERSONA)
+
+
+class EntryQualityPersonaTests(SimpleTestCase):
+    """
+    **"Was my entry optimal" is answered from MFE/MAE, and the persona ties them together.**
+    MAE is the heat before it worked; a large MAE on a trade that still won is a too-early
+    entry. The data already flows (per-trade and in the buckets); this makes Larson use it.
+    """
+
+    def test_both_personas_tie_mfe_mae_to_entry_quality(self):
+        for persona in (PERSONA, MENTOR_PERSONA):
+            self.assertIn("MFE/MAE", persona)
+            self.assertIn("avg_mae", persona)

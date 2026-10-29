@@ -1074,3 +1074,42 @@ class CrossTabTests(SimpleTestCase):
         self.assertNotIn("הצלבות", document or {})
 
 # ------------------------- CROSS-TABULATION TESTS END ------------------------- #
+
+
+
+# ------------------------- ENTRY QUALITY TESTS START ------------------------- #
+
+class EntryQualityTests(SimpleTestCase):
+    """
+    **"Was my entry optimal" is an MFE/MAE question, and the buckets carry it now.** MAE is
+    the heat a bucket took on average before it worked; a large MAE on trades that still won
+    is a too-early entry. Added only when the file carried the price path, so a journal
+    without it grows by nothing.
+    """
+
+    def test_a_breakdown_bucket_carries_entry_quality_when_present(self):
+        rows = [make_trade(executed_at = BASE + timedelta(days = i), setups = "premium",
+                           pnl = 100.0, outcome = "win", mae = -40.0, mfe = 180.0)
+                for i in range(6)]
+        stats = compute_statistics(rows)
+        bucket = next(g for g in stats["breakdowns"]["by_setup"] if g["key"] == "premium")
+        self.assertEqual(bucket["avg_mae"], -40.0)
+        self.assertEqual(bucket["avg_mfe"], 180.0)
+
+    def test_a_journal_without_the_price_path_grows_by_nothing(self):
+        rows = [make_trade(executed_at = BASE + timedelta(days = i), setups = "premium",
+                           pnl = 100.0, outcome = "win") for i in range(6)]
+        stats = compute_statistics(rows)
+        bucket = next(g for g in stats["breakdowns"]["by_setup"] if g["key"] == "premium")
+        self.assertNotIn("avg_mae", bucket)
+        self.assertNotIn("avg_mfe", bucket)
+
+    def test_a_cross_cell_carries_entry_quality(self):
+        rows = [make_trade(executed_at = BASE + timedelta(days = i), direction = "long",
+                           tags = "premium", pnl = 100.0, outcome = "win",
+                           mae = -30.0, mfe = 150.0) for i in range(6)]
+        cells = cross_breakdowns(rows)["כיוון_מול_תגית"]
+        self.assertEqual(cells[0]["avg_mae"], -30.0)
+        self.assertEqual(cells[0]["avg_mfe"], 150.0)
+
+# ------------------------- ENTRY QUALITY TESTS END ------------------------- #
