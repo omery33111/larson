@@ -671,13 +671,39 @@ def _add(user, recent, statistics, currency, timezone_name, declined, asked = Fa
     if not inferred:
         return None
 
-    already = {row.kind for row in TraderRule.objects.filter(user = user, is_active = True)}
+    active = list(TraderRule.objects.filter(user = user, is_active = True))
+    already = {row.kind for row in active}
+
+    # **A custom rule is deduplicated by what it targets, not by its kind.** Every setup-
+    # and tag-based offer is a CUSTOM rule, and the UniqueConstraint deliberately exempts
+    # CUSTOM - a trader holds many free-text rules at once ("only with IFVG" and "not during
+    # news" are both true simultaneously). Collapsing them under one "he already has a custom
+    # rule" let a single free-text rule silence every future setup/tag suggestion: Larson
+    # named a bleeding setup, told him to write it himself, and no button appeared - the exact
+    # words-and-button disagreement the rest of this feature exists to prevent. The structured
+    # kinds keep the `kind` check, because there the UniqueConstraint really is one-per-kind.
+    owns = [term
+            for row in active
+            if row.kind == TraderRule.CUSTOM and isinstance(row.terms, dict)
+            for term in (list(row.terms.get("forbid", []))
+                         + [t for group in row.terms.get("require", []) for t in group])]
 
     # Heaviest first: the one worth the single question he gets is the expensive one.
     for rule in sorted(inferred, key = lambda r: -r.get("weight", 0)):
         offer = _as_declarable(rule, statistics, timezone_name)
 
-        if not offer or offer["kind"] in already:
+        if not offer:
+            continue
+
+        if offer["kind"] == TraderRule.CUSTOM:
+            # Matched the way the verdict matches it, so "ifvg" is not offered again when
+            # "1m ifvg" is already a rule - but an unrelated setup (SMT) still gets its card.
+            wanted = (list(offer.get("terms", {}).get("forbid", []))
+                      + [t for group in offer.get("terms", {}).get("require", [])
+                         for t in group])
+            if any(matches(w, have) or matches(have, w) for w in wanted for have in owns):
+                continue
+        elif offer["kind"] in already:
             continue
 
         key = f"add:{rule['key']}"

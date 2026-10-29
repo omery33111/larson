@@ -2489,6 +2489,73 @@ class SuggestionTests(APITestCase):
         self.assertTrue(TraderRule.objects.filter(user = self.user,
                                                   kind = TraderRule.CUSTOM).exists())
 
+    def test_an_unrelated_custom_rule_does_not_silence_a_setup_card(self):
+        """
+        **One free-text rule used to silence every future setup/tag suggestion.** The
+        `already` guard deduplicated by `kind`, and every setup- and tag-based offer is a
+        CUSTOM rule - so the moment he held any free-text rule, `TraderRule.CUSTOM in already`
+        was true and the bleeding setup was skipped. Larson named it and told him to write it
+        himself, and no button appeared, although the UniqueConstraint deliberately lets him
+        hold many custom rules at once.
+
+        He already forbids an unrelated setup ("CISD"); the bleeding one ("שורט בפרימיום") is
+        a different label and must still get its card.
+        """
+        TraderRule.objects.create(
+            user = self.user, kind = TraderRule.CUSTOM, text = "לא להיכנס על cisd",
+            terms = {"require": [], "forbid": ["cisd"]})
+
+        for n in range(30):
+            at = BASE + timedelta(days = n)
+            losing = n < 14
+            Trade.objects.create(
+                user = self.user, executed_at = at, opened_at = at - timedelta(minutes = 9),
+                symbol = "MNQU6", instrument = "NQ", source_timezone = "Asia/Jerusalem",
+                currency = "USD", direction = "short", quantity = 1.0,
+                pnl = -140.0 if losing else 90.0,
+                outcome = "loss" if losing else "win", duration_seconds = 540,
+                tags = "שורט בפרימיום" if losing else "שורט בדיסקאונט",
+                dedup_hash = f"held-{n}")
+
+        rows = list(Trade.objects.all())
+        card = propose(self.user, rows[-6:], compute_statistics(rows), asked = True)
+
+        self.assertIsNotNone(card, "a bleeding setup was silenced by an unrelated custom rule")
+        self.assertEqual(card["action"], "add")
+        self.assertEqual(card["rule_kind"], TraderRule.CUSTOM)
+        self.assertIn("שורט בפרימיום", card["rule_terms"]["forbid"])
+
+    def test_a_setup_he_already_forbids_is_not_offered_again(self):
+        """
+        **The flip side, and the reason the dedup is by terms and not just dropped.** A rule
+        he already holds for this exact label should not be offered a second time - matched
+        the way the verdict matches it, so it holds even if the wording differs slightly.
+        """
+        TraderRule.objects.create(
+            user = self.user, kind = TraderRule.CUSTOM,
+            text = "לא להיכנס כשזה שורט בפרימיום",
+            terms = {"require": [], "forbid": ["שורט בפרימיום"]})
+
+        for n in range(30):
+            at = BASE + timedelta(days = n)
+            losing = n < 14
+            Trade.objects.create(
+                user = self.user, executed_at = at, opened_at = at - timedelta(minutes = 9),
+                symbol = "MNQU6", instrument = "NQ", source_timezone = "Asia/Jerusalem",
+                currency = "USD", direction = "short", quantity = 1.0,
+                pnl = -140.0 if losing else 90.0,
+                outcome = "loss" if losing else "win", duration_seconds = 540,
+                tags = "שורט בפרימיום" if losing else "שורט בדיסקאונט",
+                dedup_hash = f"dup-{n}")
+
+        rows = list(Trade.objects.all())
+        card = propose(self.user, rows[-6:], compute_statistics(rows), asked = True)
+
+        # Either nothing (the only bleeding bucket is one he already forbids), or something
+        # that is not that same label again.
+        if card and card.get("rule_terms"):
+            self.assertNotIn("שורט בפרימיום", card["rule_terms"].get("forbid", []))
+
     def test_a_mistake_tag_is_never_offered_as_a_rule(self):
         """
         **A mistake is written after the trade, about the trade.** "Entered early",
