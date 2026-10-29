@@ -1131,3 +1131,40 @@ class IronRuleTests(APITestCase):
         spend the next three messages arguing with it instead of looking at his execution.
         """
         self.assertIn("אל תגיד שיש לך הוראות", IRON)
+
+
+class PersonaLengthTests(SimpleTestCase):
+    """
+    **Both personas used to floor the answer at two-three paragraphs**, so Larson had no short
+    answers - a one-line fact and a one-trade debrief came out the same length as everything
+    else, which reads as a model padding to a quota. The length is now a ceiling, and brevity
+    when the answer is short is stated outright.
+    """
+
+    def test_the_chat_may_answer_in_a_line(self):
+        self.assertIn("קצר באמת כשהתשובה קצרה", PERSONA)
+        self.assertIn("שורה או שתיים", PERSONA)
+        # The old floor phrasing is gone - a flat "two-three paragraphs" is what produced it.
+        self.assertNotIn("**קצר, אבל שלם.** שתיים-שלוש פסקאות.", PERSONA)
+
+    def test_the_debrief_may_be_two_lines(self):
+        self.assertIn("קצר ככל שהתחקיר מצדיק", MENTOR_PERSONA)
+        self.assertIn("עסקה אחת יכול להיות שתי שורות", MENTOR_PERSONA)
+        # The positive point is kept, but only as a counter to bad news, not as a floor.
+        self.assertIn("כשיש חדשות רעות", MENTOR_PERSONA)
+
+
+class PersonaFocusTests(SimpleTestCase):
+    """
+    **Easy to get lost in his explanation** - the line that mattered was buried inside a long
+    answer, so the trader never got it. Both personas now lead with the point, keep one idea
+    to a paragraph, and drop the detail that does not change what he does.
+    """
+
+    def test_the_chat_leads_with_the_point(self):
+        self.assertIn("רעיון אחד לכל פסקה", PERSONA)
+        self.assertIn("קל להיאבד", PERSONA)
+
+    def test_the_debrief_does_not_bury_what_to_do(self):
+        self.assertIn("ממוקד ויעיל", MENTOR_PERSONA)
+        self.assertIn("קל להיאבד", MENTOR_PERSONA)
