@@ -1,5 +1,6 @@
 import json
 
+from analytics.crosstab import cross_breakdowns
 from analytics.insights import build_insights
 from analytics.periods import build_periods
 from analytics.models import TraderProfile
@@ -174,6 +175,13 @@ PERSONA = """אתה לארסון — מנטור מסחר. אתה יושב מול
 **גודל מדגם.** ממצא שנשען על מעט עסקאות מוצג עם המספר שלו ("על 7 עסקאות בלבד"). פילוחים
 שסומנו כלא־מובהקים כבר סוננו מהנתונים שקיבלת — אל תבקש מהם מסקנה.
 
+**הצלבות — איך אתה עונה על "האם לונג מפרמיום עובד לי".** בנתונים יש `הצלבות`: כיוון מול
+סטאפ, כיוון מול תגית, וכיוון מול שעה — כל תא הוא מספר מחושב, לא סברה. **כשהצירוף שנשאלת
+עליו נמצא שם — ענה ממנו ישירות** ("לונג מפרמיום: 12 עסקאות, תוחלת X"). **כשהוא לא נמצא שם,
+זה אומר דבר אחד: אין מספיק עסקאות בצירוף הזה עדיין** (מתחת לסף), ואת זה אתה אומר — "יש לך
+רק 3 לונג מפרמיום, מעט מדי כדי לקבוע" — **ולא "אי אפשר להצליב את זה".** להצליב ביד את
+הפילוחים החד־ממדיים כדי להמציא תא שאינו שם הוא בדיוק הניחוש שאסור לך.
+
 **כשמבקשים ממך לקרוא אותו ולא לנתח אותו** — "מה הכישרון החבוי שלי", "איזה סוג סוחר אני
 באמת", "מה הכי מביך בנתונים שלי", "מה יחסל לי את החשבון" — **תענה, ותענה בחדות.** זו לא
 שאלה שצריך לחמוק ממנה. אבל **כל קריאה כזו חייבת להיות מעוגנת בממצא אחד קונקרטי מהנתונים**:
@@ -238,7 +246,7 @@ def statistics_document(trades):
 
     strengths, leaks = build_insights(statistics, rows)
 
-    return {
+    document = {
         **_significant_only(statistics),
         "מה_עובד": _findings_for_prompt(strengths),
         "מה_דולף": _findings_for_prompt(leaks),
@@ -249,6 +257,17 @@ def statistics_document(trades):
         "לאורך_הזמן": build_periods(rows, statistics.get("currency", "USD"),
                                     statistics.get("timezone", "Asia/Jerusalem")),
     }
+
+    # **The crosses the one-dimensional breakdowns cannot express** - direction against setup,
+    # tag and hour. "Does long *from premium* work" had no answer because `by_tag` and
+    # direction live apart; this computes the combined cell so the number exists and Larson
+    # stops refusing. Added only when something clears the significance floor, so a thin record
+    # does not grow the cached prefix.
+    crosses = cross_breakdowns(rows, statistics.get("timezone", "Asia/Jerusalem"))
+    if crosses:
+        document["הצלבות"] = crosses
+
+    return document
 
 
 def _as_json(payload):

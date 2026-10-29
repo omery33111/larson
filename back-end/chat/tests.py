@@ -1183,3 +1183,22 @@ class DriftIsNeutralTests(SimpleTestCase):
         self.assertIn('לא "החלטה טובה"', MENTOR_PERSONA)
         self.assertIn("by_hour", MENTOR_PERSONA)
         self.assertIn("מוצג לסוחר בתעודת הזהות", MENTOR_PERSONA)
+
+
+class CrossReferenceTests(SimpleTestCase):
+    """
+    **Larson refused to cross direction with a tag while holding both fields.** "Long from
+    premium" is a cell the breakdowns never carried, so he said he could not compute it -
+    correctly, because guessing it from the two one-dimensional slices is forbidden. The cross
+    is computed now, and the persona turns a missing cell into "too few trades" rather than a
+    refusal to cross.
+    """
+
+    def test_both_personas_know_the_crosses_exist(self):
+        self.assertIn("הצלבות", PERSONA)
+        self.assertIn("הצלבות", MENTOR_PERSONA)
+
+    def test_a_missing_cell_is_too_few_trades_not_a_refusal(self):
+        self.assertIn("אי אפשר להצליב", PERSONA)
+        self.assertIn("אי אפשר להצליב", MENTOR_PERSONA)
+        self.assertIn("מעט מדי עסקאות", MENTOR_PERSONA)

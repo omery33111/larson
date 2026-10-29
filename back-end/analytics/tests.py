@@ -8,6 +8,7 @@ from rest_framework import status
 
 from trades.models import Trade
 
+from .crosstab import cross_breakdowns
 from .insights import build_insights
 from .periods import build_periods
 from .statistics import (MAX_LABEL_LENGTH, MAX_NOTE_LENGTH, clean_note,
@@ -1001,3 +1002,75 @@ class ExcursionMetricTests(SimpleTestCase):
         self.assertIn("שפל", line)
 
 # ------------------------- EXCURSION METRIC TESTS END ------------------------- #
+
+
+
+# ------------------------- CROSS-TABULATION TESTS START ------------------------- #
+
+class CrossTabTests(SimpleTestCase):
+    """
+    **"Does long *from premium* work" had no answer** because the breakdowns are
+    one-dimensional - `by_tag` and direction live apart. The raw trades carry both, so the
+    cross is a number Python can compute, and refusing it while holding the data is the
+    opposite of the god of trading the mentor is meant to be.
+    """
+
+    def _book(self):
+        rows = []
+        # long × premium - profitable, enough trades to clear the floor.
+        for i in range(8):
+            rows.append(make_trade(executed_at = BASE + timedelta(days = i),
+                                   direction = "long", tags = "premium",
+                                   pnl = 120.0, outcome = "win"))
+        # long × discount - losing, enough trades.
+        for i in range(6):
+            rows.append(make_trade(executed_at = BASE + timedelta(days = 20 + i),
+                                   direction = "long", tags = "discount",
+                                   pnl = -50.0, outcome = "loss"))
+        # short × premium - three trades, below the floor on purpose.
+        for i in range(3):
+            rows.append(make_trade(executed_at = BASE + timedelta(days = 40 + i),
+                                   direction = "short", tags = "premium",
+                                   pnl = -10.0, outcome = "loss"))
+        return rows
+
+    def test_direction_crossed_with_tag_becomes_a_cell(self):
+        cells = cross_breakdowns(self._book()).get("כיוון_מול_תגית", [])
+
+        long_premium = [c for c in cells
+                        if c["כיוון"] == "לונג" and c["תגית"] == "premium"]
+        self.assertEqual(len(long_premium), 1)
+        self.assertEqual(long_premium[0]["עסקאות"], 8)
+        self.assertEqual(long_premium[0]["expectancy"], 120.0)
+        self.assertEqual(long_premium[0]["win_rate"], 100.0)
+
+        long_discount = [c for c in cells
+                         if c["כיוון"] == "לונג" and c["תגית"] == "discount"]
+        self.assertEqual(long_discount[0]["expectancy"], -50.0)
+
+    def test_a_thin_combination_is_omitted_not_guessed(self):
+        """
+        **A missing cell is too few trades, never an invented number.** short×premium has
+        three trades, below the floor, so it is simply absent - and the persona turns that
+        into "not enough yet", not "cannot cross".
+        """
+        cells = cross_breakdowns(self._book()).get("כיוון_מול_תגית", [])
+        thin = [c for c in cells if c["כיוון"] == "שורט"]
+        self.assertEqual(thin, [])
+
+    def test_it_reaches_the_statistics_document(self):
+        from chat.context import statistics_document
+
+        document = statistics_document(self._book())
+        self.assertIn("הצלבות", document)
+        self.assertIn("כיוון_מול_תגית", document["הצלבות"])
+
+    def test_a_thin_record_adds_no_cross_to_the_cached_prefix(self):
+        from chat.context import statistics_document
+
+        rows = [make_trade(executed_at = BASE + timedelta(days = i), direction = "long",
+                           pnl = 10.0, outcome = "win") for i in range(3)]
+        document = statistics_document(rows)
+        self.assertNotIn("הצלבות", document or {})
+
+# ------------------------- CROSS-TABULATION TESTS END ------------------------- #
