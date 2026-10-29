@@ -1168,3 +1168,18 @@ class PersonaFocusTests(SimpleTestCase):
     def test_the_debrief_does_not_bury_what_to_do(self):
         self.assertIn("ממוקד ויעיל", MENTOR_PERSONA)
         self.assertIn("קל להיאבד", MENTOR_PERSONA)
+
+
+class DriftIsNeutralTests(SimpleTestCase):
+    """
+    **A shift in *when* he trades is a neutral fact, not a verdict** - the drift finding
+    carries only a share, never a per-hour P&L and never "good decision". Larson narrated one
+    into "you wisely moved from 16:00 (-$341) to 17:00 (+$429.50)", a figure and a judgment no
+    engine produced - and it flatly contradicted the identity page, where the same `by_hour`
+    makes 16:00 his strongest hour. The guard forbids both halves of that invention.
+    """
+
+    def test_the_mentor_will_not_turn_a_when_shift_into_a_money_verdict(self):
+        self.assertIn('לא "החלטה טובה"', MENTOR_PERSONA)
+        self.assertIn("by_hour", MENTOR_PERSONA)
+        self.assertIn("מוצג לסוחר בתעודת הזהות", MENTOR_PERSONA)
