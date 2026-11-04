@@ -4,6 +4,7 @@ import { FiCheck, FiCopy, FiPaperclip } from 'react-icons/fi'
 import { useAppDispatch } from '../../app/hooks'
 import LarsonMark, { LarsonState } from '../larson/LarsonMark'
 import { ChatMessage as Message } from '../../models/Chat'
+import { isolate } from '../base/bidi'
 import { toggleStarAsync } from './chatSlice'
 
 
@@ -21,8 +22,8 @@ import { toggleStarAsync } from './chatSlice'
 const inline = (text: string) =>
   text.split(/(\*\*[^*]+\*\*)/g).map((part, index) =>
     part.startsWith('**') && part.endsWith('**')
-      ? <strong key={index}>{part.slice(2, -2)}</strong>
-      : part);
+      ? <strong key={index}>{isolate(part.slice(2, -2), `s${index}`)}</strong>
+      : isolate(part, `t${index}`));
 
 
 const paragraphs = (text: string) =>
