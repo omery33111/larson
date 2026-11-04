@@ -114,8 +114,71 @@ def propose(user, recent, statistics, currency = "USD", timezone_name = "Asia/Je
     declined = set(DismissedSuggestion.objects.filter(user = user)
                    .values_list("key", flat = True))
 
+    # **The outlier flag is proactive, so it steps aside when he asks for a rule in words.** A
+    # trader who types "suggest me a rule" is answered from his own losing patterns (`_add`),
+    # not handed an unprompted daily-loss flag; the flag is for the debrief he did not ask for.
     return (_retire(user, currency, timezone_name, declined, statistics)
+            or (None if asked else _outlier(user, recent, statistics, currency, declined))
             or _add(user, recent, statistics, currency, timezone_name, declined, asked))
+
+
+# ------------- A SESSION THAT BLEW PAST HIS OWN NORM:
+#
+# **The trader asked for exactly this:** "I lost $200, twice my $100 average - raise it and
+# offer me a rule." Risk per trade is not a field the engine can enforce (most exports carry no
+# stop), but a daily-loss cap is, and it is the lever that stops a bad day turning into a hole.
+# It is framed as a flag and a suggestion, never as a deviation from a rule he never set - and a
+# no is remembered like any other, so a slightly eager offer cannot nag.
+OUTLIER_LOSS_MULTIPLE = 2.0
+
+
+def _round_cap(value):
+    """A clean round figure for a suggested cap - nobody sets a daily stop at $147.50."""
+    if value <= 0:
+        return 0
+    step = 50 if value >= 100 else 25
+    return int(round(value / step) * step) or step
+
+
+def _outlier(user, recent, statistics, currency, declined):
+    """A daily-loss cap, offered when the session lost far more than his typical trade."""
+    key = "add:daily_loss"
+
+    if key in declined:
+        return None
+
+    # He already caps his day - there is nothing to offer, and a second one cannot be set.
+    if TraderRule.objects.filter(user = user, is_active = True,
+                                 kind = TraderRule.MAX_DAILY_LOSS).exists():
+        return None
+
+    avg_loss = abs((statistics.get("core") or {}).get("avg_loss") or 0.0)
+    if avg_loss <= 0:
+        return None
+
+    # The realised loss in what he just uploaded - a session is usually a day.
+    loss = -sum((t.pnl or 0.0) for t in recent if (t.pnl or 0.0) < 0)
+    if loss < OUTLIER_LOSS_MULTIPLE * avg_loss:
+        return None
+
+    cap = _round_cap(1.5 * avg_loss)
+    if cap <= 0:
+        return None
+
+    multiple = loss / avg_loss
+
+    return {
+        "action": "add",
+        "key": key,
+        "title": (f"הפסד של {money(loss, currency)} בעדכון הזה — פי {multiple:.1f} "
+                  f"מההפסד הממוצע שלך. לקבוע הפסד יומי מרבי?"),
+        "detail": (f"ההפסד הממוצע שלך לעסקה הוא {money(avg_loss, currency)}. "
+                   f"הפסד יומי מרבי של {money(cap, currency)} עוצר יום רע לפני שהוא הופך לחור."),
+        "rule_kind": TraderRule.MAX_DAILY_LOSS,
+        "rule_number": cap,
+        "accept": "להוסיף ככלל",
+        "decline": "לא",
+    }
 
 
 

@@ -18,6 +18,7 @@ from chat.views import _answer, _error_stream, _sse
 from trades.models import Trade, TradeFile
 
 from analytics.statistics import clean_label, compute_statistics
+from analytics.evidence import debrief_trade
 from chat import retrieval
 
 from .compliance import check_plan
@@ -232,8 +233,13 @@ def stream(request):
         # The plan check already decided this; reading it is free. Broken rules outrank kept
         # ones - a debrief that found a repeat offence is not a green day whatever else went
         # right in it.
+        # **The verdict reads only his own commitments.** An inferred pattern he never agreed
+        # to must not flash "broke a rule" red on a winning trade - it becomes an observation,
+        # and where it is worth it, a suggestion. Only a declared rule he set turns the visor.
         if plan.get("available"):
-            verdict = "broken" if plan["broken"] else ("kept" if plan["kept"] else "")
+            declared_broken = [e for e in plan["broken"] if e.get("declared")]
+            declared_kept = [e for e in plan["kept"] if e.get("declared")]
+            verdict = "broken" if declared_broken else ("kept" if declared_kept else "")
 
         # Consumed the moment it is sent, not when the answer finishes: the screen has to
         # stop offering it immediately, and a second press must not produce a second debrief.
@@ -244,19 +250,28 @@ def stream(request):
         # **Larson's one question, composed here and never by the model.** Python found the
         # condition and computed the figure; the model will not see this and cannot press
         # anything - the same shape as the receipt line directly below.
+        resume_stats = compute_statistics(baseline + recent)
+
         try:
-            suggestion = propose(request.user, recent, compute_statistics(baseline + recent),
-                                 currency, zone)
+            suggestion = propose(request.user, recent, resume_stats, currency, zone)
         except Exception:
             # A debrief must not fail over an optional card.
             log.exception("Could not compose a suggestion")
             suggestion = None
 
+        # **Feed the trades themselves, not just a count - the block the debrief was missing.**
+        # Full detail for up to a dozen; on a big backfill the most notable by |P&L| carry the
+        # detail and the rest stay covered by the aggregates and the deviation report.
+        detailed = sorted(recent, key = lambda t: abs(t.pnl or 0.0), reverse = True)[:12]
+        detailed.sort(key = lambda t: t.executed_at)
+        new_rows = [debrief_trade(t, resume_stats, zone, currency) for t in detailed]
+
         prelude = receipt(trade_file)
         # `text` is still whatever he typed here - the fallback title below has not run yet -
         # so a note sent with the file reaches the model instead of being replaced away.
         briefing = update_prompt(report, plan, len(baseline) + len(recent), len(recent),
-                                 trade_file.original_name, is_first = not baseline, note = text)
+                                 new_rows, trade_file.original_name, is_first = not baseline,
+                                 note = text)
 
         if not text:
             text = f"עדכון: {trade_file.original_name}"

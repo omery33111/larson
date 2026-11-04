@@ -78,6 +78,113 @@ def describe_trade(trade, tz, currency):
     return line
 
 
+# **The trader's full write-up, not cut to a tag's length.** `clean_note` caps at 300 because
+# it rides inside a one-line finding; a debriefed trade's note is the thesis itself - why he
+# entered, where he put the stop, how he read the day - and cutting it there throws away the
+# one field that lets the mentor reflect his own read back to him. Still one line and collapsed
+# (the injection safeguard does not change) and still wrapped by json.dumps downstream, so a
+# cell cannot forge structure in the prompt; only the ceiling moves.
+MAX_DEBRIEF_NOTE = 1000
+
+
+def _plain_number(value):
+    """A quantity or point count without a trailing .0."""
+    f = float(value)
+    return str(int(f)) if f == int(f) else str(round(f, 2))
+
+
+def debrief_trade(trade, statistics, timezone_name, currency):
+    """
+    One newly-uploaded trade in full, for the debrief.
+
+    **This is the block the mentor was blind to.** The update payload used to carry only a
+    count of new trades, so the setup, the tags, the trader's own write-up and the excursion
+    never reached the model, and it answered a specific trade with generic averages. Python
+    computes the context (size vs usual, this trade vs its setup's norm, how much of the peak
+    it captured, reward against heat); the model only quotes it.
+    """
+    when = trade.executed_at.astimezone(_safe_zone(timezone_name, [trade]))
+
+    row = {"מתי": f"{when:%d/%m %H:%M}", "נכס": clean_label(trade.symbol)}
+
+    direction = {"long": "לונג", "short": "שורט"}.get(trade.direction)
+    if direction:
+        row["כיוון"] = direction
+    if trade.quantity:
+        row["חוזים"] = _plain_number(trade.quantity)
+    if trade.pnl is not None:
+        row["תוצאה"] = money(trade.pnl, currency)
+    if trade.points is not None:
+        row["נקודות"] = _plain_number(trade.points)
+    if trade.duration_seconds is not None:
+        row["משך"] = (f"{int(trade.duration_seconds)} שניות" if trade.duration_seconds < 120
+                      else f"{round(trade.duration_seconds / 60)} דקות")
+    if trade.setups:
+        row["סטאפ"] = clean_label(trade.setups)
+
+    tags = _split_tags(trade.tags)
+    if tags:
+        row["תגיות"] = tags
+
+    mistakes = _split_tags(trade.mistakes)
+    if mistakes:
+        row["טעויות_שהוא_סימן"] = mistakes
+
+    mark = " (מוערך)" if getattr(trade, "excursion_estimated", False) else ""
+    if getattr(trade, "mfe", None) is not None:
+        row["שיא"] = money(trade.mfe, currency) + mark
+    if getattr(trade, "mae", None) is not None:
+        row["שפל"] = money(trade.mae, currency) + mark
+
+    if trade.notes:
+        note = clean_label(trade.notes, limit = MAX_DEBRIEF_NOTE)
+        if note:
+            row["מה_שכתב"] = note
+
+    context = _trade_context(trade, statistics, currency)
+    if context:
+        row["בהקשר"] = context
+
+    return row
+
+
+def _trade_context(trade, statistics, currency):
+    """
+    The crossings the model should never have to do itself.
+
+    Each one is the answer to a question the trader actually asks: did I size differently, how
+    did this do against the setup's own average, how much of the move did I keep, and how much
+    heat did the entry take before it worked. All computed here, in python, so the model quotes
+    a number rather than inventing one.
+    """
+    out = {}
+    behaviour = statistics.get("behaviour", {})
+    breakdowns = statistics.get("breakdowns", {})
+
+    usual = behaviour.get("size_discipline", {}).get("avg_size")
+    if trade.quantity and usual and abs(trade.quantity - usual) >= 0.5:
+        out["גודל_מול_הרגיל"] = f"{_plain_number(trade.quantity)} מול הרגיל שלו (~{int(round(usual))})"
+
+    if trade.setups and trade.pnl is not None:
+        setup = clean_label(trade.setups)
+        group = next((g for g in breakdowns.get("by_setup", [])
+                      if str(g.get("key")) == setup and g.get("is_significant")), None)
+        if group and group.get("expectancy") is not None:
+            out["מול_ממוצע_הסטאפ"] = (f"{money(trade.pnl, currency)} מול ממוצע "
+                                      f"{money(group['expectancy'], currency)} בסטאפ הזה")
+
+    mfe = getattr(trade, "mfe", None)
+    if mfe and trade.pnl is not None and mfe > 0 and trade.pnl > 0:
+        out["תפס_מהשיא"] = f"{round(trade.pnl / mfe * 100)}%"
+
+    mae = getattr(trade, "mae", None)
+    if mae and trade.pnl is not None and trade.pnl > 0 and abs(mae) > 0:
+        out["תשואה_מול_חום"] = (f"{money(trade.pnl, currency)} מול חום של "
+                                f"{money(abs(mae), currency)}")
+
+    return out
+
+
 
 def attach_examples(findings, trades, currency = "USD", timezone_name = "Asia/Jerusalem",
                     worst_first = True):

@@ -33,8 +33,13 @@ from .rules import DAY_KINDS, day_verdict
 
 MIN_TRADES_FOR_RULE = MIN_TRADES_FOR_BREAKDOWN
 
-# And it has to have cost real money, not a rounding error.
-MIN_LOSS_FOR_RULE = 1.0
+# **A bucket has to be materially negative to become a rule, and the floor is on expectancy
+# per trade, not on net.** 22 trades at -$0.59 each is -$13 net - breakeven noise - and the
+# old $1 net floor let it through, so a losing-by-a-rounding-error hour became a judged rule
+# and flashed red "broke a rule" on a winning A+ trade. The floor is half a typical loss, so
+# it means the same to a scalper and a swing trader, with a flat minimum for tiny-loss traders.
+MIN_EXPECTANCY_FOR_RULE = 15.0
+EXPECTANCY_FRACTION_OF_LOSS = 0.5
 
 # The prompt carries the rules that matter, not every negative bucket in the history.
 MAX_RULES = 6
@@ -44,12 +49,16 @@ MAX_SHARE_FOR_INSTRUMENT_RULE = 0.5
 
 
 
-def _bad_groups(groups):
-    """Buckets that are significant, negative and actually cost money."""
+def _bad_groups(groups, min_expectancy = MIN_EXPECTANCY_FOR_RULE):
+    """Buckets significant and materially negative - not a few cents in the red.
+
+    The floor is on expectancy per trade, not net: a 22-trade bucket at -$0.59 each is -$13
+    net, breakeven noise, and turning it into a judged rule cried wolf on a winning trade.
+    """
     return [g for g in groups
             if g.get("is_significant")
-            and g["expectancy"] < 0
-            and g["net_pnl"] < -MIN_LOSS_FOR_RULE]
+            and g["expectancy"] <= -min_expectancy
+            and g["net_pnl"] < 0]
 
 
 def _evidence(group, currency):
@@ -70,6 +79,11 @@ def build_rules(statistics, currency):
     breakdowns = statistics.get("breakdowns", {})
     behaviour = statistics.get("behaviour", {})
 
+    # The per-trader floor: half a typical loss, or a flat minimum, whichever is larger. A
+    # bucket has to lose this much per trade to be worth a rule - not merely sit in the red.
+    avg_loss = abs(statistics.get("core", {}).get("avg_loss") or 0.0)
+    min_exp = max(MIN_EXPECTANCY_FOR_RULE, EXPECTANCY_FRACTION_OF_LOSS * avg_loss)
+
     rules = []
 
     # Hold duration is deliberately not a derived rule. A loss that closed fast is the market
@@ -80,10 +94,10 @@ def build_rules(statistics, currency):
     # onto entry quality (MFE/MAE), not as something to judge.
 
     # ------------- HOURS:
-    for group in _bad_groups(breakdowns.get("by_hour", [])):
+    for group in _bad_groups(breakdowns.get("by_hour", []), min_exp):
         rules.append({
             "key": f"hour:{group['key']}",
-            "rule": f"לא לסחור בשעה {int(group['key']):02d}:00",
+            "rule": f"לא לסחור בטווח {int(group['key']):02d}:00–{(int(group['key']) + 1) % 24:02d}:00",
             "why": _evidence(group, currency),
             "weight": abs(group["net_pnl"]),
             "kind": "hour",
@@ -91,7 +105,7 @@ def build_rules(statistics, currency):
         })
 
     # ------------- SETUPS:
-    for group in _bad_groups(breakdowns.get("by_setup", [])):
+    for group in _bad_groups(breakdowns.get("by_setup", []), min_exp):
         rules.append({
             "key": f"setup:{group['key']}",
             "rule": f"לא לקחת את הסטאפ {group['key']}",
@@ -119,7 +133,7 @@ def build_rules(statistics, currency):
     # he will later call mistakes is circular: it cannot be obeyed at the moment of entry,
     # which is the one test a rule has to pass. Tags describe the setup he saw; mistakes
     # describe the regret.
-    for group in _bad_groups(breakdowns.get("by_tag", [])):
+    for group in _bad_groups(breakdowns.get("by_tag", []), min_exp):
         rules.append({
             "key": f"tag:{group['key']}",
             "rule": f"לא להיכנס כשזה {group['key']}",
@@ -135,7 +149,7 @@ def build_rules(statistics, currency):
     # alone even when it is the losing one.
     total = statistics.get("total_trades") or 0
 
-    for group in _bad_groups(breakdowns.get("by_symbol", [])):
+    for group in _bad_groups(breakdowns.get("by_symbol", []), min_exp):
         if not total or group["trades"] > total * MAX_SHARE_FOR_INSTRUMENT_RULE:
             continue
 
@@ -171,14 +185,15 @@ def build_rules(statistics, currency):
     # ------------- SIZE:
     size = behaviour.get("size_discipline", {})
     if size.get("available") and size.get("biggest_size_expectancy", 0) < 0:
+        cap = int(round(size["avg_size"]))
         rules.append({
             "key": "size",
-            "rule": f"לא לעלות מעל {size['avg_size']} חוזים",
-            "why": f"בגודל המקסימלי שלך ({size['max_size']} חוזים) התוחלת היא "
+            "rule": f"לא לעלות מעל {cap} חוזים",
+            "why": f"בגודל המקסימלי שלך ({int(round(size['max_size']))} חוזים) התוחלת היא "
                    f"{money(size['biggest_size_expectancy'], currency)} לעסקה",
             "weight": abs(size["biggest_size_expectancy"]) * 10,
             "kind": "size",
-            "value": size["avg_size"],
+            "value": cap,
         })
 
     rules.sort(key = lambda r: -r["weight"])

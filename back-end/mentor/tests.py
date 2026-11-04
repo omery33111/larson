@@ -567,10 +567,12 @@ class VerdictTests(APITestCase):
         self.user = User.objects.create_user(username = "omer", password = "pass12345")
         self.client.force_authenticate(user = self.user)
 
-        # A losing "gamble" setup is what the verdict rides off; "patient" pays. Hold duration
-        # is no longer a rule, so the verdict is read off a setup rule instead.
-        make_trades(self.user, 30, pnl = 90.0, setups = "patient")
-        make_trades(self.user, 12, start = 30, pnl = -110.0, setups = "gamble")
+        # **Only his own commitments turn the visor now** - an inferred pattern is an
+        # observation, not a verdict. So the verdict rides off a declared rule he set: a size
+        # cap of three contracts, committed before these trades so it judges them.
+        make_trades(self.user, 30, pnl = 90.0)
+        TraderRule.objects.create(user = self.user, kind = TraderRule.MAX_SIZE, number = 3)
+        committed_before_these(self.user)
 
     def debrief(self, **fields):
         trade_file = TradeFile.objects.create(user = self.user, original_name = "session.csv",
@@ -585,23 +587,47 @@ class VerdictTests(APITestCase):
         return events, Message.objects.filter(role = ASSISTANT).order_by("-id").first()
 
     def test_breaking_a_rule_turns_the_visor_red(self):
-        events, answer = self.debrief(setups = "gamble", pnl = -95.0)
+        events, answer = self.debrief(quantity = 5, pnl = -95.0)
 
         self.assertEqual(events[0]["verdict"], "broken")
         self.assertEqual(answer.verdict, "broken")
 
     def test_keeping_them_all_turns_it_green(self):
-        events, answer = self.debrief(setups = "patient", pnl = 60.0)
+        events, answer = self.debrief(quantity = 2, pnl = 60.0)
 
         self.assertEqual(events[0]["verdict"], "kept")
         self.assertEqual(answer.verdict, "kept")
 
     def test_it_survives_a_reload(self):
-        self.debrief(setups = "gamble", pnl = -95.0)
+        self.debrief(quantity = 5, pnl = -95.0)
 
         # A signal that only rides the stream is a signal that vanishes on refresh.
         messages = self.client.get("/mentor/").data["messages"]
         self.assertEqual(messages[-1]["verdict"], "broken")
+
+    def test_an_inferred_pattern_alone_does_not_turn_the_visor(self):
+        """
+        **The fix for the red visor on a good trade.** An inferred leak he never declared is an
+        observation, not a verdict - so a winning trade that only touches a losing inferred
+        bucket leaves the visor idle, not red. Broken intentionally and watched fall.
+        """
+        bleed = User.objects.create_user(username = "bleeder", password = "pass12345")
+        self.client.force_authenticate(user = bleed)
+        make_trades(bleed, 30, pnl = 90.0, setups = "clean")
+        make_trades(bleed, 12, start = 30, pnl = -200.0, setups = "smt")
+
+        trade_file = TradeFile.objects.create(user = bleed, original_name = "s.csv",
+                                              imported_count = 1, confirmed = True)
+        make_trades(bleed, 1, start = 100, trade_file = trade_file, setups = "smt", pnl = 300.0)
+
+        with self.settings(ANTHROPIC_API_KEY = "test-key"):
+            with patch("anthropic.Anthropic", fake_client(["תחקיר"])):
+                events = read_events(self.client.post("/mentor/stream/",
+                                                      {"trade_file_id": trade_file.id}))
+
+        # The inferred SMT bucket was "broken" (he took SMT), but it is not his rule, so the
+        # visor stays idle rather than red.
+        self.assertEqual(events[0]["verdict"], "")
 
     def test_a_plain_question_carries_no_verdict(self):
         with self.settings(ANTHROPIC_API_KEY = "test-key"):
@@ -2546,6 +2572,63 @@ class SuggestionTests(APITestCase):
         self.assertEqual(card["rule_kind"], TraderRule.CUSTOM)
         self.assertIn("שורט בפרימיום", card["rule_terms"]["forbid"])
 
+    def test_an_oversized_loss_offers_a_daily_cap(self):
+        """
+        **The red flag the trader asked for:** a session that lost far more than his typical
+        trade offers a daily-loss cap - the one lever that is actually enforceable, since most
+        exports carry no stop. Raised as a flag and a suggestion, never as a deviation from a
+        rule he never set.
+        """
+        base = []
+        for n in range(30):
+            at = BASE + timedelta(days = n)
+            losing = n < 12
+            base.append(Trade.objects.create(
+                user = self.user, executed_at = at, opened_at = at - timedelta(minutes = 9),
+                symbol = "MNQU6", instrument = "NQ", source_timezone = "Asia/Jerusalem",
+                currency = "USD", direction = "long", quantity = 1.0,
+                pnl = -100.0 if losing else 90.0, outcome = "loss" if losing else "win",
+                duration_seconds = 540, setups = "breakout", dedup_hash = f"ov-{n}"))
+
+        # A new session with a single loss three times his typical one.
+        recent = [Trade.objects.create(
+            user = self.user, executed_at = BASE + timedelta(days = 100),
+            opened_at = BASE + timedelta(days = 100), symbol = "MNQU6", instrument = "NQ",
+            source_timezone = "Asia/Jerusalem", currency = "USD", direction = "long",
+            quantity = 1.0, pnl = -300.0, outcome = "loss", duration_seconds = 540,
+            setups = "breakout", dedup_hash = "ov-big")]
+
+        card = propose(self.user, recent, compute_statistics(base + recent))
+
+        self.assertIsNotNone(card, "an oversized loss did not raise a flag")
+        self.assertEqual(card["rule_kind"], TraderRule.MAX_DAILY_LOSS)
+        self.assertIn("פי", card["title"])
+        self.assertTrue(card["rule_number"] > 0)
+
+    def test_a_normal_losing_day_is_not_flagged_as_oversized(self):
+        """A single typical loss is not an outlier - the flag is for a blow-up, not a bad day."""
+        base = []
+        for n in range(30):
+            at = BASE + timedelta(days = n)
+            losing = n < 12
+            base.append(Trade.objects.create(
+                user = self.user, executed_at = at, opened_at = at - timedelta(minutes = 9),
+                symbol = "MNQU6", instrument = "NQ", source_timezone = "Asia/Jerusalem",
+                currency = "USD", direction = "long", quantity = 1.0,
+                pnl = -100.0 if losing else 90.0, outcome = "loss" if losing else "win",
+                duration_seconds = 540, setups = "breakout", dedup_hash = f"nm-{n}"))
+
+        recent = [Trade.objects.create(
+            user = self.user, executed_at = BASE + timedelta(days = 100),
+            opened_at = BASE + timedelta(days = 100), symbol = "MNQU6", instrument = "NQ",
+            source_timezone = "Asia/Jerusalem", currency = "USD", direction = "long",
+            quantity = 1.0, pnl = -100.0, outcome = "loss", duration_seconds = 540,
+            setups = "breakout", dedup_hash = "nm-one")]
+
+        card = propose(self.user, recent, compute_statistics(base + recent))
+
+        self.assertIsNone(card)
+
     def test_a_setup_he_already_forbids_is_not_offered_again(self):
         """
         **The flip side, and the reason the dedup is by terms and not just dropped.** A rule
@@ -3797,7 +3880,7 @@ class NoDoubleReportingTests(APITestCase):
         plan = check_plan(statistics, [], rows, declared = declared_rules(self.user))
 
         inferred_hours = [e["rule"] for e in plan["broken"] + plan["kept"]
-                          if "לסחור בשעה" in e["rule"]]
+                          if "לסחור בטווח" in e["rule"]]
 
         self.assertEqual(inferred_hours, [])
 
@@ -3814,7 +3897,7 @@ class NoDoubleReportingTests(APITestCase):
         plan = check_plan(statistics, [], rows, declared = declared_rules(self.user))
 
         inferred_hours = [e["rule"] for e in plan["broken"] + plan["kept"]
-                          if "לסחור בשעה" in e["rule"]]
+                          if "לסחור בטווח" in e["rule"]]
 
         self.assertTrue(inferred_hours, "a losing hour his own rule permits was swallowed")
 

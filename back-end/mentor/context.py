@@ -91,6 +91,26 @@ PERSONA = """אתה לארסון — המנטור האישי של הסוחר ה�
 כפי שהוא — אותו סימן ואותה שעה — כי אותו מספר בדיוק מוצג לסוחר בתעודת הזהות, וסתירה בין
 השניים נקראת כתוכנה שבורה.
 
+**העסקה עצמה מולך עכשיו — וזה לב התחקיר.** ב-`העסקאות_בעדכון` יש כל עסקה שהעלה, במלואה:
+הסטאפ, התגיות, **מה שהוא כתב בעצמו** (`מה_שכתב`), השיא והשפל, ו-`בהקשר` — גודל מול הרגיל שלו,
+העסקה מול ממוצע הסטאפ, כמה מהשיא תפס, ותשואה מול חום. **אל תתחיל מהממוצעים — תתחיל ממה שהוא
+עשה ומהקריאה שכתב, ואז תוכיח או תאתגר אותה עם המספרים.** זה ההבדל בין מנטור שמכיר אותו לבין
+דוח.
+
+- **החזר לו את ה-edge שלו.** אם התגיות וה-`מה_שכתב` מתארים תזה — למשל סטופ שהונח מאחורי בלוק
+  נזילות — והשפל קטן, זה אומר שהבלוק החזיק והקריאה שלו הייתה מדויקת. **תגיד את זה**, זה הרגע
+  שבו הוא מרגיש שאתה יודע עליו הכל. ואם המספרים סותרים את מה שכתב — תגיד גם את זה, בעדינות.
+- **החלטה מכוונת מקבלת קרדיט, לא בדיקה מול תקרה.** `גודל_מול_הרגיל` שקטן יותר אומר שהוא סיזֵת
+  למטה בכוונה — תכבד את זה ("ירדת ל-2 מ-3 כדי להישאר נוח, וזה עדיין החזיר"), לעולם לא כ"לא
+  חרגת מתקרה".
+- **הצלב מול הבייסליין שלו שכבר מולך למעלה.** הפסד או גודל חריגים מהרגיל שלו הם דגל אדום —
+  תרים אותו כ**שימת לב**, ואם מתחת לתשובה יש כרטיס הצעה, הוא הדרך להפוך את זה לכלל. **זו לא
+  סטייה מכלל שהוא קבע** — הוא לא קבע אותו, אתה מציע.
+- **דפוס מוסק אינו "כלל שהוא שבר".** כל שורה ב-`בדיקת_הכללים` שאין עליה `declared: true` היא
+  תצפית, לא כלל: תגיד "זה יושב בדלי ה-X שמדמם לך", לא "שברת את כלל ה-X". **רק כלל שהוא קבע
+  בעצמו הוא כלל שנשבר או נשמר**, וזה מה שצובע את הוויזור. על עסקה מצוינת שלא נגעה בשום כלל
+  שהוא קבע — אל תמציא פסיקה.
+
 **אסור לחלוטין:** להמליץ לקנות או למכור נכס ספציפי, לתת תחזית שוק, או לתת ייעוץ השקעות.""" + IRON
 
 
@@ -164,7 +184,10 @@ def receipt(trade_file):
     It is the first thing the trader reads after handing over a file, and it is the promise
     that his data landed. A number the model produced here would be a number nobody checked.
     """
-    line = f"✔ תועד ונשמר לרזומה: {trade_count(trade_file.imported_count)} חדשות"
+    # The adjective has to agree with the count: "עסקה אחת חדשה", not "עסקה אחת חדשות".
+    count = trade_file.imported_count
+    line = (f"✔ תועד ונשמר לרזומה: {trade_count(count)} "
+            + ("חדשה" if count == 1 else "חדשות"))
 
     if trade_file.duplicate_count:
         line += f" ({trade_count(trade_file.duplicate_count)} כפולות דולגו)"
@@ -205,7 +228,8 @@ DECLARED_BRIEF = """**בתוך `בדיקת_הכללים`, כל שורה שנוש
   בפשטות שהוא קבע את זה ולא עמד בו, עם העסקה בשמה, **ושאל מה קרה שם.** בלי הרצאה.
 - **כלל שהוא קבע ושמר עליו** — זה הדבר הכי שווה ציון בכל התחקיר, גם ביום מפסיד. **הוא עשה
   בדיוק מה שהתחייב.** אמור זאת לפני כל השאר.
-- **כלל שנגזר מההיסטוריה** — שם כן מקומו של ההסבר, כי ייתכן שהוא לא ידע.
+- **דפוס שנגזר מההיסטוריה (לא כלל שהוא קבע)** — זו תצפית ולא פסיקה: "זה יושב בדלי שמדמם לך",
+  ולא "שברת כלל". שם מקום ההסבר, כי ייתכן שהוא לא ידע — ואם הוא חוזר ושווה כלל, יש כרטיס הצעה.
 
 **וכלל שהסוחר ניסח בעצמו — צטט אותו במילים שלו, בדיוק כפי שהוא מופיע.** אל תנסח אותו מחדש
 ואל תסביר אותו לו: זה המשפט שהוא כתב, והוא יזהה אותו. ניסוח מחדש נקרא כאילו לא הבנת אותו.
@@ -333,8 +357,8 @@ def suggestion_brief(card, standings = ()):
 אמור שזה לא ניתן לבדיקה אוטומטית עדיין.**"""
 
 
-def update_prompt(deviation, plan, total_trades, new_trades, file_name, is_first = False,
-                  note = ""):
+def update_prompt(deviation, plan, total_trades, new_count, new_rows, file_name,
+                  is_first = False, note = ""):
     """
     The briefing for an update. Words and finished figures - nothing to compute.
 
@@ -350,11 +374,21 @@ def update_prompt(deviation, plan, total_trades, new_trades, file_name, is_first
     """
     payload = {
         "מה_קרה": f"הסוחר העלה קובץ ({clean_label(file_name)}) ואישר את קליטתו לרזומה.",
-        "עסקאות_בעדכון_הזה": new_trades,
+        "עסקאות_בעדכון_הזה": new_count,
+        # **The trades themselves, in full - the block the debrief was missing.** The model used
+        # to get only the count above and answered a specific session with generic averages. Now
+        # each trade carries its setup, tags, the trader's own write-up and the excursion, plus
+        # the context python computed (size vs usual, this trade vs its setup's norm, capture,
+        # heat), so Larson can talk about what he actually did and reflect his own read back.
+        "העסקאות_בעדכון": new_rows,
         "עסקאות_ברזומה_אחרי_העדכון": total_trades,
         "השוואה_לבייסליין": deviation,
         "בדיקת_הכללים": plan,
     }
+
+    if new_count > len(new_rows):
+        payload["הערה_על_הפירוט"] = (f"מפורטות {len(new_rows)} העסקאות הבולטות מתוך "
+                                     f"{new_count}; השאר מכוסות באגרגטים ובדוח הסטיות.")
 
     # A first file founds the resume rather than reporting on a session, and the persona is
     # written around comparing and rule-checking - both of which are necessarily empty here.

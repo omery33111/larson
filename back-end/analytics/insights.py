@@ -81,7 +81,7 @@ def _collect_strengths(statistics, currency):
         findings.append({
             "key": "best_hour",
             "subject": best_hour["key"],
-            "title": f"השעה החזקה שלך: {int(best_hour['key']):02d}:00",
+            "title": f"השעה החזקה שלך: {int(best_hour['key']):02d}:00–{(int(best_hour['key']) + 1) % 24:02d}:00",
             "detail": f"תוחלת {money(best_hour['expectancy'], currency)} לעסקה בשעה הזו. "
                       f"אם יש לך זמן מוגבל למסך — זה החלון.",
             "impact": best_hour["net_pnl"],
@@ -241,7 +241,7 @@ def _collect_leaks(statistics, currency):
         findings.append({
             "key": "worst_hour",
             "subject": worst_hour["key"],
-            "title": f"השעה שעולה לך הכי הרבה: {int(worst_hour['key']):02d}:00",
+            "title": f"השעה שעולה לך הכי הרבה: {int(worst_hour['key']):02d}:00–{(int(worst_hour['key']) + 1) % 24:02d}:00",
             "detail": f"תוחלת {money(worst_hour['expectancy'], currency)} לעסקה בשעה הזו, "
                       f"סה\"כ {money(worst_hour['net_pnl'], currency)}.",
             "impact": worst_hour["net_pnl"],
