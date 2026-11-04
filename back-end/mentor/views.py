@@ -233,13 +233,23 @@ def stream(request):
         # The plan check already decided this; reading it is free. Broken rules outrank kept
         # ones - a debrief that found a repeat offence is not a green day whatever else went
         # right in it.
-        # **The verdict reads only his own commitments.** An inferred pattern he never agreed
-        # to must not flash "broke a rule" red on a winning trade - it becomes an observation,
-        # and where it is worth it, a suggestion. Only a declared rule he set turns the visor.
-        if plan.get("available"):
-            declared_broken = [e for e in plan["broken"] if e.get("declared")]
-            declared_kept = [e for e in plan["kept"] if e.get("declared")]
-            verdict = "broken" if declared_broken else ("kept" if declared_kept else "")
+        # **The visor reflects two things: his commitments, and whether he held his norm.**
+        # Red when he broke a declared rule OR drifted worse from his baseline; green when he
+        # did neither and affirmatively kept a rule or held his norm; idle otherwise. **Either
+        # failure outranks either success** - that is the answer to "kept the norm but broke a
+        # rule" and "kept the rules but drifted": red is the state that asks for attention, and
+        # the text names which side drove it. An inferred *per-trade* pattern is still only an
+        # observation - what turns the visor is a declared rule or a significant session drift,
+        # never "you took a setup that bleeds" on one winning trade.
+        declared_broken = [e for e in plan.get("broken", []) if e.get("declared")]
+        declared_kept = [e for e in plan.get("kept", []) if e.get("declared")]
+        drifted_worse = bool(report.get("available") and report.get("deviations"))
+        held_the_norm = bool(report.get("available") and not report.get("deviations"))
+
+        if declared_broken or drifted_worse:
+            verdict = "broken"
+        elif declared_kept or held_the_norm:
+            verdict = "kept"
 
         # Consumed the moment it is sent, not when the answer finishes: the screen has to
         # stop offering it immediately, and a second press must not produce a second debrief.

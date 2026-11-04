@@ -629,6 +629,52 @@ class VerdictTests(APITestCase):
         # visor stays idle rather than red.
         self.assertEqual(events[0]["verdict"], "")
 
+    def _debrief_for(self, user, baseline_kwargs, recent_kwargs, count = 10):
+        make_trades(user, 40, **baseline_kwargs)
+        trade_file = TradeFile.objects.create(user = user, original_name = "s.csv",
+                                              imported_count = count, confirmed = True)
+        make_trades(user, count, start = 100, trade_file = trade_file, **recent_kwargs)
+
+        with self.settings(ANTHROPIC_API_KEY = "test-key"):
+            with patch("anthropic.Anthropic", fake_client(["תחקיר"])):
+                return read_events(self.client.post("/mentor/stream/",
+                                                    {"trade_file_id": trade_file.id}))
+
+    def test_drifting_worse_from_the_norm_turns_the_visor_red(self):
+        """**A significant worsening drift reddens the visor even with no declared rule** - the
+        deviation engine is the heart of the mentor. Here: double size and bleeding."""
+        u = User.objects.create_user(username = "drifter", password = "pass12345")
+        self.client.force_authenticate(user = u)
+        events = self._debrief_for(u, dict(quantity = 1.0, pnl = 90.0),
+                                   dict(quantity = 6.0, pnl = -200.0))
+
+        self.assertEqual(events[0]["verdict"], "broken")
+
+    def test_holding_the_norm_turns_it_green(self):
+        """Consistency with his baseline - no worsening drift - is a green day on its own."""
+        u = User.objects.create_user(username = "steady", password = "pass12345")
+        self.client.force_authenticate(user = u)
+        events = self._debrief_for(u, dict(quantity = 1.0, pnl = 90.0),
+                                   dict(quantity = 1.0, pnl = 90.0))
+
+        self.assertEqual(events[0]["verdict"], "kept")
+
+    def test_keeping_a_rule_but_drifting_is_still_red(self):
+        """**The conflict case he asked about:** he kept his declared size cap (2 <= 3) but
+        drifted worse (double his baseline size, losing). Red wins - it is the state that asks
+        for attention - and the text names both sides."""
+        trade_file = TradeFile.objects.create(user = self.user, original_name = "s.csv",
+                                              imported_count = 10, confirmed = True)
+        make_trades(self.user, 10, start = 100, trade_file = trade_file,
+                    quantity = 2.0, pnl = -200.0)
+
+        with self.settings(ANTHROPIC_API_KEY = "test-key"):
+            with patch("anthropic.Anthropic", fake_client(["תחקיר"])):
+                events = read_events(self.client.post("/mentor/stream/",
+                                                      {"trade_file_id": trade_file.id}))
+
+        self.assertEqual(events[0]["verdict"], "broken")
+
     def test_a_plain_question_carries_no_verdict(self):
         with self.settings(ANTHROPIC_API_KEY = "test-key"):
             with patch("anthropic.Anthropic", fake_client(["תשובה"])):
