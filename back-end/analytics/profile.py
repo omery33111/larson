@@ -85,7 +85,6 @@ def build_profile_prompt(statistics, strengths, leaks):
     breakdowns = statistics["breakdowns"]
     currency = statistics.get("currency", "USD")
 
-    hold = behaviour.get("hold_time", {})
     awareness = behaviour.get("self_awareness", {})
     size = behaviour.get("size_discipline", {})
 
@@ -98,7 +97,6 @@ def build_profile_prompt(statistics, strengths, leaks):
             "השעה_החלשה": _top_group(breakdowns["by_hour"], best = False),
             "הסטאפ_שעובד": _top_group(breakdowns["by_setup"], best = True),
             "הסטאפ_שלא_עובד": _top_group(breakdowns["by_setup"], best = False),
-            "משך_החזקה_שעובד": _top_group(breakdowns["by_duration"], best = True),
             "הכיוון_החזק": _top_group(breakdowns["by_direction"], best = True),
             "עסקאות_ליום_בממוצע": statistics["daily"]["avg_trades_per_day"],
         },
@@ -108,7 +106,6 @@ def build_profile_prompt(statistics, strengths, leaks):
         "מה_דולף_אצלו": [f["title"] for f in leaks],
 
         "דפוסים_התנהגותיים": {
-            "מחזיק_מפסידות_יותר_מרווחיות": hold.get("holds_losers_longer"),
             "הדירוג_העצמי_שלו_מנבא_תוצאה": awareness.get("is_calibrated"),
             "גודל_פוזיציה_יציב": size.get("is_consistent"),
             "רצף_ההפסדים_הארוך_ביותר": statistics["streaks"]["longest_loss_streak"],

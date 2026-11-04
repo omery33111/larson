@@ -273,7 +273,6 @@ def _behavioural_metrics(trades, tz):
         "revenge": _revenge_trading(trades),
         "after_red_day": _after_red_day(trades, tz),
         "overtrading": _overtrading(trades, tz),
-        "hold_time": _hold_time_asymmetry(trades),
         "mistake_tax": _mistake_tax(trades),
         "self_awareness": _self_awareness(trades),
         "size_discipline": _size_discipline(trades),
@@ -431,27 +430,6 @@ def _overtrading(trades, tz):
     result["median_trades_per_day"] = median
 
     return result
-
-
-def _hold_time_asymmetry(trades):
-    """Cutting winners early while sitting in losers is the classic asymmetry."""
-    wins = [t.duration_seconds for t in trades if _is_win(t) and t.duration_seconds]
-    losses = [t.duration_seconds for t in trades if _is_loss(t) and t.duration_seconds]
-
-    if not wins or not losses:
-        return {"available": False}
-
-    avg_win = _mean(wins)
-    avg_loss = _mean(losses)
-
-    return {
-        "available": True,
-        "avg_win_minutes": round(avg_win / 60, 1),
-        "avg_loss_minutes": round(avg_loss / 60, 1),
-        "ratio": round(avg_win / avg_loss, 2) if avg_loss else None,
-        # Holding losers longer than winners is the direction that costs money.
-        "holds_losers_longer": avg_loss > avg_win,
-    }
 
 
 def _mistake_tax(trades):
@@ -850,14 +828,16 @@ def _score_discipline(behaviour, streaks):
 
 
 def _score_execution(core, behaviour):
-    """Trade craft: the size of a win against the size of a loss, and how each is held."""
+    """Trade craft: the size of a win against the size of a loss.
+
+    Hold duration is deliberately not a factor. A loss that closed fast is the market hitting
+    the trader's resting stop, not a decision to "exit early"; without exit-reason data it
+    cannot be read as behaviour, and the honest risk/reward signal already lives in the
+    win/loss ratio below. This is the same reason `min_hold` is not a rule and duration is not
+    a derived rule - duration is the market's answer, never the clock as a lever.
+    """
     ratio = core["win_loss_ratio"]
     value = _scale(ratio, low = 0.7, high = 3.0) if ratio else 50.0
-
-    hold = behaviour["hold_time"]
-    if hold.get("available") and hold["holds_losers_longer"]:
-        # Sitting in losers longer than winners is the most expensive habit in trading.
-        value -= 20
 
     return {
         "value": max(min(value, 100.0), 0.0),

@@ -3,7 +3,7 @@ from zoneinfo import ZoneInfo
 
 from analytics.evidence import describe_trade
 from analytics.statistics import (MIN_TRADES_FOR_BREAKDOWN, REVENGE_WINDOW_MINUTES, clean_label,
-                                  _duration_bucket, _is_loss, _split_tags)
+                                  _is_loss, _split_tags)
 from analytics.formatting import money, percent
 from analytics.formatting import trades as trade_count
 
@@ -72,16 +72,12 @@ def build_rules(statistics, currency):
 
     rules = []
 
-    # ------------- HOLD TIME:
-    for group in _bad_groups(breakdowns.get("by_duration", [])):
-        rules.append({
-            "key": f"duration:{group['key']}",
-            "rule": f"לא להיכנס לעסקאות שנסגרות בטווח {group['key']}",
-            "why": _evidence(group, currency),
-            "weight": abs(group["net_pnl"]),
-            "kind": "duration",
-            "value": group["key"],
-        })
+    # Hold duration is deliberately not a derived rule. A loss that closed fast is the market
+    # hitting a resting stop, not a choice to exit early - the same reason `min_hold` was
+    # removed from the declared rules. A rule the trader cannot obey by deciding to would fire
+    # on the market's behaviour, never his, and would push him off a good entry whose stop was
+    # simply hit fast. The losing short-duration bucket still lives in `by_duration` as a lens
+    # onto entry quality (MFE/MAE), not as something to judge.
 
     # ------------- HOURS:
     for group in _bad_groups(breakdowns.get("by_hour", [])):
@@ -228,10 +224,6 @@ def _re_entry(rule, trade, previous):
 def _breaks(rule, trade, tz, previous):
     """Whether this one trade broke this one rule. None when the rule cannot be judged."""
     kind = rule["kind"]
-
-    if kind == "duration":
-        bucket = _duration_bucket(trade)
-        return None if bucket is None else bucket == rule["value"]
 
     if kind == "hour":
         return trade.executed_at.astimezone(tz).hour == rule["value"]

@@ -149,17 +149,6 @@ def _collect_strengths(statistics, currency):
             "evidence": f"{trade_count(awareness['rated_trades'])} מדורגות",
         })
 
-    hold = behaviour["hold_time"]
-    if hold.get("available") and not hold["holds_losers_longer"]:
-        findings.append({
-            "key": "hold_time",
-            "title": "אתה חותך הפסדים מהר יותר מרווחים",
-            "detail": f"החזקה ממוצעת של {minutes(hold['avg_win_minutes'])} ברווח "
-                      f"מול {minutes(hold['avg_loss_minutes'])} בהפסד. זה הכיוון הנכון.",
-            "impact": core["gross_profit"] * 0.15,
-            "evidence": trade_count(core["wins"] + core["losses"]),
-        })
-
     if daily["green_day_rate"] >= 55:
         findings.append({
             "key": "green_days",
@@ -245,18 +234,6 @@ def _collect_leaks(statistics, currency):
             "detail": detail,
             "impact": after_red["total_pnl"],
             "evidence": trade_count(after_red["count"]),
-        })
-
-    hold = behaviour["hold_time"]
-    if hold.get("available") and hold["holds_losers_longer"]:
-        findings.append({
-            "key": "hold_time",
-            "title": "אתה מחזיק מפסידות יותר מרווחיות",
-            "detail": f"החזקה ממוצעת של {minutes(hold['avg_loss_minutes'])} בהפסד "
-                      f"מול {minutes(hold['avg_win_minutes'])} ברווח. "
-                      f"זו הדליפה היקרה ביותר במסחר.",
-            "impact": -abs(core["gross_loss"] * 0.2),
-            "evidence": trade_count(core["wins"] + core["losses"]),
         })
 
     worst_hour = _worst_group(breakdowns["by_hour"])

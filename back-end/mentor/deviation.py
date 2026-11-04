@@ -215,40 +215,6 @@ def _revenge(baseline, recent, ctx):
     }
 
 
-# ------------- HOLDING LOSERS:
-def _hold_time(baseline, recent, ctx):
-    def asymmetry(rows):
-        wins = [t.duration_seconds for t in rows if _is_win(t) and t.duration_seconds]
-        losses = [t.duration_seconds for t in rows if _is_loss(t) and t.duration_seconds]
-
-        if not wins or not losses:
-            return None
-
-        return _mean(losses) / _mean(wins), _mean(losses) / 60
-
-    before, after = asymmetry(baseline), asymmetry(recent)
-
-    if before is None or after is None:
-        return None
-
-    change = _relative(before[0], after[0])
-
-    if abs(change) < MIN_RELATIVE_CHANGE:
-        return None
-
-    direction = "גדל" if change > 0 else "הצטמצם"
-
-    return {
-        "key": "hold_time",
-        "title": f"הפער בין הזמן שאתה נותן למפסידות לזמן שאתה נותן לרווחיות {direction}",
-        "detail": f"יחס של {ratio(after[0])} מול {ratio(before[0])} בעבר. "
-                  f"מפסידה ממוצעת מוחזקת {minutes_text(after[1])}.",
-        "evidence": trade_count(len(recent)),
-        "is_worse": change > 0,
-        "magnitude": abs(change),
-    }
-
-
 # ------------- THE RESULT ITSELF:
 def _outcome_shift(baseline, recent, ctx):
     currency = ctx["currency"]
@@ -375,7 +341,7 @@ def _bright_spot(baseline, recent, ctx):
             or best(by_hour, lambda k: f"השעה {int(k):02d}:00"))
 
 
-COMPARISONS = [_exposure, _frequency, _session, _revenge, _hold_time, _outcome_shift, _setups]
+COMPARISONS = [_exposure, _frequency, _session, _revenge, _outcome_shift, _setups]
 
 MAX_DEVIATIONS = 3
 

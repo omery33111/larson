@@ -291,16 +291,6 @@ class BehaviourTests(APITestCase):
         self.assertEqual(tax["total_cost"], -150.0)
 
 
-    def test_hold_time_asymmetry_flags_sitting_in_losers(self):
-        trades = series([100, 100, -80, -80])
-        trades[0].duration_seconds = trades[1].duration_seconds = 300
-        trades[2].duration_seconds = trades[3].duration_seconds = 3000
-
-        hold = compute_statistics(trades)["behaviour"]["hold_time"]
-
-        self.assertTrue(hold["holds_losers_longer"])
-
-
     def test_self_awareness_detects_a_calibrated_trader(self):
         trades = series([200, 200, 200, -50, -50, -50])
         for trade in trades[:3]:

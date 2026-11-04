@@ -160,13 +160,6 @@ def _instances(finding, trades, tz):
         sizes = [t.quantity for t in trades if t.quantity]
         return list(biggest_size_slice(trades)[1]) if sizes else []
 
-    if key == "hold_time":
-        # The leak is sitting in losers; the strength is letting winners run. Either way the
-        # instance worth showing is the longest-held trade on the relevant side.
-        side = [t for t in trades
-                if t.duration_seconds and (_is_loss(t) if _holds_losers(finding) else _is_win(t))]
-        return sorted(side, key = lambda t: -t.duration_seconds)[:EXAMPLES_PER_FINDING]
-
     if key == "self_awareness":
         return _miscalled(trades, finding)
 
@@ -192,10 +185,6 @@ def _instances(finding, trades, tz):
 
     return []
 
-
-def _holds_losers(finding):
-    """The two hold-time findings share a key and sit on opposite shoulders."""
-    return "מחזיק מפסידות" in finding.get("title", "")
 
 
 def _tagged(trades, field, subject):

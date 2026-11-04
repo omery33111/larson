@@ -209,16 +209,17 @@ class PlanCheckTests(APITestCase):
     """
     The half of the debrief that works on a session of one.
 
-    The baseline below is a trader whose quick trades bleed and whose patient trades pay -
-    the shape the whole feature was built for.
+    The baseline below is a trader whose "gamble" setup bleeds and whose "patient" setup pays
+    - a losing bucket the plan check turns into a rule. (Hold duration is no longer a rule: a
+    fast stop-out is the market's answer, not a decision - see the fast-stop lock below.)
     """
 
     def setUp(self):
         self.user = User.objects.create_user(username = "omer", password = "pass12345")
 
         self.baseline = (
-            make_trades(self.user, 30, duration_seconds = 1800, pnl = 90.0)
-            + make_trades(self.user, 12, start = 30, duration_seconds = 45, pnl = -110.0)
+            make_trades(self.user, 30, pnl = 90.0, setups = "patient")
+            + make_trades(self.user, 12, start = 30, pnl = -110.0, setups = "gamble")
         )
 
         self.statistics = compute_statistics(self.baseline)
@@ -227,50 +228,69 @@ class PlanCheckTests(APITestCase):
         return build_rules(self.statistics, "USD")
 
     def test_a_losing_bucket_becomes_a_rule_carrying_its_own_evidence(self):
-        quick = next(r for r in self.rules() if r["kind"] == "duration")
+        gamble = next(r for r in self.rules() if r["kind"] == "setup")
 
-        self.assertIn("עד 2 דקות", quick["rule"])
+        self.assertIn("gamble", gamble["rule"])
         # "Says who" always has a number behind it.
-        self.assertIn("12", quick["why"])
-        self.assertIn("$", quick["why"])
+        self.assertIn("12", gamble["why"])
+        self.assertIn("$", gamble["why"])
 
     def test_a_profitable_bucket_never_becomes_a_rule(self):
         values = [r.get("value") for r in self.rules()]
 
-        self.assertNotIn("10-30 דקות", values)
+        self.assertNotIn("patient", values)
+
+    def test_a_fast_stop_out_is_never_a_rule_or_a_verdict(self):
+        """
+        A loss that closed in under two minutes is the market hitting a resting stop, not a
+        decision to exit early - the same reason `min_hold` is not a declared rule. The losing
+        short-duration bucket that used to become "do not enter trades closing within 2 min"
+        must now produce no rule, and a fast new loss must not be judged as breaking anything.
+        Broken intentionally and watched fall.
+        """
+        quick = (make_trades(self.user, 30, start = 300, duration_seconds = 1800, pnl = 90.0)
+                 + make_trades(self.user, 12, start = 330, duration_seconds = 45, pnl = -110.0))
+        stats = compute_statistics(quick)
+
+        self.assertFalse(any(r["kind"] == "duration" for r in build_rules(stats, "USD")))
+
+        recent = make_trades(self.user, 1, start = 400, duration_seconds = 40, pnl = -95.0)
+        report = check_plan(stats, quick, recent)
+        judged = " ".join(e["rule"] for e in report.get("kept", []) + report.get("broken", []))
+        self.assertNotIn("דקות", judged)
 
     def test_one_trade_that_breaks_the_rule_is_caught(self):
         # The headline case: a day that ended on a single trade still gets an answer.
-        recent = make_trades(self.user, 1, start = 100, duration_seconds = 40, pnl = -95.0)
+        recent = make_trades(self.user, 1, start = 100, setups = "gamble", pnl = -95.0)
 
         report = check_plan(self.statistics, self.baseline, recent)
 
         self.assertTrue(report["available"])
         self.assertEqual(report["checked"], 1)
 
-        broken = next(b for b in report["broken"] if "2 דקות" in b["rule"])
+        broken = next(b for b in report["broken"] if "gamble" in b["rule"])
         self.assertEqual(broken["broke"], 1)
         self.assertEqual(broken["checked"], 1)
         self.assertTrue(broken["examples"])
 
     def test_one_trade_that_keeps_the_rule_is_credited(self):
-        recent = make_trades(self.user, 1, start = 100, duration_seconds = 2400, pnl = 60.0)
+        recent = make_trades(self.user, 1, start = 100, setups = "patient", pnl = 60.0)
 
         report = check_plan(self.statistics, self.baseline, recent)
 
-        kept = next(k for k in report["kept"] if "2 דקות" in k["rule"])
+        kept = next(k for k in report["kept"] if "gamble" in k["rule"])
         self.assertEqual(kept["checked"], 1)
         self.assertEqual(report["broken"], [])
 
     def test_a_rule_that_could_not_be_judged_is_left_out_of_both_lists(self):
-        # No duration on the trade means the duration rule was never actually tested, and
-        # crediting it as "kept" would be a compliment nobody earned.
-        recent = make_trades(self.user, 1, start = 100, duration_seconds = None, pnl = 40.0)
+        # No tags on the trade means the setup rule was never actually tested, and crediting
+        # it as "kept" would be a compliment nobody earned.
+        recent = make_trades(self.user, 1, start = 100, setups = "", pnl = 40.0)
 
         report = check_plan(self.statistics, self.baseline, recent)
         judged = [e["rule"] for e in report["kept"] + report["broken"]]
 
-        self.assertNotIn("לא להיכנס לעסקאות שנסגרות בטווח עד 2 דקות", judged)
+        self.assertNotIn("לא לקחת את הסטאפ gamble", judged)
 
     def test_direction_is_never_a_rule(self):
         # Every trade is a long or a short, so the check would fire on all of them by
@@ -288,7 +308,7 @@ class PlanCheckTests(APITestCase):
         self.assertFalse(any(r["kind"] == "instrument" for r in self.rules()))
 
     def test_the_internal_weight_never_leaves(self):
-        recent = make_trades(self.user, 1, start = 100, duration_seconds = 40, pnl = -95.0)
+        recent = make_trades(self.user, 1, start = 100, setups = "gamble", pnl = -95.0)
 
         report = check_plan(self.statistics, self.baseline, recent)
 
@@ -306,7 +326,7 @@ class PlanCheckTests(APITestCase):
     def test_the_deviation_declines_but_the_plan_check_still_answers(self):
         # One trade: no statistic to report, and a verdict all the same. This pairing is the
         # entire point of having two engines.
-        recent = make_trades(self.user, 1, start = 100, duration_seconds = 40, pnl = -95.0)
+        recent = make_trades(self.user, 1, start = 100, setups = "gamble", pnl = -95.0)
 
         deviation = build_deviation(self.baseline, recent)
         plan = check_plan(self.statistics, self.baseline, recent)
@@ -547,9 +567,10 @@ class VerdictTests(APITestCase):
         self.user = User.objects.create_user(username = "omer", password = "pass12345")
         self.client.force_authenticate(user = self.user)
 
-        # Quick trades bleed; patient ones pay. That is what makes "under two minutes" a rule.
-        make_trades(self.user, 30, duration_seconds = 1800, pnl = 90.0)
-        make_trades(self.user, 12, start = 30, duration_seconds = 45, pnl = -110.0)
+        # A losing "gamble" setup is what the verdict rides off; "patient" pays. Hold duration
+        # is no longer a rule, so the verdict is read off a setup rule instead.
+        make_trades(self.user, 30, pnl = 90.0, setups = "patient")
+        make_trades(self.user, 12, start = 30, pnl = -110.0, setups = "gamble")
 
     def debrief(self, **fields):
         trade_file = TradeFile.objects.create(user = self.user, original_name = "session.csv",
@@ -564,19 +585,19 @@ class VerdictTests(APITestCase):
         return events, Message.objects.filter(role = ASSISTANT).order_by("-id").first()
 
     def test_breaking_a_rule_turns_the_visor_red(self):
-        events, answer = self.debrief(duration_seconds = 40, pnl = -95.0)
+        events, answer = self.debrief(setups = "gamble", pnl = -95.0)
 
         self.assertEqual(events[0]["verdict"], "broken")
         self.assertEqual(answer.verdict, "broken")
 
     def test_keeping_them_all_turns_it_green(self):
-        events, answer = self.debrief(duration_seconds = 2400, pnl = 60.0)
+        events, answer = self.debrief(setups = "patient", pnl = 60.0)
 
         self.assertEqual(events[0]["verdict"], "kept")
         self.assertEqual(answer.verdict, "kept")
 
     def test_it_survives_a_reload(self):
-        self.debrief(duration_seconds = 40, pnl = -95.0)
+        self.debrief(setups = "gamble", pnl = -95.0)
 
         # A signal that only rides the stream is a signal that vanishes on refresh.
         messages = self.client.get("/mentor/").data["messages"]
