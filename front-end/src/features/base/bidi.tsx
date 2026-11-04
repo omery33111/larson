@@ -12,10 +12,11 @@ import { ReactNode } from 'react'
  *
  * Two token kinds are isolated, each in its own <bdi>, and nothing else:
  *   - A Latin-letter phrase: words plus the connectors that bind them. A connector (space,
- *     apostrophe, dot, slash, hyphen) is taken only when a letter or digit follows it, so a
- *     ticker like "MNQU6" stays whole while a trailing count does NOT get swallowed - "Change
- *     in delta levels — 9 עסקאות" keeps the "9" out of the phrase so it sits beside "עסקאות",
- *     the Hebrew noun it belongs to, not beside the English name.
+ *     apostrophe, dot, slash, hyphen) is taken only when a LETTER follows it - never a digit -
+ *     so a ticker like "MNQU6" stays whole (its digit is glued, no connector), while a count
+ *     after a space is left out: "Change in delta levels — 9 עסקאות" and "Daily 50% FVG" keep
+ *     the number its own token, beside the Hebrew noun ("9 עסקאות") or as a clean "50%", not
+ *     merged into the English word as "Daily 50" with a stray "%".
  *   - A number/currency token: an amount, percentage, ratio, time, date or numeric range,
  *     kept whole (its internal . , : / and dash never split) so "-$18", "16:00–17:00" and
  *     "25/08" each render as one left-to-right unit.
@@ -25,7 +26,7 @@ import { ReactNode } from 'react'
  * so a compound citation like "25/08 17:36 · MNQU6 · 87 שניות · -$255" reads correctly. The
  * raw text copied by the copy button or sent to the server is never altered.
  */
-const LETTER = "[A-Za-z](?:[A-Za-z0-9]|[ '’./\\-](?=[A-Za-z0-9]))*";
+const LETTER = "[A-Za-z](?:[A-Za-z0-9]|[ '’./\\-](?=[A-Za-z]))*";
 const NUMBER = "[-–]?[$€£₪¥]?\\d[\\d.,:/]*%?(?:\\s*[–-]\\s*[$€£₪¥]?\\d[\\d.,:/]*%?)*";
 const ISLAND = new RegExp("(" + LETTER + "|" + NUMBER + ")", "g");
 const WHOLE = new RegExp("^(?:" + LETTER + "|" + NUMBER + ")$");
