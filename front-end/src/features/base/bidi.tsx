@@ -18,8 +18,10 @@ import { ReactNode } from 'react'
  *     the number its own token, beside the Hebrew noun ("9 עסקאות") or as a clean "50%", not
  *     merged into the English word as "Daily 50" with a stray "%".
  *   - A number/currency token: an amount, percentage, ratio, time, date or numeric range,
- *     kept whole (its internal . , : / and dash never split) so "-$18", "16:00–17:00" and
- *     "25/08" each render as one left-to-right unit. A letter suffix glued straight onto a
+ *     kept whole (its . , : / separators join only digit-to-digit, so "-$18", "16:00–17:00"
+ *     and "25/08" stay one unit while a trailing sentence comma or period is left OUT -
+ *     "$1,195.50," keeps its thousands comma but drops the list comma, which would otherwise
+ *     double up against the Hebrew comma before it). A letter suffix glued straight onto a
  *     number joins it ("2.9R", "5K", "50%WR") so it does not render reversed as "R2.9".
  *
  * Everything else - plain Hebrew, a lone space, a middot, an em-dash, a bare separator -
@@ -28,7 +30,7 @@ import { ReactNode } from 'react'
  * raw text copied by the copy button or sent to the server is never altered.
  */
 const LETTER = "[A-Za-z](?:[A-Za-z0-9]|[ '’./\\-](?=[A-Za-z]))*";
-const NUMBER = "[-–]?[$€£₪¥]?\\d[\\d.,:/]*%?[A-Za-z]*(?:\\s*[–-]\\s*[$€£₪¥]?\\d[\\d.,:/]*%?[A-Za-z]*)*";
+const NUMBER = "[-–]?[$€£₪¥]?\\d+(?:[.,:/]\\d+)*%?[A-Za-z]*(?:\\s*[–-]\\s*[$€£₪¥]?\\d+(?:[.,:/]\\d+)*%?[A-Za-z]*)*";
 const ISLAND = new RegExp("(" + LETTER + "|" + NUMBER + ")", "g");
 const WHOLE = new RegExp("^(?:" + LETTER + "|" + NUMBER + ")$");
 
