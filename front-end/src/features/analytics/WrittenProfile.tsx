@@ -7,7 +7,7 @@ import {
 } from './analyticsSlice'
 import { selectSelectedAccounts } from './analyticsSlice'
 import { tradeCount } from './format'
-import { isolate } from '../base/bidi'
+import { baseDir, isolate } from '../base/bidi'
 import LarsonMark from '../larson/LarsonMark'
 import './analytics.css'
 
@@ -108,10 +108,10 @@ const WrittenProfile = () => {
               return (
                 <>
                   <div className="written-text">
-                    {body.map((line, index) => <p key={index}>{isolate(line, `b${index}`)}</p>)}
+                    {body.map((line, index) => <p key={index} dir={baseDir(line)}>{isolate(line, `b${index}`)}</p>)}
                   </div>
 
-                  {closing && <p className="written-closing">{isolate(closing, 'c')}</p>}
+                  {closing && <p className="written-closing" dir={baseDir(closing)}>{isolate(closing, 'c')}</p>}
                 </>
               );
             })()}

@@ -4,7 +4,7 @@ import { FiCheck, FiCopy, FiPaperclip } from 'react-icons/fi'
 import { useAppDispatch } from '../../app/hooks'
 import LarsonMark, { LarsonState } from '../larson/LarsonMark'
 import { ChatMessage as Message } from '../../models/Chat'
-import { isolate } from '../base/bidi'
+import { baseDir, isolate } from '../base/bidi'
 import { toggleStarAsync } from './chatSlice'
 
 
@@ -127,7 +127,7 @@ const ChatMessage = ({ message, isWriting = false, isFound = false }: Props) => 
             </span>
           )}
 
-          {paragraphs(message.content).map((line, index) => <p key={index}>{inline(line)}</p>)}
+          {paragraphs(message.content).map((line, index) => <p key={index} dir={baseDir(line)}>{inline(line)}</p>)}
         </div>
       </div>
     );
@@ -164,7 +164,7 @@ const ChatMessage = ({ message, isWriting = false, isFound = false }: Props) => 
         {!isWriting && !message.content.trim() ? (
           <p className="chat-answer-missing">לארסון לא הצליח לענות כאן. אפשר לשאול שוב.</p>
         ) : paragraphs(message.content).map((line, index, all) => (
-          <p key={index}>
+          <p key={index} dir={baseDir(line)}>
             {inline(line)}
 
             {/* The caret rides the end of the last line, where a cursor belongs. Parked

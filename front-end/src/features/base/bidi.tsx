@@ -35,6 +35,24 @@ const WHOLE = new RegExp("^(?:" + LETTER + "|" + NUMBER + ")$");
 const LEADING_DASH = /^[-–]/;
 const HEBREW_END = /[֐-׿]$/;
 
+/**
+ * The base direction a paragraph should render in, by which script carries it.
+ *
+ * Our pages are RTL, so a <p> inherits RTL and a fully English answer from Larson renders
+ * scrambled (phrases reversed, the period thrown to the front). The fix is to set the
+ * paragraph's own dir: more Hebrew letters than Latin -> rtl, otherwise ltr. Counting letters
+ * (not the first strong character, which `dir="auto"` uses) keeps a Hebrew sentence that opens
+ * with an English ticker — "MNQU6 הוא הטיקר..." — right-to-left, while a mostly-English answer
+ * goes left-to-right. Within either, isolate() and the browser's own bidi handle the embedded
+ * runs of the other script.
+ */
+export const baseDir = (text: string): 'rtl' | 'ltr' => {
+  const hebrew = (text.match(/[֐-׿]/g) || []).length;
+  const latin = (text.match(/[A-Za-z]/g) || []).length;
+  return hebrew >= latin ? 'rtl' : 'ltr';
+};
+
+
 export const isolate = (text: string, keyBase: string): ReactNode[] => {
   const parts = text.split(ISLAND);
   const nodes: ReactNode[] = [];
