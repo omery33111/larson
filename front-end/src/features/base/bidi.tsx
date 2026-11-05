@@ -15,8 +15,7 @@ import { ReactNode } from 'react'
  *     apostrophe, dot, slash, hyphen) is taken only when a LETTER follows it - never a digit -
  *     so a ticker like "MNQU6" stays whole (its digit is glued, no connector), while a count
  *     after a space is left out: "Change in delta levels — 9 עסקאות" and "Daily 50% FVG" keep
- *     the number its own token, beside the Hebrew noun ("9 עסקאות") or as a clean "50%", not
- *     merged into the English word as "Daily 50" with a stray "%".
+ *     the number its own token, beside the Hebrew noun ("9 עסקאות") or as a clean "50%".
  *   - A number/currency token: an amount, percentage, ratio, time, date or numeric range,
  *     kept whole (its . , : / separators join only digit-to-digit, so "-$18", "16:00–17:00"
  *     and "25/08" stay one unit while a trailing sentence comma or period is left OUT -
@@ -33,7 +32,29 @@ const LETTER = "[A-Za-z](?:[A-Za-z0-9]|[ '’./\\-](?=[A-Za-z]))*";
 const NUMBER = "[-–]?[$€£₪¥]?\\d+(?:[.,:/]\\d+)*%?[A-Za-z]*(?:\\s*[–-]\\s*[$€£₪¥]?\\d+(?:[.,:/]\\d+)*%?[A-Za-z]*)*";
 const ISLAND = new RegExp("(" + LETTER + "|" + NUMBER + ")", "g");
 const WHOLE = new RegExp("^(?:" + LETTER + "|" + NUMBER + ")$");
+const LEADING_DASH = /^[-–]/;
+const HEBREW_END = /[֐-׿]$/;
 
-export const isolate = (text: string, keyBase: string): ReactNode[] =>
-  text.split(ISLAND).map((chunk, index) =>
-    chunk && WHOLE.test(chunk) ? <bdi key={`${keyBase}-${index}`}>{chunk}</bdi> : chunk);
+export const isolate = (text: string, keyBase: string): ReactNode[] => {
+  const parts = text.split(ISLAND);
+  const nodes: ReactNode[] = [];
+  parts.forEach((chunk, index) => {
+    if (!chunk) return;
+    if (!WHOLE.test(chunk)) { nodes.push(chunk); return; }
+
+    // A leading dash right after a Hebrew letter is a prefix maqaf (ה-, ל-, ב-, ו-, מ-), not a
+    // minus sign. Absorbed into the number it flips to the island's far edge and detaches,
+    // rendering "ה-1:5" as "ה1:5-". Keep it out as plain text beside the Hebrew word; a dash
+    // after a space is a real negative and stays in the island ("שפל -$18"). A regex lookbehind
+    // would be cleaner but throws at parse time on older iOS Safari and takes the page down, so
+    // the check is done here on the preceding chunk instead.
+    const previous = parts[index - 1];
+    if (LEADING_DASH.test(chunk) && previous && HEBREW_END.test(previous)) {
+      nodes.push(chunk[0]);
+      nodes.push(<bdi key={`${keyBase}-${index}`}>{chunk.slice(1)}</bdi>);
+    } else {
+      nodes.push(<bdi key={`${keyBase}-${index}`}>{chunk}</bdi>);
+    }
+  });
+  return nodes;
+};
