@@ -19,7 +19,8 @@ import { ReactNode } from 'react'
  *     merged into the English word as "Daily 50" with a stray "%".
  *   - A number/currency token: an amount, percentage, ratio, time, date or numeric range,
  *     kept whole (its internal . , : / and dash never split) so "-$18", "16:00–17:00" and
- *     "25/08" each render as one left-to-right unit.
+ *     "25/08" each render as one left-to-right unit. A letter suffix glued straight onto a
+ *     number joins it ("2.9R", "5K", "50%WR") so it does not render reversed as "R2.9".
  *
  * Everything else - plain Hebrew, a lone space, a middot, an em-dash, a bare separator -
  * flows as text. Consecutive isolated islands keep their logical order when read right-to-left,
@@ -27,7 +28,7 @@ import { ReactNode } from 'react'
  * raw text copied by the copy button or sent to the server is never altered.
  */
 const LETTER = "[A-Za-z](?:[A-Za-z0-9]|[ '’./\\-](?=[A-Za-z]))*";
-const NUMBER = "[-–]?[$€£₪¥]?\\d[\\d.,:/]*%?(?:\\s*[–-]\\s*[$€£₪¥]?\\d[\\d.,:/]*%?)*";
+const NUMBER = "[-–]?[$€£₪¥]?\\d[\\d.,:/]*%?[A-Za-z]*(?:\\s*[–-]\\s*[$€£₪¥]?\\d[\\d.,:/]*%?[A-Za-z]*)*";
 const ISLAND = new RegExp("(" + LETTER + "|" + NUMBER + ")", "g");
 const WHOLE = new RegExp("^(?:" + LETTER + "|" + NUMBER + ")$");
 
