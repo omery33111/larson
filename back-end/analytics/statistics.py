@@ -98,6 +98,18 @@ def compute_statistics(trades, timezone_name = "Asia/Jerusalem"):
         "by_duration": _breakdown(trades, _duration_bucket),
     }
 
+    # **Per-account, but only when the export actually carries more than one.** A trader
+    # running several prop evaluations in one file (APEX-44 / -45 / -46 / a Lucid account)
+    # wants "how is this one account doing", and without a by-account cut the mentor can only
+    # refuse - every figure is the four combined, and it may not compute one by hand. The
+    # account id is already on every trade (it is what the identity-page account picker filters
+    # on), so this is the same group-by, and `_group_stats` already carries avg_mae/avg_mfe, so
+    # the per-account entry-quality / basehits question is answered too. A single-account resume
+    # (the norm) adds nothing: the block is absent, so the cached prefix does not grow and no
+    # model call is added - the breakdown rides the resume that is already embedded.
+    if len({t.account_id for t in trades if t.account_id}) > 1:
+        breakdowns["by_account"] = _breakdown(trades, lambda t: t.account_id)
+
     score = compute_score(core, daily, behaviour, streaks, currency)
 
     return {

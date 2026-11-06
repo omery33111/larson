@@ -571,6 +571,48 @@ class AccountSelectionTests(APITestCase):
 # ------------------------- ACCOUNT SELECTION TESTS END ------------------------- #
 
 
+# ------------------------- PER-ACCOUNT BREAKDOWN TESTS START ------------------------- #
+
+class PerAccountBreakdownTests(SimpleTestCase):
+    """
+    One export can carry several prop evaluations in it. The mentor may not compute a single
+    account's numbers by hand, so the engine has to cut them per account - but only when there
+    is more than one account to tell apart.
+    """
+
+    def test_several_accounts_each_get_their_own_cell(self):
+        trades = (series([100, 150, -90], account_id = "APEX-44")
+                  + series([-140, -160], account_id = "APEX-45"))
+        cells = {c["key"]: c for c in compute_statistics(trades)["breakdowns"]["by_account"]}
+
+        self.assertEqual(set(cells), {"APEX-44", "APEX-45"})
+        self.assertEqual(cells["APEX-44"]["trades"], 3)
+        self.assertEqual(cells["APEX-44"]["net_pnl"], 160.0)
+        self.assertEqual(cells["APEX-45"]["net_pnl"], -300.0)
+        # The figure the model quotes per account, so it has to be on the cell.
+        self.assertIn("expectancy", cells["APEX-44"])
+
+
+    def test_a_single_account_has_no_by_account_cut(self):
+        # Every number is already that one account's, so a per-account block would be noise -
+        # and it would grow the cached prompt for nothing.
+        trades = series([100, -50, 80], account_id = "ONLY")
+        self.assertNotIn("by_account", compute_statistics(trades)["breakdowns"])
+
+
+    def test_a_per_account_cell_carries_entry_quality_when_the_file_has_it(self):
+        # avg_mae/avg_mfe is how "was my entry optimal on this account" becomes a number and
+        # not a guess, so it must ride the per-account cell like every other breakdown.
+        trades = (series([100, 150], account_id = "APEX-44", mfe = 300.0, mae = -40.0)
+                  + series([-140, -160], account_id = "APEX-45", mfe = 10.0, mae = -200.0))
+        cells = {c["key"]: c for c in compute_statistics(trades)["breakdowns"]["by_account"]}
+
+        self.assertEqual(cells["APEX-44"]["avg_mae"], -40.0)
+        self.assertEqual(cells["APEX-45"]["avg_mae"], -200.0)
+
+# ------------------------- PER-ACCOUNT BREAKDOWN TESTS END ------------------------- #
+
+
 # ------------------------- INSTRUMENT GROUPING TESTS START ------------------------- #
 
 class InstrumentGroupingTests(APITestCase):
