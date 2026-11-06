@@ -5,6 +5,7 @@ from zoneinfo import ZoneInfo
 
 from trades.symbols import instrument_label
 
+from .decisions import collapse
 from .formatting import money, percent, ratio as ratio_text
 
 
@@ -65,64 +66,80 @@ def compute_statistics(trades, timezone_name = "Asia/Jerusalem"):
     trades - an iterable of Trade rows, any order.
     Returns the full statistics document that feeds both the profile page and the prompt.
     """
-    trades = [t for t in trades if t.pnl is not None]
-    trades.sort(key = lambda t: t.executed_at)
+    rows = [t for t in trades if t.pnl is not None]
+    rows.sort(key = lambda t: t.executed_at)
 
-    if not trades:
+    if not rows:
         return {"total_trades": 0, "has_enough_data": False}
 
-    tz = _safe_zone(timezone_name, trades)
+    tz = _safe_zone(timezone_name, rows)
+
+    # **Copy-traded mirrors fold into one decision; raw rows stay only where money is per
+    # account.** A copier fires one trade across several accounts at once, so the record holds N
+    # rows for one decision. Everything that counts *how often he acts* - counts, cadence,
+    # streaks, the behavioural slices - must read one, or it tells him he takes "12 trades a day"
+    # when he took three. So those run on `decisions`. The money is untouched: a decision's P&L
+    # is the sum of its copies, so every total lands to the cent where it did. For a
+    # single-account record `collapse` is identity, so nothing here moves for the ordinary
+    # trader. Only `by_account` and the account list stay on the raw rows - that is the per
+    # account cut, and it is the one view that must not fold. See analytics/decisions.py.
+    decisions = collapse(rows)
 
     # The scratch band this trader actually works with, used for days and for any trade the
-    # source file did not label.
-    flat_band = _flat_band(trades)
+    # source file did not label. Decision-level, to match the unit everything below counts in.
+    flat_band = _flat_band(decisions)
 
-    currency = _currency(trades)
+    currency = _currency(decisions)
 
-    core = _core_metrics(trades)
-    daily = _daily_metrics(trades, tz, flat_band)
-    streaks = _streaks(trades)
-    behaviour = _behavioural_metrics(trades, tz)
-    excursion = _excursion_metrics(trades)
+    core = _core_metrics(decisions)
+    daily = _daily_metrics(decisions, tz, flat_band)
+    streaks = _streaks(decisions)
+    behaviour = _behavioural_metrics(decisions, tz)
+    excursion = _excursion_metrics(decisions)
 
     breakdowns = {
-        "by_hour": _breakdown(trades, lambda t: t.executed_at.astimezone(tz).hour),
-        "by_weekday": _breakdown(trades, lambda t: t.executed_at.astimezone(tz).weekday()),
+        "by_hour": _breakdown(decisions, lambda t: t.executed_at.astimezone(tz).hour),
+        "by_weekday": _breakdown(decisions, lambda t: t.executed_at.astimezone(tz).weekday()),
         # Grouped by the chart, not by the contract month. Without this a trader who rolls
         # every quarter looks like someone who trades four unrelated instruments badly.
-        "by_symbol": _breakdown(trades, _instrument_of, label = instrument_label),
-        "by_direction": _breakdown(trades, lambda t: t.direction),
-        "by_setup": _breakdown_multi(trades, lambda t: _split_tags(t.setups)),
-        "by_tag": _breakdown_multi(trades, lambda t: _split_tags(t.tags)),
-        "by_mistake": _breakdown_multi(trades, lambda t: _split_tags(t.mistakes)),
-        "by_duration": _breakdown(trades, _duration_bucket),
+        "by_symbol": _breakdown(decisions, _instrument_of, label = instrument_label),
+        "by_direction": _breakdown(decisions, lambda t: t.direction),
+        "by_setup": _breakdown_multi(decisions, lambda t: _split_tags(t.setups)),
+        "by_tag": _breakdown_multi(decisions, lambda t: _split_tags(t.tags)),
+        "by_mistake": _breakdown_multi(decisions, lambda t: _split_tags(t.mistakes)),
+        "by_duration": _breakdown(decisions, _duration_bucket),
     }
 
     # **Per-account, but only when the export actually carries more than one.** A trader
     # running several prop evaluations in one file (APEX-44 / -45 / -46 / a Lucid account)
     # wants "how is this one account doing", and without a by-account cut the mentor can only
-    # refuse - every figure is the four combined, and it may not compute one by hand. The
-    # account id is already on every trade (it is what the identity-page account picker filters
-    # on), so this is the same group-by, and `_group_stats` already carries avg_mae/avg_mfe, so
-    # the per-account entry-quality / basehits question is answered too. A single-account resume
-    # (the norm) adds nothing: the block is absent, so the cached prefix does not grow and no
-    # model call is added - the breakdown rides the resume that is already embedded.
-    if len({t.account_id for t in trades if t.account_id}) > 1:
-        breakdowns["by_account"] = _breakdown(trades, lambda t: t.account_id)
+    # refuse - every figure is the four combined, and it may not compute one by hand. This is
+    # the one cut that reads the **raw rows**, not the decisions: it is per-account money, which
+    # is exactly what folding copies would destroy. `_group_stats` already carries
+    # avg_mae/avg_mfe, so the per-account entry-quality / basehits question is answered too. A
+    # single-account resume (the norm) adds nothing: the block is absent, so the cached prefix
+    # does not grow and no model call is added - the breakdown rides the resume already embedded.
+    if len({t.account_id for t in rows if t.account_id}) > 1:
+        breakdowns["by_account"] = _breakdown(rows, lambda t: t.account_id)
 
     score = compute_score(core, daily, behaviour, streaks, currency)
 
     return {
-        "total_trades": len(trades),
-        "has_enough_data": len(trades) >= MIN_TRADES_FOR_PROFILE,
+        # Decisions, not rows: the honest count of what he did. `executions` is the raw row
+        # count across accounts, and `copy_trading` says the two differ - so the model can say
+        # "24 decisions, copied to 95 executions" instead of claiming 95 trades.
+        "total_trades": len(decisions),
+        "executions": len(rows),
+        "copy_trading": len(rows) > len(decisions),
+        "has_enough_data": len(decisions) >= MIN_TRADES_FOR_PROFILE,
         "min_trades_for_profile": MIN_TRADES_FOR_PROFILE,
         "timezone": str(tz),
         "currency": currency,
-        "date_from": trades[0].executed_at,
-        "date_to": trades[-1].executed_at,
-        "accounts": sorted({clean_label(t.account_id) for t in trades if t.account_id}),
+        "date_from": decisions[0].executed_at,
+        "date_to": decisions[-1].executed_at,
+        "accounts": sorted({clean_label(t.account_id) for t in rows if t.account_id}),
         "flat_band": round(flat_band, 2),
-        "outcome_from_file": sum(1 for t in trades
+        "outcome_from_file": sum(1 for t in decisions
                                  if getattr(t, "outcome", None) in (WIN, LOSS, BREAKEVEN)),
         "core": core,
         "daily": daily,

@@ -1,6 +1,7 @@
 from collections import defaultdict
 from datetime import timedelta
 
+from .decisions import collapse
 from .formatting import days as day_count, money, percent, trades as trade_count
 from .statistics import (MIN_TRADES_FOR_BREAKDOWN, _instrument_of, _is_loss, _is_win, _mean,
                          _safe_zone, _split_tags, clean_label)
@@ -55,7 +56,10 @@ MAX_ABANDONED = 3
 
 def build_periods(trades, currency = "USD", timezone_name = "Asia/Jerusalem"):
     """The record cut along time, instead of summed over it."""
-    rows = sorted([t for t in trades if t.pnl is not None], key = lambda t: t.executed_at)
+    # Decisions, not rows: "am I getting better" and the drift in cadence read copies as the one
+    # decision they were, so a copy trader's month does not show four times the activity it had.
+    # Identity for a single-account record. Money is unchanged - a decision sums its copies.
+    rows = collapse([t for t in trades if t.pnl is not None])
 
     if len(rows) < MIN_WINDOW_TRADES * 2:
         return {

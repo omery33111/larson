@@ -1,5 +1,6 @@
 from collections import defaultdict
 
+from .decisions import collapse
 from .statistics import MIN_TRADES_FOR_BREAKDOWN, _is_loss, _is_win, _safe_zone, _split_tags
 
 
@@ -111,6 +112,11 @@ def cross_breakdowns(trades, timezone_name = "Asia/Jerusalem"):
     so a thin record adds nothing to the prompt.
     """
     tz = _safe_zone(timezone_name, trades)
+
+    # Decisions, not rows: a cell's count and win rate must be per decision, or a copy trader's
+    # "long from premium" reads four times its real size. Identity for a single-account record;
+    # the money in a cell is unchanged, since a decision sums its copies.
+    trades = collapse([t for t in trades if t.pnl is not None])
 
     def hours(trade):
         return [f"{trade.executed_at.astimezone(tz).hour:02d}:00"]

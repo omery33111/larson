@@ -5,6 +5,7 @@ from zoneinfo import ZoneInfo
 # The outcome rules are subtle - the journal's own status column wins over the sign of the
 # P&L, and a scratch is neither a win nor a loss. Re-deriving them here would be a second
 # definition of "did this trade work", and the two would drift.
+from analytics.decisions import collapse
 from analytics.statistics import REVENGE_WINDOW_MINUTES, _is_loss, _is_win, clean_label
 from analytics.formatting import minutes as minutes_text
 from analytics.formatting import money, percent, ratio
@@ -353,6 +354,13 @@ def build_deviation(baseline, recent, currency = "USD", timezone_name = "Asia/Je
     Everything numeric is finished here. The model is handed this and asked to say it like a
     mentor - it never recomputes and never adds a figure of its own.
     """
+    # Decisions on each side, not rows: a copy-traded session is one decision mirrored, and a
+    # deviation in cadence or exposure must compare what he decided, not how many accounts
+    # copied it. Identity for a single-account record; each side folds its own copies, so the
+    # first-of-update-against-baseline revenge check is preserved.
+    baseline = collapse([t for t in baseline if t.pnl is not None])
+    recent = collapse([t for t in recent if t.pnl is not None])
+
     counts = {"baseline": len(baseline), "recent": len(recent)}
 
     if len(recent) < MIN_RECENT_TRADES:

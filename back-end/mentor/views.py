@@ -17,6 +17,7 @@ from chat.failures import configuration_fault
 from chat.views import _answer, _error_stream, _sse
 from trades.models import Trade, TradeFile
 
+from analytics.decisions import collapse
 from analytics.statistics import clean_label, compute_statistics
 from analytics.evidence import debrief_trade
 from chat import retrieval
@@ -214,6 +215,16 @@ def stream(request):
         recent = list(Trade.objects.filter(user = request.user, trade_file = trade_file))
         baseline = list(Trade.objects.filter(user = request.user).exclude(trade_file = trade_file))
 
+        # **A copy-traded session is one decision mirrored across accounts, and the debrief has
+        # to count it as one** - or it contradicts its own deviation report, which already counts
+        # decisions, in the same breath ("8 new trades" over "2 new decisions"). Rows stay the
+        # rows only where the money is per account: `compute_statistics` collapses internally and
+        # needs the raw rows for `by_account`, and `build_deviation` collapses each side itself.
+        # Everything that judges or counts the session - the plan check, the suggestion, the
+        # named rows, the totals - reads the decisions. Identity for a single-account record.
+        recent_decisions = collapse(recent)
+        baseline_decisions = collapse(baseline)
+
         currency = _currency(recent or baseline)
         zone = _timezone(recent or baseline)
 
@@ -226,7 +237,8 @@ def stream(request):
         # **His own commitments first, then what his history argues for.** `rules.py` gives
         # them the same shape, so the checker needs no special case and the offending trade
         # is named the same way either way.
-        plan = check_plan(compute_statistics(baseline), baseline, recent, currency, zone,
+        plan = check_plan(compute_statistics(baseline), baseline_decisions, recent_decisions,
+                          currency, zone,
                           declared = declared_rules(request.user, currency,
                                                     for_judging = True))
 
@@ -263,7 +275,7 @@ def stream(request):
         resume_stats = compute_statistics(baseline + recent)
 
         try:
-            suggestion = propose(request.user, recent, resume_stats, currency, zone)
+            suggestion = propose(request.user, recent_decisions, resume_stats, currency, zone)
         except Exception:
             # A debrief must not fail over an optional card.
             log.exception("Could not compose a suggestion")
@@ -272,14 +284,16 @@ def stream(request):
         # **Feed the trades themselves, not just a count - the block the debrief was missing.**
         # Full detail for up to a dozen; on a big backfill the most notable by |P&L| carry the
         # detail and the rest stay covered by the aggregates and the deviation report.
-        detailed = sorted(recent, key = lambda t: abs(t.pnl or 0.0), reverse = True)[:12]
+        detailed = sorted(recent_decisions, key = lambda t: abs(t.pnl or 0.0), reverse = True)[:12]
         detailed.sort(key = lambda t: t.executed_at)
         new_rows = [debrief_trade(t, resume_stats, zone, currency) for t in detailed]
 
         prelude = receipt(trade_file)
         # `text` is still whatever he typed here - the fallback title below has not run yet -
         # so a note sent with the file reaches the model instead of being replaced away.
-        briefing = update_prompt(report, plan, len(baseline) + len(recent), len(recent),
+        briefing = update_prompt(report, plan,
+                                 len(baseline_decisions) + len(recent_decisions),
+                                 len(recent_decisions),
                                  new_rows, trade_file.original_name, is_first = not baseline,
                                  note = text)
 

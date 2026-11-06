@@ -9,6 +9,7 @@ from rest_framework import status
 from trades.models import Trade
 
 from .crosstab import cross_breakdowns
+from .decisions import collapse
 from .insights import build_insights
 from .periods import build_periods
 from .statistics import (MAX_LABEL_LENGTH, MAX_NOTE_LENGTH, clean_note,
@@ -611,6 +612,83 @@ class PerAccountBreakdownTests(SimpleTestCase):
         self.assertEqual(cells["APEX-45"]["avg_mae"], -200.0)
 
 # ------------------------- PER-ACCOUNT BREAKDOWN TESTS END ------------------------- #
+
+
+# ------------------------- COPY-TRADE COLLAPSE TESTS START ------------------------- #
+
+def _copy_decision(minute, pnl_each, accounts = ("A1", "A2", "A3", "A4")):
+    """One decision mirrored across accounts: same instrument, direction and entry minute, a
+    row per account - the signature of a copier."""
+    opened = BASE + timedelta(minutes = minute)
+    executed = opened + timedelta(minutes = 5)
+    return [make_trade(account_id = a, opened_at = opened, executed_at = executed,
+                       pnl = pnl_each) for a in accounts]
+
+
+class CopyTradeCollapseTests(SimpleTestCase):
+    """
+    A copier fires one decision across several accounts at once. The money is per-account and
+    real, but the counts must read one decision, not N copies - or the trader is told he takes
+    "12 trades a day" when he took three.
+    """
+
+    def test_mirrored_rows_fold_into_one_decision(self):
+        rows = _copy_decision(0, 50) + _copy_decision(10, 50) + _copy_decision(20, 50)
+        decisions = collapse(rows)
+
+        self.assertEqual(len(rows), 12)
+        self.assertEqual(len(decisions), 3)
+        # Money is untouched: the decision total equals the row total to the cent.
+        self.assertEqual(sum(t.pnl for t in rows), sum(t.pnl for t in decisions))
+        self.assertEqual({t.pnl for t in decisions}, {200.0})
+
+
+    def test_the_statistics_count_decisions_and_report_executions(self):
+        rows = _copy_decision(0, 50) + _copy_decision(10, 50) + _copy_decision(20, 50)
+        stats = compute_statistics(rows)
+
+        self.assertEqual(stats["total_trades"], 3)
+        self.assertEqual(stats["executions"], 12)
+        self.assertTrue(stats["copy_trading"])
+        # The headline cadence number is per decision, not per execution.
+        self.assertEqual(stats["daily"]["avg_trades_per_day"], 3.0)
+        self.assertEqual(stats["daily"]["max_trades_in_a_day"], 3)
+        # The real money is unchanged.
+        self.assertEqual(stats["core"]["net_pnl"], 600.0)
+
+
+    def test_the_per_account_cut_still_reads_raw_rows(self):
+        # by_account is per-account money and must NOT fold - each account really traded three.
+        rows = _copy_decision(0, 50) + _copy_decision(10, 50) + _copy_decision(20, 50)
+        cells = {c["key"]: c for c in compute_statistics(rows)["breakdowns"]["by_account"]}
+
+        self.assertEqual(set(cells), {"A1", "A2", "A3", "A4"})
+        for cell in cells.values():
+            self.assertEqual(cell["trades"], 3)
+            self.assertEqual(cell["net_pnl"], 150.0)
+
+
+    def test_a_single_account_record_is_untouched(self):
+        # The overwhelming majority: collapse is identity, nothing moves, no copy flag.
+        rows = series([100, -50, 80, 40, -30], account_id = "ONLY")
+        decisions = collapse(rows)
+        stats = compute_statistics(rows)
+
+        self.assertEqual(len(decisions), len(rows))
+        self.assertEqual(stats["total_trades"], 5)
+        self.assertEqual(stats["executions"], 5)
+        self.assertFalse(stats["copy_trading"])
+
+
+    def test_two_trades_on_the_same_account_are_not_copies(self):
+        # Same minute, same account - a repeat, not a mirror. It must not fold, or real activity
+        # would vanish.
+        opened = BASE
+        rows = [make_trade(account_id = "A1", opened_at = opened, executed_at = opened + timedelta(minutes = 5), pnl = 10),
+                make_trade(account_id = "A1", opened_at = opened, executed_at = opened + timedelta(minutes = 5), pnl = 20)]
+        self.assertEqual(len(collapse(rows)), 2)
+
+# ------------------------- COPY-TRADE COLLAPSE TESTS END ------------------------- #
 
 
 # ------------------------- INSTRUMENT GROUPING TESTS START ------------------------- #

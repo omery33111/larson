@@ -108,6 +108,30 @@ class DeviationTests(APITestCase):
         self.assertFalse(report["available"])
         self.assertIn(str(MIN_BASELINE_TRADES), report["reason"])
 
+    def test_a_copy_traded_update_counts_decisions_not_executions(self):
+        """
+        A copier mirrors one decision across accounts at the same instant. The deviation must
+        count six decisions, not eighteen executions - otherwise it says "8 new trades" while
+        the debrief beside it is judging two, and the trader reads a product that lost count.
+        """
+        baseline = make_trades(self.user, MIN_BASELINE_TRADES)
+
+        recent = []
+        for d in range(6):
+            opened = BASE + timedelta(days = 40, minutes = d * 10)
+            for account in ("A1", "A2", "A3"):
+                recent.append(Trade(
+                    user = self.user, account_id = account, symbol = "MNQU6", instrument = "NQ",
+                    source_timezone = "Asia/Jerusalem", direction = "long", quantity = 1.0,
+                    opened_at = opened, executed_at = opened + timedelta(minutes = 5),
+                    pnl = -60.0, outcome = "loss"))
+
+        report = build_deviation(baseline, recent)
+
+        self.assertEqual(len(recent), 18)
+        self.assertEqual(report["counts"]["recent"], 6)
+        self.assertEqual(report["counts"]["baseline"], MIN_BASELINE_TRADES)
+
     def test_a_jump_in_size_is_caught(self):
         baseline = make_trades(self.user, 40, quantity = 1.0)
         recent = make_trades(self.user, 10, start = 40, quantity = 4.0, pnl = -80.0)

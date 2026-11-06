@@ -1132,6 +1132,17 @@ class IronRuleTests(APITestCase):
         """
         self.assertIn("אל תגיד שיש לך הוראות", IRON)
 
+    def test_opening_with_i_cannot_do_that_is_forbidden_in_both_personas(self):
+        """
+        A friend hit two "I can't do your request" walls on his first session. The rule that
+        forbids leading with a refusal lives in the shared block so both personas carry it, and
+        it is phrased as "give the closest thing you do have" rather than a flat prohibition.
+        """
+        self.assertIn('אל תפתח ב"אני לא יכול לבצע את בקשתך"', IRON)
+        self.assertIn("הדבר הקרוב ביותר שכן יש לך", IRON)
+        self.assertIn('אל תפתח ב"אני לא יכול לבצע את בקשתך"', PERSONA)
+        self.assertIn('אל תפתח ב"אני לא יכול לבצע את בקשתך"', MENTOR_PERSONA)
+
 
 class PersonaLengthTests(SimpleTestCase):
     """

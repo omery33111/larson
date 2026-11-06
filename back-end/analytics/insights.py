@@ -1,3 +1,4 @@
+from .decisions import collapse
 from .evidence import attach_examples
 from .formatting import days, minutes, money, percent, points, ratio, trades as trade_count
 from .statistics import MIN_TRADES_FOR_BREAKDOWN
@@ -48,8 +49,12 @@ def build_insights(statistics, trades = None):
     leaks = leaks[:MAX_FINDINGS_PER_SIDE]
 
     if trades:
-        attach_examples(strengths, trades, currency, zone, worst_first = False)
-        attach_examples(leaks, trades, currency, zone, worst_first = True)
+        # The examples must be the same decisions the numbers were computed over, or a copy
+        # trader's finding would quote the same execution three times by name - exactly the
+        # triple-appearance that gives the inflation away. Identity for a single-account record.
+        decisions = collapse([t for t in trades if t.pnl is not None])
+        attach_examples(strengths, decisions, currency, zone, worst_first = False)
+        attach_examples(leaks, decisions, currency, zone, worst_first = True)
 
     return strengths, leaks
 
