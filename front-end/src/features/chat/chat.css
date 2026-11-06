@@ -675,6 +675,16 @@
 
 .chat-turn-larson {
   align-items: flex-start;
+  /* **The block is capped and centred so the mark and the actions have a gutter to live in.**
+     Both are positioned absolutely just outside the turn - the avatar on one side, the action
+     icons on the other - so a turn that fills the thread pushes them past its 24px padding and
+     they clip at the edge (the sliver that read as a bug). Leaving 180px total, 90px a side,
+     holds the 46px mark and the 66px action row with room, at any thread width, and the
+     message lands at the ~720px the layout was measured for. Reset to full width on a phone,
+     where both come back into the flow and there is no gutter to reserve. */
+  width: 100%;
+  max-width: calc(100% - 180px);
+  margin-inline: auto;
 }
 
 /* He fills more of the disc than he used to, which he can now afford: the artwork was
@@ -1249,6 +1259,13 @@
 
   .chat-avatar {
     position: static;
+  }
+
+  /* No gutter to reserve here - the mark and actions are in the flow - so the block takes the
+     full width back. */
+  .chat-turn-larson {
+    max-width: 100%;
+    margin-inline: 0;
   }
 
   .chat-answer {

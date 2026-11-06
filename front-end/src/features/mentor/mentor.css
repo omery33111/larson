@@ -1039,15 +1039,26 @@
     white-space: normal;
   }
 
+  /* Tighter, so the update bar and the composer around it give the thread more of the phone -
+     padding and spacing only, never the words: the note under it is the one thing that tells
+     the trader this screen is not the general chat. */
   .mentor-dropzone {
-    min-height: 60px;
-    padding: 0.65rem 0.8rem;
+    min-height: 52px;
+    padding: 0.55rem 0.8rem;
     gap: 0.6rem;
+    margin-bottom: 0.5rem;
   }
 
   .mentor-attached {
     gap: 0.55rem;
     padding: 0.5rem 0.7rem;
+  }
+
+  /* Scoped to beat the chat composer's own mobile padding (same class, one level deeper) with
+     no !important - a touch tighter so the thread keeps the width the footer and padding gave
+     it. */
+  .mentor-shell .mentor-composer {
+    padding: 0.5rem 0.7rem 0.55rem;
   }
 
   .mentor-dropzone-text b {

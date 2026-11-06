@@ -389,6 +389,20 @@ a {
     padding-bottom: 3dvh;
   }
 
+  /* **On a phone the conversation is the screen, so the chrome around it gives up its share.**
+     A full-height page (the chat and the mentor) already fills the viewport and pins its own
+     composer, so the breathing room above and below is dead space between the navbar and the
+     thread - and the global footer, 157px of policy links, is competing with the one answer the
+     trader came to read. The links live in the account menu and on every other page; here they
+     cost more than they are worth. Together these hand the thread back most of the screen. */
+  .App-fullheight .app-main {
+    padding-block: 0;
+  }
+
+  .App-fullheight .my-footer {
+    display: none;
+  }
+
   .app-container {
     padding-inline: 0.85rem;
   }

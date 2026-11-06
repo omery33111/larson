@@ -193,10 +193,13 @@
   }
 
   /* Still clearly larger than the 40px avatar it is meant to stop being confused with,
-     and it keeps its headline - which is the half a phone can least afford to lose. */
+     and it keeps its headline - which is the half a phone can least afford to lose. Trimmed
+     from 54 so the badge stops being the tallest thing in the bar: on a full-height screen the
+     topbar's height is the thread's loss, and at 48 the resume line beside it is what sets the
+     height instead - which is already there and cannot be made shorter. */
   .larson-presence-disc {
-    width: 54px;
-    height: 54px;
+    width: 48px;
+    height: 48px;
     padding: 3px;
   }
 
